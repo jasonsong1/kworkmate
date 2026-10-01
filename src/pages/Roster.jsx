@@ -32,11 +32,12 @@ export default function Roster() {
     }
     setLoading(true);
     const [staff, list] = await Promise.all([
-      base44.entities.EmployeeProfile.filter({ branch_id: activeBranch.id, status: 'active' }, { limit: 200 }),
-      base44.entities.Shift.filter(
-        { branch_id: activeBranch.id, date: { $gte: weekStart, $lte: weekEnd } },
-        { sort: 'date', limit: 500 }
-      )
+      base44.entities.EmployeeProfile
+        .filter({ branch_id: activeBranch.id, status: 'active' }, { limit: 200 })
+        .then((page) => page.items || []),
+      base44.entities.Shift
+        .filter({ branch_id: activeBranch.id, date: { $gte: weekStart, $lte: weekEnd } }, { sort: 'date', limit: 500 })
+        .then((page) => page.items || [])
     ]);
     setEmployees(staff);
     setShifts(list);

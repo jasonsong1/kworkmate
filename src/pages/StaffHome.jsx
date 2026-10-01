@@ -25,12 +25,13 @@ export default function StaffHome() {
     if (!me) return;
     setLoading(true);
     const [shiftList, submissions] = await Promise.all([
-      base44.entities.Shift.filter(
-        { employee_email: me.email, status: 'published', date: { $gte: todayIso() } },
-        { sort: 'date', limit: 30 }
-      ).catch(() => []),
+      base44.entities.Shift
+        .filter({ employee_email: me.email, status: 'published', date: { $gte: todayIso() } }, { sort: 'date', limit: 30 })
+        .then((page) => page.items || [])
+        .catch(() => []),
       base44.entities.AvailabilitySubmission
         .filter({ employee_email: me.email }, { sort: '-created_date', limit: 1 })
+        .then((page) => page.items || [])
         .catch(() => [])
     ]);
     setShifts(shiftList);

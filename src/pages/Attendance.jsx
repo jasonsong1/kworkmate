@@ -27,10 +27,9 @@ export default function Attendance() {
     const from = `${date}T00:00:00.000Z`;
     const to = `${date}T23:59:59.999Z`;
     const [list, aggregated] = await Promise.all([
-      base44.entities.TimeEntry.filter(
-        { branch_id: activeBranch.id, clock_in_at: { $gte: from, $lte: to } },
-        { sort: '-clock_in_at', limit: 200 }
-      ),
+      base44.entities.TimeEntry
+        .filter({ branch_id: activeBranch.id, clock_in_at: { $gte: from, $lte: to } }, { sort: '-clock_in_at', limit: 200 })
+        .then((page) => page.items || []),
       base44.entities.TimeEntry
         .aggregate({ query: { branch_id: activeBranch.id, clock_in_at: { $gte: from, $lte: to } }, sum: 'minutes' })
         .catch(() => ({ rows: [] }))

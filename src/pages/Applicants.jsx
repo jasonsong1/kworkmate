@@ -32,7 +32,8 @@ export default function Applicants() {
 
   const loadJobs = useCallback(async () => {
     if (!activeBranch) return;
-    const list = await base44.entities.Job.filter({ branch_id: activeBranch.id }, { sort: '-created_date', limit: 100 });
+    const page = await base44.entities.Job.filter({ branch_id: activeBranch.id }, { sort: '-created_date', limit: 100 });
+    const list = page.items || [];
     setJobs(list);
     setJobId((prev) => (prev && list.some((j) => j.id === prev) ? prev : list[0] ? list[0].id : ''));
   }, [activeBranch]);
@@ -51,7 +52,9 @@ export default function Applicants() {
     setLoading(true);
     const [currentJob, list, total, interviewCount] = await Promise.all([
       base44.entities.Job.get(jobId).catch(() => null),
-      base44.entities.Applicant.filter({ job_id: jobId }, { sort: '-ai_score', limit: 200 }),
+      base44.entities.Applicant
+        .filter({ job_id: jobId }, { sort: '-ai_score', limit: 200 })
+        .then((page) => page.items || []),
       base44.entities.Applicant.count({ job_id: jobId }).catch(() => 0),
       base44.entities.Applicant.count({ job_id: jobId, status: { $in: INTERVIEW_STATUSES } }).catch(() => 0)
     ]);

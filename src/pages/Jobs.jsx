@@ -41,7 +41,9 @@ export default function Jobs() {
     }
     setLoading(true);
     const [list, grouped] = await Promise.all([
-      base44.entities.Job.filter({ branch_id: activeBranch.id }, { sort: '-created_date', limit: 100 }),
+      base44.entities.Job
+        .filter({ branch_id: activeBranch.id }, { sort: '-created_date', limit: 100 })
+        .then((page) => page.items || []),
       base44.entities.Applicant.aggregate({ query: { branch_id: activeBranch.id }, groupBy: 'job_id' }).catch(() => ({ rows: [] }))
     ]);
     setJobs(list);

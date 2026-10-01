@@ -32,8 +32,8 @@ export default function Employees() {
     setLoading(true);
     const query = { branch_id: activeBranch.id };
     if (search.trim()) query.full_name = { $regex: search.trim(), $options: 'i' };
-    const list = await base44.entities.EmployeeProfile.filter(query, { sort: '-created_date', limit: 100 });
-    setRows(list);
+    const page = await base44.entities.EmployeeProfile.filter(query, { sort: '-created_date', limit: 100 });
+    setRows(page.items || []);
     setLoading(false);
   }, [activeBranch, search]);
 

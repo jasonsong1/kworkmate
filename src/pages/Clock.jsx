@@ -22,9 +22,10 @@ export default function Clock() {
 
   const load = useCallback(async () => {
     if (!me) return;
-    const active = await base44.entities.TimeEntry
+    const activePage = await base44.entities.TimeEntry
       .filter({ employee_email: me.email, status: 'active' }, { limit: 1 })
-      .catch(() => []);
+      .catch(() => ({ items: [] }));
+    const active = activePage.items || [];
     setEntry(active[0] || null);
     if (activeBranch) {
       const shifts = await base44.entities.Shift

@@ -53,7 +53,10 @@ export default function Dashboard() {
         base44.entities.EmployeeProfile.count({ ...scope, status: 'active' }).catch(() => 0),
         base44.entities.Shift.count({ ...scope, date: todayIso() }).catch(() => 0),
         base44.entities.EmployeeProfile.count({ ...scope, onboarding_status: { $ne: 'completed' } }).catch(() => 0),
-        base44.entities.Applicant.filter(scope, { sort: '-created_date', limit: 5 }).catch(() => []),
+        base44.entities.Applicant
+          .filter(scope, { sort: '-created_date', limit: 5 })
+          .then((page) => page.items || [])
+          .catch(() => []),
         base44.entities.Applicant
           .filter({ ...scope, status: 'final_interview', invited_at: { $lt: twoDaysAgo } })
           .catch(() => [])
