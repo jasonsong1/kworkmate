@@ -41,25 +41,25 @@ function BackofficeShell() {
 
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-semibold">{company ? company.name : t('app.name')}</p>
-            <p className="truncate text-xs text-muted-foreground">
+            <p className="truncate text-xs text-muted-foreground hidden">
               {t(`role.${role}`)} · {me ? me.email : ''}
             </p>
           </div>
 
-          {branches.length > 0 && (
-            <Select value={activeBranchId} onValueChange={selectBranch}>
+          {branches.length > 0 &&
+          <Select value={activeBranchId} onValueChange={selectBranch}>
               <SelectTrigger className="hidden w-56 sm:flex">
                 <SelectValue placeholder={t('top.branch')} />
               </SelectTrigger>
               <SelectContent>
-                {branches.map((b) => (
-                  <SelectItem key={b.id} value={b.id}>
+                {branches.map((b) =>
+              <SelectItem key={b.id} value={b.id}>
                     {b.name}
                   </SelectItem>
-                ))}
+              )}
               </SelectContent>
             </Select>
-          )}
+          }
 
           <Button variant="ghost" size="sm" onClick={toggle} className="gap-2">
             <Languages className="h-4 w-4" />
@@ -75,14 +75,14 @@ function BackofficeShell() {
           <Outlet />
         </main>
       </div>
-    </div>
-  );
+    </div>);
+
 }
 
 export default function BackofficeLayout() {
   return (
     <WorkspaceProvider>
       <BackofficeShell />
-    </WorkspaceProvider>
-  );
+    </WorkspaceProvider>);
+
 }
