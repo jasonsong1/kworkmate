@@ -41,9 +41,9 @@ function BackofficeShell() {
 
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-semibold">{company ? company.name : t('app.name')}</p>
-            <p className="truncate text-xs text-muted-foreground hidden">
-              {t(`role.${role}`)} · {me ? me.email : ''}
-            </p>
+            
+
+            
           </div>
 
           {branches.length > 0 &&
