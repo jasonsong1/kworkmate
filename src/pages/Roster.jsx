@@ -21,6 +21,8 @@ export default function Roster() {
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogDate, setDialogDate] = useState('');
+  const [dialogEmployee, setDialogEmployee] = useState(null);
+  const [sending, setSending] = useState(false);
 
   const weekEnd = addDaysIso(weekStart, 6);
   const days = weekDates(weekStart);
@@ -48,12 +50,27 @@ export default function Roster() {
     load();
   }, [load]);
 
-  const publishWeek = async () => {
+  const saveWeek = async () => {
     await base44.entities.Shift.updateMany(
       { branch_id: activeBranch.id, date: { $gte: weekStart, $lte: weekEnd }, status: 'draft' },
-      { $set: { status: 'published' } }
+      { $set: { status: 'saved' } }
     );
-    toast({ title: t('roster.published') });
+    toast({ title: t('roster.saved') });
+    await load();
+  };
+
+  const sendWeek = async () => {
+    setSending(true);
+    const response = await base44.functions.invoke('sendRoster', {
+      branch_id: activeBranch.id,
+      week_start: weekStart
+    });
+    setSending(false);
+    if (response.data?.error) {
+      toast({ title: response.data.error, variant: 'destructive' });
+      return;
+    }
+    toast({ title: `${t('roster.sent')} · ${response.data.sent || 0}` });
     await load();
   };
 
@@ -87,14 +104,19 @@ export default function Roster() {
               variant="outline"
               onClick={() => {
                 setDialogDate(todayIso());
+                setDialogEmployee(null);
                 setDialogOpen(true);
               }}
               disabled={!activeBranch || employees.length === 0}
             >
               <Plus className="mr-2 h-4 w-4" /> {t('roster.addShift')}
             </Button>
-            <Button onClick={publishWeek} disabled={!activeBranch || shifts.length === 0}>
-              <Send className="mr-2 h-4 w-4" /> {t('roster.publish')}
+            <Button variant="outline" onClick={saveWeek} disabled={!activeBranch || shifts.length === 0}>
+              {t('roster.save')}
+            </Button>
+            <Button onClick={sendWeek} disabled={!activeBranch || shifts.length === 0 || sending}>
+              {sending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
+              {t('roster.send')}
             </Button>
           </>
         }
@@ -145,7 +167,9 @@ export default function Roster() {
                                   className={`group rounded-lg border px-2 py-1.5 text-xs ${
                                     shift.status === 'published'
                                       ? 'border-emerald-200 bg-emerald-50'
-                                      : 'bg-muted/40'
+                                      : shift.status === 'saved'
+                                        ? 'border-sky-200 bg-sky-50'
+                                        : 'bg-muted/40'
                                   }`}
                                 >
                                   <div className="flex items-center justify-between gap-1">
@@ -167,6 +191,7 @@ export default function Roster() {
                               <button
                                 onClick={() => {
                                   setDialogDate(day.date);
+                                  setDialogEmployee(employee);
                                   setDialogOpen(true);
                                 }}
                                 className="w-full rounded-lg border border-dashed px-2 py-1 text-[11px] text-muted-foreground hover:bg-muted"
@@ -192,6 +217,7 @@ export default function Roster() {
         branch={activeBranch}
         employees={employees}
         defaultDate={dialogDate}
+        defaultEmployee={dialogEmployee}
         onSaved={load}
       />
     </div>

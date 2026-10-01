@@ -91,7 +91,7 @@ export default async function (req) {
           `We have received and filed your TFN declaration, superannuation choice and bank details for <b>${branch ? branch.name : 'your store'}</b>.`,
           'Your signed documents are stored securely on your employee profile. Nothing else is needed from you.'
         ],
-        footer: `${company ? company.name : ''} · BranchHire`
+        footer: `${company ? company.name : ''} · kworkmate`
       })
     });
 

@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Loader2, MapPin } from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
+import TradingHoursEditor from '@/components/TradingHoursEditor';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -16,6 +17,7 @@ export default function PropertySetup() {
   const { t } = useI18n();
   const { branches, activeBranch } = useWorkspace();
   const { toast } = useToast();
+  const navigate = useNavigate();
   const [params] = useSearchParams();
   const branchId = params.get('branch') || (activeBranch && activeBranch.id);
   const branch = branches.find((b) => b.id === branchId) || activeBranch;
@@ -68,6 +70,7 @@ export default function PropertySetup() {
     });
     setSaving(false);
     toast({ title: t('property.saved') });
+    navigate('/branches');
   };
 
   if (!branch || !form) {
@@ -116,7 +119,7 @@ export default function PropertySetup() {
             </div>
             <div className="sm:col-span-2">
               <Label>{t('property.hours')}</Label>
-              <Input value={form.trading_hours} onChange={(e) => set('trading_hours', e.target.value)} />
+              <TradingHoursEditor value={form.trading_hours} onChange={(next) => set('trading_hours', next)} />
             </div>
           </CardContent>
         </Card>

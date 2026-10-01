@@ -19,6 +19,7 @@ export default function Branches() {
   const { toast } = useToast();
   const [addOpen, setAddOpen] = useState(false);
   const [stats, setStats] = useState({});
+  const [managers, setManagers] = useState([]);
   const [managerEmail, setManagerEmail] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -34,6 +35,26 @@ export default function Branches() {
       if (!cancelled) setStats({ staff, openJobs, applicants });
     };
     load();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeBranch]);
+
+  useEffect(() => {
+    const emails = (activeBranch && activeBranch.manager_emails) || [];
+    if (emails.length === 0) {
+      setManagers([]);
+      return;
+    }
+    let cancelled = false;
+    base44.entities.EmployeeProfile
+      .filter({ user_email: { $in: emails } }, { limit: 20 })
+      .then((page) => {
+        if (!cancelled) setManagers(page.items || []);
+      })
+      .catch(() => {
+        if (!cancelled) setManagers([]);
+      });
     return () => {
       cancelled = true;
     };
@@ -154,11 +175,16 @@ export default function Branches() {
                   {(activeBranch.manager_emails || []).length === 0 && (
                     <span className="text-sm text-muted-foreground">—</span>
                   )}
-                  {(activeBranch.manager_emails || []).map((email) => (
-                    <Badge key={email} variant="outline">
-                      {email}
-                    </Badge>
-                  ))}
+                  {(activeBranch.manager_emails || []).map((email) => {
+                    const profile = managers.find((m) => m.user_email === email);
+                    return (
+                      <Badge key={email} variant="outline">
+                        {profile
+                          ? `${profile.full_name}${profile.phone ? ` · ${profile.phone}` : ''}`
+                          : email}
+                      </Badge>
+                    );
+                  })}
                 </div>
                 {isAdmin && (
                   <div className="mt-4 flex flex-col gap-2 sm:flex-row">

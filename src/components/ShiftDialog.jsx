@@ -9,7 +9,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { POSITIONS } from '@/lib/bh';
 import { base44 } from '@/api/base44Client';
 
-export default function ShiftDialog({ open, onOpenChange, branch, employees, defaultDate, onSaved }) {
+export default function ShiftDialog({ open, onOpenChange, branch, employees, defaultDate, defaultEmployee, onSaved }) {
   const { toast } = useToast();
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
@@ -23,12 +23,38 @@ export default function ShiftDialog({ open, onOpenChange, branch, employees, def
   });
 
   useEffect(() => {
-    if (open) setForm((prev) => ({ ...prev, date: defaultDate || prev.date }));
-  }, [open, defaultDate]);
+    if (!open) return;
+    setForm((prev) => ({
+      ...prev,
+      date: defaultDate || prev.date,
+      employee_email: defaultEmployee ? defaultEmployee.user_email : '',
+      position: defaultEmployee && defaultEmployee.position ? defaultEmployee.position : prev.position
+    }));
+  }, [open, defaultDate, defaultEmployee]);
 
   const submit = async () => {
     if (!branch || !form.employee_email || !form.date) {
       toast({ title: 'Choose a staff member and a date', variant: 'destructive' });
+      return;
+    }
+    const toMinutes = (value) => {
+      const [hour, minute] = String(value || '').split(':').map(Number);
+      return (hour || 0) * 60 + (minute || 0);
+    };
+    const start = toMinutes(form.start_time);
+    const end = toMinutes(form.end_time);
+    if (end <= start) {
+      toast({ title: 'End time must be after the start time', variant: 'destructive' });
+      return;
+    }
+    const sameDay = await base44.entities.Shift
+      .filter({ branch_id: branch.id, employee_email: form.employee_email, date: form.date })
+      .catch(() => []);
+    const clash = (sameDay || []).some(
+      (shift) => start < toMinutes(shift.end_time) && toMinutes(shift.start_time) < end
+    );
+    if (clash) {
+      toast({ title: 'This staff member already has an overlapping shift', variant: 'destructive' });
       return;
     }
     setSaving(true);
@@ -59,21 +85,30 @@ export default function ShiftDialog({ open, onOpenChange, branch, employees, def
           <DialogTitle>Add shift</DialogTitle>
         </DialogHeader>
         <div className="grid gap-4 sm:grid-cols-2">
-          <div className="sm:col-span-2">
-            <Label>Staff member</Label>
-            <Select value={form.employee_email} onValueChange={(v) => setForm({ ...form, employee_email: v })}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select staff" />
-              </SelectTrigger>
-              <SelectContent>
-                {employees.map((e) => (
-                  <SelectItem key={e.id} value={e.user_email}>
-                    {e.full_name} {e.position ? `· ${e.position}` : ''}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          {defaultEmployee ? (
+            <div className="sm:col-span-2 rounded-lg bg-muted/50 px-3 py-2 text-sm">
+              <span className="font-medium">{defaultEmployee.full_name}</span>
+              {defaultEmployee.position ? (
+                <span className="text-muted-foreground"> · {defaultEmployee.position}</span>
+              ) : null}
+            </div>
+          ) : (
+            <div className="sm:col-span-2">
+              <Label>Staff member</Label>
+              <Select value={form.employee_email} onValueChange={(v) => setForm({ ...form, employee_email: v })}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select staff" />
+                </SelectTrigger>
+                <SelectContent>
+                  {employees.map((e) => (
+                    <SelectItem key={e.id} value={e.user_email}>
+                      {e.full_name} {e.position ? `· ${e.position}` : ''}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
           <div>
             <Label>Date</Label>
             <Input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />

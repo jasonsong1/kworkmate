@@ -9,7 +9,7 @@ export function buildInterviewIcs({ uid, title, description, location, date, sta
   const lines = [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
-    'PRODID:-//BranchHire//Interview//EN',
+    'PRODID:-//kworkmate//Interview//EN',
     'CALSCALE:GREGORIAN',
     'METHOD:REQUEST',
     'BEGIN:VEVENT',
@@ -20,7 +20,7 @@ export function buildInterviewIcs({ uid, title, description, location, date, sta
     `SUMMARY:${fold(title)}`,
     `DESCRIPTION:${fold(description)}`,
     `LOCATION:${fold(location)}`,
-    organizerEmail ? `ORGANIZER;CN=BranchHire:mailto:${organizerEmail}` : '',
+    organizerEmail ? `ORGANIZER;CN=kworkmate:mailto:${organizerEmail}` : '',
     attendeeEmail ? `ATTENDEE;CN=${fold(attendeeName || 'Applicant')};ROLE=REQ-PARTICIPANT:mailto:${attendeeEmail}` : '',
     'STATUS:CONFIRMED',
     'SEQUENCE:0',

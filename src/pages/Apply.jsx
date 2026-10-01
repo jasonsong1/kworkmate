@@ -11,7 +11,7 @@ import { Progress } from '@/components/ui/progress';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
-import { VISA_TYPES, defaultRequiredQuestions, emptyAvailability, money } from '@/lib/bh';
+import { VISA_TYPES, defaultRequiredQuestions, emptyAvailability, isDigits, money } from '@/lib/bh';
 import { base44 } from '@/api/base44Client';
 
 const initialForm = {
@@ -22,8 +22,7 @@ const initialForm = {
   visa_expiry: '',
   available_immediately: true,
   emergency_contact_name: '',
-  emergency_contact_phone: '',
-  pre_interview_url: ''
+  emergency_contact_phone: ''
 };
 
 export default function Apply() {
@@ -64,11 +63,13 @@ export default function Apply() {
     const checks = [
       form.full_name.trim().length > 1,
       /\S+@\S+\.\S+/.test(form.email),
-      form.phone.replace(/\D/g, '').length >= 8,
+      isDigits(form.phone, 10),
       Boolean(form.visa_type),
       Boolean(form.visa_expiry),
       enabled.includes('availability') ? Object.values(availability).some((d) => d.length > 0) : true,
-      enabled.includes('emergency_contact') ? Boolean(form.emergency_contact_name && form.emergency_contact_phone) : true,
+      enabled.includes('emergency_contact')
+        ? Boolean(form.emergency_contact_name && isDigits(form.emergency_contact_phone, 10))
+        : true,
       enabled.includes('resume') ? Boolean(resume && resume.file_uri) : true,
       customQuestions.every((q) => !q.required || String(answers[q.id] || '').trim().length > 0)
     ];
@@ -92,7 +93,6 @@ export default function Apply() {
       available_immediately: form.available_immediately,
       emergency_contact_name: form.emergency_contact_name,
       emergency_contact_phone: form.emergency_contact_phone,
-      pre_interview_url: form.pre_interview_url,
       answers: customQuestions.map((q) => ({ question: q.label, answer: answers[q.id] || '' })),
       resume_file_uri: resume ? resume.file_uri : '',
       resume_filename: resume ? resume.filename : '',
@@ -211,6 +211,9 @@ export default function Apply() {
             <div>
               <Label>Mobile number *</Label>
               <Input inputMode="tel" value={form.phone} onChange={(e) => set('phone', e.target.value)} />
+              {form.phone.length > 0 && !isDigits(form.phone, 10) && (
+                <p className="mt-1 text-xs text-destructive">Enter a 10-digit mobile number</p>
+              )}
             </div>
           </div>
         </section>
@@ -283,17 +286,10 @@ export default function Apply() {
                     value={form.emergency_contact_phone}
                     onChange={(e) => set('emergency_contact_phone', e.target.value)}
                   />
+                  {form.emergency_contact_phone.length > 0 && !isDigits(form.emergency_contact_phone, 10) && (
+                    <p className="mt-1 text-xs text-destructive">Enter a 10-digit phone number</p>
+                  )}
                 </div>
-              </div>
-            )}
-            {enabled.includes('pre_interview_url') && (
-              <div>
-                <Label>Pre-interview video link (optional)</Label>
-                <Input
-                  value={form.pre_interview_url}
-                  onChange={(e) => set('pre_interview_url', e.target.value)}
-                  placeholder="https://"
-                />
               </div>
             )}
             {customQuestions.map((question) => (

@@ -81,7 +81,7 @@ export default async function (req) {
         ],
         ctaText: 'Complete onboarding',
         ctaUrl: link,
-        footer: `${company ? company.name : ''} · BranchHire`
+        footer: `${company ? company.name : ''} · kworkmate`
       })
     });
 

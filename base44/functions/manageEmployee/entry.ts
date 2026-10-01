@@ -89,7 +89,7 @@ export default async function (req) {
             ],
             ctaText: 'Start onboarding',
             ctaUrl: link,
-            footer: `${branch.name} · BranchHire`
+            footer: `${branch.name} · kworkmate`
           })
         });
       }
@@ -147,7 +147,7 @@ export default async function (req) {
           ],
           ctaText: 'Start onboarding',
           ctaUrl: link,
-          footer: `${branch.name} · BranchHire`
+          footer: `${branch.name} · kworkmate`
         })
       });
     }

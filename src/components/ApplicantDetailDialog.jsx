@@ -1,7 +1,8 @@
 import React from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { APPLICANT_STATUS, availabilitySummary, visaLabel } from '@/lib/bh';
+import AvailabilityChart from '@/components/AvailabilityChart';
+import { APPLICANT_STATUS, visaLabel } from '@/lib/bh';
 
 const ROWS = [
   ['Email', (a) => a.email],
@@ -9,7 +10,6 @@ const ROWS = [
   ['Visa type', (a) => visaLabel(a.visa_type)],
   ['Visa expiry', (a) => a.visa_expiry],
   ['Available immediately', (a) => (a.available_immediately ? 'Yes' : 'No')],
-  ['Weekly availability', (a) => availabilitySummary(a.availability)],
   ['Emergency contact', (a) => a.emergency_contact_name],
   ['Emergency phone', (a) => a.emergency_contact_phone],
   ['Resume file', (a) => a.resume_filename],
@@ -39,7 +39,7 @@ export default function ApplicantDetailDialog({ applicant, open, onOpenChange })
           {applicant.ai_summary && (
             <div className="rounded-lg bg-muted/50 p-4">
               <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                AI summary
+                Summary
               </p>
               <p className="text-sm">{applicant.ai_summary}</p>
               {applicant.ai_notes && <p className="mt-2 text-xs text-muted-foreground">{applicant.ai_notes}</p>}
@@ -67,6 +67,13 @@ export default function ApplicantDetailDialog({ applicant, open, onOpenChange })
                 </div>
               );
             })}
+          </div>
+
+          <div>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Weekly availability
+            </p>
+            <AvailabilityChart matrix={applicant.availability} />
           </div>
 
           {(applicant.answers || []).length > 0 && (

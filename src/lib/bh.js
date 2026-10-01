@@ -113,7 +113,6 @@ export function defaultRequiredQuestions() {
     { key: 'availability', label: 'Weekly availability matrix', required: true, enabled: true },
     { key: 'available_immediately', label: 'Available to start immediately', required: true, enabled: true },
     { key: 'emergency_contact', label: 'Emergency contact', required: true, enabled: true },
-    { key: 'pre_interview_url', label: 'Pre-interview video link', required: false, enabled: true },
     { key: 'resume', label: 'Resume upload (PDF / DOC / DOCX, max 10MB)', required: true, enabled: true }
   ];
 }

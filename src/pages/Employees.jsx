@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { FileText, Pencil, Plus, Search, Send } from 'lucide-react';
+import { FileText, Pencil, Plus, Power, Search, Send, Trash2 } from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
 import EmployeeDialog from '@/components/EmployeeDialog';
 import EmployeeDocumentsDialog from '@/components/EmployeeDocumentsDialog';
@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { useToast } from '@/components/ui/use-toast';
 import { useI18n } from '@/lib/i18n';
 import { useWorkspace } from '@/lib/WorkspaceContext';
 import { money } from '@/lib/bh';
@@ -16,6 +17,7 @@ import { base44 } from '@/api/base44Client';
 export default function Employees() {
   const { t } = useI18n();
   const { activeBranch } = useWorkspace();
+  const { toast } = useToast();
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -31,7 +33,13 @@ export default function Employees() {
     }
     setLoading(true);
     const query = { branch_id: activeBranch.id };
-    if (search.trim()) query.full_name = { $regex: search.trim(), $options: 'i' };
+    const term = search.trim();
+    if (term) {
+      query.$or = [
+        { full_name: { $regex: term, $options: 'i' } },
+        { employee_number: { $regex: term, $options: 'i' } }
+      ];
+    }
     const page = await base44.entities.EmployeeProfile.filter(query, { sort: '-created_date', limit: 100 });
     setRows(page.items || []);
     setLoading(false);
@@ -50,6 +58,20 @@ export default function Employees() {
   const openEdit = (row) => {
     setEditing(row);
     setDialogOpen(true);
+  };
+
+  const toggleActive = async (row) => {
+    await base44.entities.EmployeeProfile.update(row.id, {
+      status: row.status === 'inactive' ? 'active' : 'inactive'
+    });
+    toast({ title: t('common.save') });
+    load();
+  };
+
+  const removeEmployee = async (row) => {
+    if (!window.confirm(t('employees.deleteConfirm'))) return;
+    await base44.entities.EmployeeProfile.delete(row.id);
+    load();
   };
 
   return (
@@ -97,7 +119,12 @@ export default function Employees() {
                   {rows.map((row) => (
                     <TableRow key={row.id}>
                       <TableCell>
-                        <p className="font-medium">{row.full_name}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium">{row.full_name}</p>
+                          {row.status === 'inactive' && (
+                            <Badge variant="secondary">{t('employees.inactive')}</Badge>
+                          )}
+                        </div>
                         <p className="text-xs text-muted-foreground">{row.user_email}</p>
                       </TableCell>
                       <TableCell className="font-mono text-xs">{row.employee_number || '—'}</TableCell>
@@ -136,6 +163,22 @@ export default function Employees() {
                             }}
                           >
                             <Send className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            title={row.status === 'inactive' ? t('employees.activate') : t('employees.deactivate')}
+                            onClick={() => toggleActive(row)}
+                          >
+                            <Power className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            title={t('employees.delete')}
+                            onClick={() => removeEmployee(row)}
+                          >
+                            <Trash2 className="h-3.5 w-3.5 text-destructive" />
                           </Button>
                         </div>
                       </TableCell>

@@ -44,7 +44,11 @@ export default function Dashboard() {
         setLoading(false);
         return;
       }
-      const scope = isAdmin ? { company_id: company.id } : { branch_id: activeBranch ? activeBranch.id : '__none__' };
+      const scope = activeBranch
+        ? { branch_id: activeBranch.id }
+        : isAdmin
+          ? { company_id: company.id }
+          : { branch_id: '__none__' };
       const twoDaysAgo = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
 
       const [jobs, applicants, staff, shifts, onboarding, recentList, delayedList] = await Promise.all([

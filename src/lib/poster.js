@@ -26,6 +26,27 @@ function roundRect(ctx, x, y, w, h, r) {
   ctx.closePath();
 }
 
+function wrapText(ctx, text, x, y, maxWidth, lineHeight, maxLines) {
+  const words = String(text || '')
+    .split(/\s+/)
+    .filter(Boolean);
+  const lines = [];
+  let line = '';
+  words.forEach((word) => {
+    const test = line ? `${line} ${word}` : word;
+    if (ctx.measureText(test).width > maxWidth && line) {
+      lines.push(line);
+      line = word;
+    } else {
+      line = test;
+    }
+  });
+  if (line) lines.push(line);
+  const shown = lines.slice(0, maxLines);
+  shown.forEach((value, index) => ctx.fillText(value, x, y + index * lineHeight));
+  return shown.length || 1;
+}
+
 export async function renderPoster(canvas, { title, storeName, rate, address, applyUrl, brandColor, logoUrl, note }) {
   const W = 1100;
   const H = 1500;
@@ -43,9 +64,13 @@ export async function renderPoster(canvas, { title, storeName, rate, address, ap
   ctx.fillStyle = color;
   ctx.fillRect(0, 0, W, 300);
 
-  if (logo) {
+  if (logo && logo.width && logo.height) {
     try {
-      ctx.drawImage(logo, 70, 70, 160, 160);
+      const box = 160;
+      const scale = Math.min(box / logo.width, box / logo.height);
+      const logoW = logo.width * scale;
+      const logoH = logo.height * scale;
+      ctx.drawImage(logo, 70 + (box - logoW) / 2, 70 + (box - logoH) / 2, logoW, logoH);
     } catch (error) {
       console.error('logo draw failed', error);
     }
@@ -81,11 +106,11 @@ export async function renderPoster(canvas, { title, storeName, rate, address, ap
   ctx.fillStyle = '#475569';
   ctx.font = '400 32px Inter, Arial, sans-serif';
   if (address) {
-    ctx.fillText(address.slice(0, 46), 70, y + 60);
-    y += 50;
+    const lines = wrapText(ctx, address, 70, y + 60, 420, 44, 3);
+    y += 44 * lines + 12;
   }
   if (note) {
-    ctx.fillText(note.slice(0, 46), 70, y + 60);
+    wrapText(ctx, note, 70, y + 60, 420, 44, 2);
   }
 
   const qrX = W - qrSize - 90;
@@ -110,10 +135,6 @@ export async function renderPoster(canvas, { title, storeName, rate, address, ap
   ctx.fillStyle = '#0f172a';
   ctx.font = '700 46px Inter, Arial, sans-serif';
   ctx.fillText('SCAN TO APPLY', 70, H - 250);
-  ctx.fillStyle = '#475569';
-  ctx.font = '400 28px Inter, Arial, sans-serif';
-  ctx.fillText('Takes about 1 minute — no login needed', 70, H - 195);
-
   ctx.fillStyle = color;
   ctx.font = '400 24px Inter, Arial, sans-serif';
   ctx.fillText(applyUrl.length > 60 ? `${applyUrl.slice(0, 60)}…` : applyUrl, 70, H - 130);

@@ -11,6 +11,14 @@ export default function QuestionBuilder({ required, custom, onChangeRequired, on
     onChangeRequired(required.map((q) => (q.key === key ? { ...q, enabled: !q.enabled } : q)));
   };
 
+  const setRequiredFlag = (key, value) => {
+    onChangeRequired(required.map((q) => (q.key === key ? { ...q, required: value } : q)));
+  };
+
+  const setCustomRequired = (id, value) => {
+    onChangeCustom((custom || []).map((q) => (q.id === id ? { ...q, required: value } : q)));
+  };
+
   const addCustom = () => {
     onChangeCustom([
       ...(custom || []),
@@ -32,14 +40,29 @@ export default function QuestionBuilder({ required, custom, onChangeRequired, on
         <p className="mb-3 text-sm font-semibold">Standard questions</p>
         <div className="divide-y rounded-lg border">
           {(required || []).map((q) => (
-            <div key={q.key} className="flex items-center justify-between gap-3 px-4 py-3">
-              <div>
+            <div key={q.key} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+              <div className="min-w-0">
                 <p className="text-sm">{q.label}</p>
                 <p className="text-xs text-muted-foreground">
-                  {q.required ? 'Required field' : 'Optional field'}
+                  {q.enabled === false ? 'Not asked on the application form' : 'Asked on the application form'}
                 </p>
               </div>
-              <Switch checked={q.enabled !== false} onCheckedChange={() => toggleRequired(q.key)} />
+              <div className="flex items-center gap-2">
+                <Select
+                  value={q.required ? 'required' : 'optional'}
+                  onValueChange={(v) => setRequiredFlag(q.key, v === 'required')}
+                  disabled={q.enabled === false}
+                >
+                  <SelectTrigger className="h-8 w-[130px] text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="required">Required</SelectItem>
+                    <SelectItem value="optional">Optional</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Switch checked={q.enabled !== false} onCheckedChange={() => toggleRequired(q.key)} />
+              </div>
             </div>
           ))}
         </div>
@@ -59,7 +82,7 @@ export default function QuestionBuilder({ required, custom, onChangeRequired, on
         ) : (
           <div className="space-y-3">
             {(custom || []).map((q) => (
-              <div key={q.id} className="grid gap-3 rounded-lg border p-3 sm:grid-cols-[1fr_150px_auto]">
+              <div key={q.id} className="grid gap-3 rounded-lg border p-3 sm:grid-cols-[1fr_150px_130px_auto]">
                 <div>
                   <Label className="text-xs">Question</Label>
                   <Input
@@ -77,6 +100,18 @@ export default function QuestionBuilder({ required, custom, onChangeRequired, on
                     <SelectContent>
                       <SelectItem value="text">Short answer</SelectItem>
                       <SelectItem value="yesno">Yes / No</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-xs">Answer</Label>
+                  <Select value={q.required ? 'required' : 'optional'} onValueChange={(v) => setCustomRequired(q.id, v === 'required')}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="required">Required</SelectItem>
+                      <SelectItem value="optional">Optional</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

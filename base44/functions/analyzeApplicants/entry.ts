@@ -39,7 +39,7 @@ Read the attached resume and return:
 1. experience_years — total relevant hospitality / customer service experience in years.
 2. skills — short list of practical skills.
 3. certificates — list any certification found (RSA, RSG, food safety, first aid, barista, etc).
-4. summary — exactly two sentences in English. Sentence one: who they are and their experience. Sentence two: why they fit or do not fit this exact role.
+4. summary — exactly two short lines in English. Line one: their relevant hospitality / customer service experience. Line two: their weekly availability, naming the days and shift blocks they can work. Say nothing else — no opinions and no fit commentary.
 5. fit_score — 0 to 100 for THIS job. Weight relevant hospitality experience heavily, then certifications, then weekly availability coverage, then visa validity of at least six months, then reliability signals.
 6. strengths and concerns — short phrases.
 7. unreadable — true when the document is a scan or image with no extractable text; in that case still return fit_score 50 and a summary saying the resume is a scan and needs manual review.
@@ -90,7 +90,7 @@ export default async function (req) {
               `Thank you for your interest in <b>${job.title}</b> at ${branch ? branch.name : 'our store'}.`,
               'After reviewing this round of applications we are not moving forward with your application. We keep your details on file and would be glad to consider you for future openings.'
             ],
-            footer: `${company ? company.name : ''} · BranchHire`
+            footer: `${company ? company.name : ''} · kworkmate`
           })
         });
         if (ok) {
@@ -188,7 +188,7 @@ export default async function (req) {
                 'Current AI top list:',
                 `<pre style="font-family:monospace;font-size:13px;color:#334155;white-space:pre-wrap">${shortlist}</pre>`
               ],
-              footer: `${company ? company.name : ''} · BranchHire`
+              footer: `${company ? company.name : ''} · kworkmate`
             })
           });
         }
