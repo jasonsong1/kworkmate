@@ -29,7 +29,9 @@ export default function ApplicantDetailDialog({ applicant, open, onOpenChange })
           <DialogTitle className="flex flex-wrap items-center gap-2">
             {applicant.full_name}
             <Badge className={meta.tone}>{meta.label}</Badge>
-            {typeof applicant.ai_score === 'number' && <Badge variant="outline">AI {applicant.ai_score}</Badge>}
+            {typeof applicant.ai_score === 'number' && (
+              <Badge variant="outline">Fit rate {applicant.ai_score}</Badge>
+            )}
           </DialogTitle>
         </DialogHeader>
 

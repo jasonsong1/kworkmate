@@ -125,7 +125,9 @@ export default function Dashboard() {
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
                       {typeof applicant.ai_score === 'number' && (
-                        <Badge variant="outline">AI {applicant.ai_score}</Badge>
+                        <Badge variant="outline">
+                          {t('applicants.aiScore')} {applicant.ai_score}
+                        </Badge>
                       )}
                       <Badge className={meta.tone}>{meta.label}</Badge>
                     </div>
