@@ -6,10 +6,10 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { useI18n } from '@/lib/i18n';
-import { useWorkspace } from '@/lib/WorkspaceContext';
+import { WorkspaceProvider, useWorkspace } from '@/lib/WorkspaceContext';
 import { base44 } from '@/api/base44Client';
 
-export default function BackofficeLayout() {
+function BackofficeShell() {
   const { t, toggle } = useI18n();
   const { me, company, branches, activeBranchId, selectBranch, role } = useWorkspace();
   const [open, setOpen] = useState(false);
@@ -76,5 +76,13 @@ export default function BackofficeLayout() {
         </main>
       </div>
     </div>
+  );
+}
+
+export default function BackofficeLayout() {
+  return (
+    <WorkspaceProvider>
+      <BackofficeShell />
+    </WorkspaceProvider>
   );
 }

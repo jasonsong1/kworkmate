@@ -92,5 +92,19 @@ export function WorkspaceProvider({ children }) {
 }
 
 export function useWorkspace() {
-  return useContext(WorkspaceContext) || {};
+  return (
+    useContext(WorkspaceContext) || {
+      me: null,
+      company: null,
+      branches: [],
+      role: 'staff',
+      isManager: false,
+      employeeProfile: null,
+      activeBranch: null,
+      activeBranchId: '',
+      selectBranch: () => {},
+      loading: true,
+      reload: () => {}
+    }
+  );
 }

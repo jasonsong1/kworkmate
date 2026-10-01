@@ -66,6 +66,10 @@ export function money(value) {
   return `$${Number(value || 0).toFixed(2)}`;
 }
 
+export function isDigits(value, length) {
+  return new RegExp(`^\\d{${length}}$`).test(String(value || '').trim());
+}
+
 export function employeeNumberPreview(prefix, padding, next) {
   const pad = Number(padding) > 0 ? Number(padding) : 3;
   return `${prefix || ''}${String(Number(next) || 1).padStart(pad, '0')}`;
