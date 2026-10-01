@@ -1,0 +1,30 @@
+{
+  "name": "User",
+  "type": "object",
+  "properties": {
+    "company_id": {
+      "type": "string"
+    },
+    "branch_id": {
+      "type": "string"
+    },
+    "branch_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "app_role": {
+      "type": "string",
+      "enum": [
+        "company_admin",
+        "branch_manager",
+        "staff"
+      ],
+      "default": "staff"
+    },
+    "position": {
+      "type": "string"
+    }
+  }
+}

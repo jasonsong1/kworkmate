@@ -1,0 +1,196 @@
+{
+  "name": "EmployeeProfile",
+  "type": "object",
+  "properties": {
+    "company_id": {
+      "type": "string"
+    },
+    "branch_id": {
+      "type": "string"
+    },
+    "user_email": {
+      "type": "string"
+    },
+    "full_name": {
+      "type": "string"
+    },
+    "employee_number": {
+      "type": "string"
+    },
+    "position": {
+      "type": "string"
+    },
+    "hourly_rate": {
+      "type": "number"
+    },
+    "employment_type": {
+      "type": "string",
+      "enum": [
+        "casual",
+        "part_time",
+        "full_time"
+      ],
+      "default": "casual"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "inactive"
+      ],
+      "default": "active"
+    },
+    "start_date": {
+      "type": "string"
+    },
+    "phone": {
+      "type": "string"
+    },
+    "date_of_birth": {
+      "type": "string"
+    },
+    "address": {
+      "type": "string"
+    },
+    "emergency_contact_name": {
+      "type": "string"
+    },
+    "emergency_contact_phone": {
+      "type": "string"
+    },
+    "onboarding_status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "in_progress",
+        "completed"
+      ],
+      "default": "pending"
+    },
+    "onboarding_token": {
+      "type": "string"
+    },
+    "onboarding_submitted_at": {
+      "type": "string"
+    },
+    "docs": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "tfn_number": {
+      "type": "string"
+    },
+    "tfn_pending": {
+      "type": "boolean",
+      "default": false
+    },
+    "residency_status": {
+      "type": "string"
+    },
+    "tax_free_threshold": {
+      "type": "boolean",
+      "default": true
+    },
+    "hecs_help": {
+      "type": "boolean",
+      "default": false
+    },
+    "super_choice": {
+      "type": "string",
+      "enum": [
+        "default_fund",
+        "custom_fund"
+      ]
+    },
+    "super_fund_name": {
+      "type": "string"
+    },
+    "super_usi": {
+      "type": "string"
+    },
+    "super_member_number": {
+      "type": "string"
+    },
+    "super_fund_abn": {
+      "type": "string"
+    },
+    "bank_bsb": {
+      "type": "string"
+    },
+    "bank_account_number": {
+      "type": "string"
+    },
+    "bank_account_name": {
+      "type": "string"
+    },
+    "signature_file_uri": {
+      "type": "string"
+    },
+    "signed_at": {
+      "type": "string"
+    },
+    "applicant_id": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "full_name"
+  ],
+  "rls": {
+    "read": {
+      "$or": [
+        {
+          "data.user_email": "{{user.email}}"
+        },
+        {
+          "data.branch_id": {
+            "$in": "{{user.data.branch_ids}}"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "create": {
+      "$or": [
+        {
+          "data.company_id": "{{user.data.company_id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "$or": [
+        {
+          "data.company_id": "{{user.data.company_id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "delete": {
+      "$or": [
+        {
+          "data.company_id": "{{user.data.company_id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    }
+  }
+}

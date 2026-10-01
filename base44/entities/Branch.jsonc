@@ -1,0 +1,108 @@
+{
+  "name": "Branch",
+  "type": "object",
+  "properties": {
+    "company_id": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string"
+    },
+    "code": {
+      "type": "string"
+    },
+    "address": {
+      "type": "string"
+    },
+    "suburb": {
+      "type": "string"
+    },
+    "state": {
+      "type": "string"
+    },
+    "postcode": {
+      "type": "string"
+    },
+    "phone": {
+      "type": "string"
+    },
+    "trading_hours": {
+      "type": "string"
+    },
+    "manager_emails": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "employee_prefix": {
+      "type": "string"
+    },
+    "employee_number_padding": {
+      "type": "number",
+      "default": 3
+    },
+    "employee_next_number": {
+      "type": "number",
+      "default": 1
+    },
+    "gps_lat": {
+      "type": "number"
+    },
+    "gps_lng": {
+      "type": "number"
+    },
+    "gps_radius_m": {
+      "type": "number",
+      "default": 100
+    },
+    "logo_url": {
+      "type": "string"
+    },
+    "brand_color": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "name"
+  ],
+  "rls": {
+    "read": {},
+    "create": {
+      "$or": [
+        {
+          "data.company_id": "{{user.data.company_id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "$or": [
+        {
+          "data.company_id": "{{user.data.company_id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "delete": {
+      "$or": [
+        {
+          "data.company_id": "{{user.data.company_id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    }
+  }
+}

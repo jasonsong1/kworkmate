@@ -1,0 +1,100 @@
+{
+  "name": "Company",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string"
+    },
+    "abn": {
+      "type": "string"
+    },
+    "logo_url": {
+      "type": "string"
+    },
+    "brand_color": {
+      "type": "string",
+      "default": "#4338ca"
+    },
+    "contact_email": {
+      "type": "string"
+    },
+    "contact_phone": {
+      "type": "string"
+    },
+    "member_emails": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "default_super_fund_name": {
+      "type": "string"
+    },
+    "default_super_fund_abn": {
+      "type": "string"
+    },
+    "default_super_fund_usi": {
+      "type": "string"
+    },
+    "default_super_fund_phone": {
+      "type": "string"
+    },
+    "auto_reject_email": {
+      "type": "boolean",
+      "default": true
+    },
+    "mini_interview_enabled": {
+      "type": "boolean",
+      "default": true
+    },
+    "ai_top_n": {
+      "type": "number",
+      "default": 10
+    }
+  },
+  "required": [
+    "name"
+  ],
+  "rls": {
+    "read": {},
+    "create": {
+      "data.member_emails": {
+        "$in": [
+          "{{user.email}}"
+        ]
+      }
+    },
+    "update": {
+      "$or": [
+        {
+          "data.member_emails": {
+            "$in": [
+              "{{user.email}}"
+            ]
+          }
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "delete": {
+      "$or": [
+        {
+          "data.member_emails": {
+            "$in": [
+              "{{user.email}}"
+            ]
+          }
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    }
+  }
+}

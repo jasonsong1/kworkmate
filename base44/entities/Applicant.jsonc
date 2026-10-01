@@ -1,0 +1,183 @@
+{
+  "name": "Applicant",
+  "type": "object",
+  "properties": {
+    "company_id": {
+      "type": "string"
+    },
+    "branch_id": {
+      "type": "string"
+    },
+    "job_id": {
+      "type": "string"
+    },
+    "full_name": {
+      "type": "string"
+    },
+    "email": {
+      "type": "string"
+    },
+    "phone": {
+      "type": "string"
+    },
+    "visa_type": {
+      "type": "string"
+    },
+    "visa_expiry": {
+      "type": "string"
+    },
+    "availability": {
+      "type": "object"
+    },
+    "available_immediately": {
+      "type": "boolean",
+      "default": true
+    },
+    "emergency_contact_name": {
+      "type": "string"
+    },
+    "emergency_contact_phone": {
+      "type": "string"
+    },
+    "pre_interview_url": {
+      "type": "string"
+    },
+    "answers": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "resume_file_uri": {
+      "type": "string"
+    },
+    "resume_filename": {
+      "type": "string"
+    },
+    "resume_size": {
+      "type": "number"
+    },
+    "ai_score": {
+      "type": "number"
+    },
+    "ai_summary": {
+      "type": "string"
+    },
+    "ai_skills": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "ai_flags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "ai_notes": {
+      "type": "string"
+    },
+    "analysis_status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "analyzed",
+        "unreadable",
+        "failed"
+      ],
+      "default": "pending"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "submitted",
+        "top10",
+        "mini_interview",
+        "final_interview",
+        "interview_scheduled",
+        "hired",
+        "rejected"
+      ],
+      "default": "submitted"
+    },
+    "rank": {
+      "type": "number"
+    },
+    "interview_token": {
+      "type": "string"
+    },
+    "interview_slot_id": {
+      "type": "string"
+    },
+    "interview_confirmed_at": {
+      "type": "string"
+    },
+    "invited_at": {
+      "type": "string"
+    },
+    "hired_at": {
+      "type": "string"
+    },
+    "rejection_sent_at": {
+      "type": "string"
+    },
+    "onboarding_token": {
+      "type": "string"
+    },
+    "onboarding_status": {
+      "type": "string",
+      "enum": [
+        "none",
+        "pending",
+        "completed"
+      ],
+      "default": "none"
+    }
+  },
+  "required": [
+    "full_name",
+    "email"
+  ],
+  "rls": {
+    "read": {
+      "$or": [
+        {
+          "data.branch_id": {
+            "$in": "{{user.data.branch_ids}}"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "create": {},
+    "update": {
+      "$or": [
+        {
+          "data.company_id": "{{user.data.company_id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "delete": {
+      "$or": [
+        {
+          "data.company_id": "{{user.data.company_id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    }
+  }
+}

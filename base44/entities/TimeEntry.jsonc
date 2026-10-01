@@ -1,0 +1,121 @@
+{
+  "name": "TimeEntry",
+  "type": "object",
+  "properties": {
+    "company_id": {
+      "type": "string"
+    },
+    "branch_id": {
+      "type": "string"
+    },
+    "employee_email": {
+      "type": "string"
+    },
+    "employee_name": {
+      "type": "string"
+    },
+    "shift_id": {
+      "type": "string"
+    },
+    "clock_in_at": {
+      "type": "string"
+    },
+    "clock_out_at": {
+      "type": "string"
+    },
+    "clock_in_lat": {
+      "type": "number"
+    },
+    "clock_in_lng": {
+      "type": "number"
+    },
+    "clock_out_lat": {
+      "type": "number"
+    },
+    "clock_out_lng": {
+      "type": "number"
+    },
+    "clock_in_distance_m": {
+      "type": "number"
+    },
+    "clock_out_distance_m": {
+      "type": "number"
+    },
+    "geo_verified": {
+      "type": "boolean",
+      "default": false
+    },
+    "scheduled_start": {
+      "type": "string"
+    },
+    "scheduled_end": {
+      "type": "string"
+    },
+    "minutes": {
+      "type": "number"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "completed"
+      ],
+      "default": "active"
+    }
+  },
+  "rls": {
+    "read": {
+      "$or": [
+        {
+          "data.employee_email": "{{user.email}}"
+        },
+        {
+          "data.branch_id": {
+            "$in": "{{user.data.branch_ids}}"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "create": {
+      "$or": [
+        {
+          "data.company_id": "{{user.data.company_id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "$or": [
+        {
+          "data.company_id": "{{user.data.company_id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "delete": {
+      "$or": [
+        {
+          "data.company_id": "{{user.data.company_id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    }
+  }
+}
