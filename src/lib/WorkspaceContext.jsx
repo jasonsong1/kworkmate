@@ -22,6 +22,8 @@ export function WorkspaceProvider({ children }) {
 
     setMe(user);
 
+    const superAdmin = Boolean(user && user.role === 'admin');
+
     if (user && user.company_id) {
       const [companies, allBranches] = await Promise.all([
         base44.entities.Company.filter({ id: user.company_id }).catch(() => []),
@@ -30,7 +32,7 @@ export function WorkspaceProvider({ children }) {
       setCompany(companies[0] || null);
 
       const allowed =
-        user.app_role === 'company_admin'
+        superAdmin || user.app_role === 'company_admin'
           ? allBranches
           : allBranches.filter((b) => (user.branch_ids || []).includes(b.id));
       setBranches(allowed);
@@ -48,7 +50,7 @@ export function WorkspaceProvider({ children }) {
     }
 
     // Everyone who is not a manager is an employee: staff and every company-defined position.
-    const appRole = user ? user.app_role || (user.role === 'admin' ? 'company_admin' : 'staff') : '';
+    const appRole = user ? (superAdmin ? 'company_admin' : user.app_role || 'staff') : '';
     if (user && appRole !== 'company_admin' && appRole !== 'branch_manager') {
       const profiles = await base44.entities.EmployeeProfile.filter({ user_email: user.email }).catch(() => []);
       setEmployeeProfile(profiles[0] || null);
@@ -92,10 +94,12 @@ export function WorkspaceProvider({ children }) {
   };
 
   const activeBranch = branches.find((b) => b.id === activeBranchId) || null;
-  const role = (me && me.app_role) || (me && me.role === 'admin' ? 'company_admin' : 'staff');
-  const isManager = role === 'company_admin' || role === 'branch_manager';
   // The app owner (platform admin) can enter any company; everyone else only sees their own.
   const isPlatformAdmin = Boolean(me && me.role === 'admin');
+  // A super admin always acts as the company admin of the company they are in, whatever
+  // app role happens to be stored on their account.
+  const role = isPlatformAdmin ? 'company_admin' : (me && me.app_role) || 'staff';
+  const isManager = role === 'company_admin' || role === 'branch_manager';
 
   return (
     <WorkspaceContext.Provider

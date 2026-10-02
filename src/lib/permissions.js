@@ -58,9 +58,10 @@ export function areaForPath(pathname) {
   return match ? match[1] : null;
 }
 
-export function resolvePermissions(company, branch, role) {
+export function resolvePermissions(company, branch, role, isPlatformAdmin) {
   const resolved = {};
-  if (role === 'company_admin') {
+  // A super admin holds every permission in every company they enter.
+  if (isPlatformAdmin || role === 'company_admin') {
     PERMISSION_AREAS.forEach((area) => {
       resolved[area.key] = 'edit';
     });
@@ -76,11 +77,12 @@ export function resolvePermissions(company, branch, role) {
 }
 
 export function usePermissions() {
-  const { company, activeBranch, role } = useWorkspace();
-  const permissions = resolvePermissions(company, activeBranch, role);
+  const { company, activeBranch, role, isPlatformAdmin } = useWorkspace();
+  const permissions = resolvePermissions(company, activeBranch, role, isPlatformAdmin);
   return {
     role,
-    isCompanyAdmin: role === 'company_admin',
+    isPlatformAdmin,
+    isCompanyAdmin: isPlatformAdmin || role === 'company_admin',
     permissions,
     level: (area) => permissions[area] || 'none',
     canView: (area) => (permissions[area] || 'none') !== 'none',

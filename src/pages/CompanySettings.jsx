@@ -14,11 +14,12 @@ import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/components/ui/use-toast';
 import { useI18n } from '@/lib/i18n';
 import { useWorkspace } from '@/lib/WorkspaceContext';
+import CompanyPicker from '@/components/platform/CompanyPicker';
 import { base44 } from '@/api/base44Client';
 
 export default function CompanySettings() {
   const { t } = useI18n();
-  const { company, reload, role } = useWorkspace();
+  const { company, reload, role, isPlatformAdmin } = useWorkspace();
   const { toast } = useToast();
   const [form, setForm] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -70,6 +71,17 @@ export default function CompanySettings() {
     setSaving(false);
     toast({ title: t('settings.saved') });
   };
+
+  // A super admin who has not entered a company yet picks one here instead of waiting on
+  // settings that belong to no company.
+  if (isPlatformAdmin && !company) {
+    return (
+      <div>
+        <PageHeader title={t('settings.title')} subtitle={t('settings.subtitle')} />
+        <CompanyPicker />
+      </div>
+    );
+  }
 
   if (!form) return <p className="text-sm text-muted-foreground">{t('common.loading')}</p>;
 
