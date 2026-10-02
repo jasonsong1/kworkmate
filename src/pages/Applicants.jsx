@@ -187,7 +187,7 @@ export default function Applicants() {
         </Button>
       )}
       {job &&
-        job.video_interview_enabled === true &&
+        job.video_interview_enabled !== false &&
         ['top10', 'mini_interview'].includes(applicant.status) &&
         applicant.video_interview_status !== 'completed' && (
           <Button size="sm" variant="secondary" disabled={busyId === applicant.id} onClick={() => act(applicant, 'video')}>

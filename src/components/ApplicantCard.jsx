@@ -1,6 +1,8 @@
 import React from 'react';
 import { AlertTriangle, CheckCircle2, Eye, FileText } from 'lucide-react';
 import AvailabilityTable from '@/components/AvailabilityTable';
+import MiniInterviewPanel from '@/components/MiniInterviewPanel';
+import VideoInterviewPanel from '@/components/VideoInterviewPanel';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { APPLICANT_STATUS, coverageDays, formatDateTime, visaLabel } from '@/lib/bh';
@@ -88,6 +90,14 @@ export default function ApplicantCard({ applicant, actions, onOpen, onViewResume
           <AvailabilityTable matrix={applicant.availability} />
         </div>
       </div>
+
+      {(applicant.mini_interview_responses || []).length > 0 ||
+      (applicant.video_interview_responses || []).length > 0 ? (
+        <div className="mt-4 space-y-3 rounded-lg border bg-muted/20 p-3">
+          <MiniInterviewPanel responses={applicant.mini_interview_responses} />
+          <VideoInterviewPanel responses={applicant.video_interview_responses} />
+        </div>
+      ) : null}
 
       <div className="mt-4 flex flex-wrap gap-2">
         <Button size="sm" variant="outline" onClick={onOpen}>

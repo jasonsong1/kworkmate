@@ -77,7 +77,7 @@ export default function Jobs() {
       screening_min_score: 60,
       auto_reject_email: company ? company.auto_reject_email !== false : true,
       mini_interview_enabled: company ? company.mini_interview_enabled !== false : true,
-      video_interview_enabled: company ? company.video_interview_enabled === true : false,
+      video_interview_enabled: company ? company.video_interview_enabled !== false : false,
       contact_email: company ? company.contact_email : '',
       brand_color: activeBranch.brand_color || '#4338ca',
       logo_url: activeBranch.logo_url || '',

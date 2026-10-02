@@ -16,7 +16,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/components/ui/use-toast';
 import { useI18n } from '@/lib/i18n';
 import { useWorkspace } from '@/lib/WorkspaceContext';
-import { EMPLOYMENT_TYPES, POSITIONS } from '@/lib/bh';
+import { EMPLOYMENT_TYPES } from '@/lib/bh';
 import { base44 } from '@/api/base44Client';
 
 export default function JobDetail() {
@@ -24,6 +24,7 @@ export default function JobDetail() {
   const { t } = useI18n();
   const { branches, company } = useWorkspace();
   const { toast } = useToast();
+  const roleOptions = (company && company.custom_roles) || [];
   const [job, setJob] = useState(null);
   const [branch, setBranch] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -55,6 +56,7 @@ export default function JobDetail() {
       screening_min_score: Number(job.screening_min_score) || 60,
       auto_reject_email: job.auto_reject_email !== false,
       mini_interview_enabled: job.mini_interview_enabled !== false,
+      video_interview_enabled: job.video_interview_enabled !== false,
       screening_criteria: job.screening_criteria || '',
       required_questions: job.required_questions || [],
       custom_questions: job.custom_questions || [],
@@ -124,16 +126,22 @@ export default function JobDetail() {
                   <Label>{t('common.position')}</Label>
                   <Select value={job.position || ''} onValueChange={(v) => patch({ position: v })}>
                     <SelectTrigger>
-                      <SelectValue placeholder={t('common.select')} />
+                      <SelectValue placeholder={t('role.select')} />
                     </SelectTrigger>
                     <SelectContent>
-                      {POSITIONS.map((p) => (
-                        <SelectItem key={p} value={p}>
-                          {p}
+                      {roleOptions.map((option) => (
+                        <SelectItem key={option.key} value={option.label}>
+                          {option.label}
                         </SelectItem>
                       ))}
+                      {job.position && !roleOptions.some((option) => option.label === job.position) && (
+                        <SelectItem value={job.position}>{job.position}</SelectItem>
+                      )}
                     </SelectContent>
                   </Select>
+                  {roleOptions.length === 0 && (
+                    <p className="mt-1 text-xs text-muted-foreground">{t('role.noneHint')}</p>
+                  )}
                 </div>
                 <div>
                   <Label>{t('common.rate')} (AUD)</Label>
@@ -221,7 +229,7 @@ export default function JobDetail() {
                   <div className="flex items-center justify-between rounded-lg border px-4 py-3">
                     <span className="text-sm">{t('settings.videoInterviewStep')}</span>
                     <Switch
-                      checked={job.video_interview_enabled === true}
+                      checked={job.video_interview_enabled !== false}
                       onCheckedChange={(v) => patch({ video_interview_enabled: v })}
                     />
                   </div>

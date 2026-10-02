@@ -49,11 +49,12 @@ export default function MiniInterview() {
   };
 
   useEffect(() => {
+    if (state !== 'ready') return undefined;
     speak(questionText);
     return () => {
       if (typeof window !== 'undefined' && window.speechSynthesis) window.speechSynthesis.cancel();
     };
-  }, [questionText]);
+  }, [state, questionText]);
 
   const upload = async (blob) => {
     setSaving(true);
