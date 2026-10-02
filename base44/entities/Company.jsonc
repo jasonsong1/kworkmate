@@ -87,13 +87,27 @@
       "items": {
         "type": "object"
       }
+    },
+    "job_design": {
+      "type": "object"
     }
   },
   "required": [
     "name"
   ],
   "rls": {
-    "read": {},
+    "read": {
+      "$or": [
+        {
+          "id": "{{user.data.company_id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
     "create": {
       "data.member_emails": {
         "$in": [

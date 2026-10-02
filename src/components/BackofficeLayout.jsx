@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { LogOut, Menu, Languages } from 'lucide-react';
 import AppSidebar from '@/components/AppSidebar';
+import CompanySwitcher from '@/components/company/CompanySwitcher';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
@@ -13,7 +14,7 @@ import { base44 } from '@/api/base44Client';
 
 function BackofficeShell() {
   const { t, toggle } = useI18n();
-  const { me, company, branches, activeBranchId, selectBranch, role } = useWorkspace();
+  const { company, branches, activeBranchId, selectBranch, isPlatformAdmin } = useWorkspace();
   const { canView } = usePermissions();
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
@@ -46,11 +47,12 @@ function BackofficeShell() {
           </Sheet>
 
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-semibold">{company ? company.name : t('app.name')}</p>
-            
-
-            
+            {!isPlatformAdmin && (
+              <p className="truncate text-sm font-semibold">{company ? company.name : t('app.name')}</p>
+            )}
           </div>
+
+          {isPlatformAdmin && <CompanySwitcher />}
 
           {branches.length > 0 &&
           <Select value={activeBranchId} onValueChange={selectBranch}>

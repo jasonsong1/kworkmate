@@ -64,13 +64,42 @@
     },
     "role_permissions": {
       "type": "object"
+    },
+    "roster_email_enabled": {
+      "type": "boolean",
+      "default": false
+    },
+    "roster_email_day": {
+      "type": "number",
+      "default": 0
+    },
+    "roster_email_hour": {
+      "type": "number",
+      "default": 20
+    },
+    "roster_email_origin": {
+      "type": "string"
+    },
+    "roster_email_last_sent": {
+      "type": "string"
     }
   },
   "required": [
     "name"
   ],
   "rls": {
-    "read": {},
+    "read": {
+      "$or": [
+        {
+          "data.company_id": "{{user.data.company_id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
     "create": {
       "$or": [
         {

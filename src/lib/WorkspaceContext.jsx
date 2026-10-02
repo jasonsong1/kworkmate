@@ -47,7 +47,9 @@ export function WorkspaceProvider({ children }) {
       setActiveBranchId('');
     }
 
-    if (user && user.app_role === 'staff') {
+    // Everyone who is not a manager is an employee: staff and every company-defined position.
+    const appRole = user ? user.app_role || (user.role === 'admin' ? 'company_admin' : 'staff') : '';
+    if (user && appRole !== 'company_admin' && appRole !== 'branch_manager') {
       const profiles = await base44.entities.EmployeeProfile.filter({ user_email: user.email }).catch(() => []);
       setEmployeeProfile(profiles[0] || null);
     } else {
@@ -69,6 +71,21 @@ export function WorkspaceProvider({ children }) {
     setCompany((prev) => (prev ? { ...prev, ...data } : prev));
   }, []);
 
+  // Entering another company changes which branches the user can see, so start from a clean workspace.
+  const refreshWorkspace = useCallback(async () => {
+    localStorage.removeItem('bh_branch');
+    await load();
+  }, [load]);
+
+  const switchCompany = useCallback(
+    async (companyId) => {
+      const response = await base44.functions.invoke('switchCompany', { company_id: companyId });
+      if (response.data && response.data.error) throw new Error(response.data.error);
+      await refreshWorkspace();
+    },
+    [refreshWorkspace]
+  );
+
   const selectBranch = (id) => {
     setActiveBranchId(id);
     localStorage.setItem('bh_branch', id);
@@ -77,6 +94,8 @@ export function WorkspaceProvider({ children }) {
   const activeBranch = branches.find((b) => b.id === activeBranchId) || null;
   const role = (me && me.app_role) || (me && me.role === 'admin' ? 'company_admin' : 'staff');
   const isManager = role === 'company_admin' || role === 'branch_manager';
+  // The app owner (platform admin) can enter any company; everyone else only sees their own.
+  const isPlatformAdmin = Boolean(me && me.role === 'admin');
 
   return (
     <WorkspaceContext.Provider
@@ -86,10 +105,13 @@ export function WorkspaceProvider({ children }) {
         branches,
         role,
         isManager,
+        isPlatformAdmin,
         employeeProfile,
         activeBranch,
         activeBranchId,
         selectBranch,
+        switchCompany,
+        refreshWorkspace,
         loading,
         reload: load,
         patchBranch,
@@ -109,10 +131,13 @@ export function useWorkspace() {
       branches: [],
       role: 'staff',
       isManager: false,
+      isPlatformAdmin: false,
       employeeProfile: null,
       activeBranch: null,
       activeBranchId: '',
       selectBranch: () => {},
+      switchCompany: () => {},
+      refreshWorkspace: () => {},
       loading: true,
       reload: () => {},
       patchBranch: () => {},

@@ -1,0 +1,45 @@
+{
+  "definition": {
+    "document": {
+      "dsl": "1.0.0",
+      "name": "weekly_availability_requests",
+      "version": "1.0",
+      "namespace": "base44"
+    },
+    "do": [
+      {
+        "send_requests": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "sendAvailabilityRequests",
+            "args": {}
+          },
+          "then": "end",
+          "x-base44": {
+            "title": "\uc8fc\uac04 \uadfc\ubb34\uac00\ub2a5\uc2dc\uac04 \uc694\uccad \ubc1c\uc1a1",
+            "description": "\uc608\uc57d \uc2dc\uac04\uc774 \ub41c \uc9c0\uc810\uc5d0 \uc774\uba54\uc77c \ubc1c\uc1a1"
+          }
+        }
+      }
+    ]
+  },
+  "name": "Weekly Availability Requests",
+  "trigger": {
+    "condition": null,
+    "config": {
+      "trigger_type": "scheduled",
+      "events": [],
+      "schedule_mode": "recurring",
+      "cron_expression": "0 * * * *",
+      "one_time_date": null,
+      "timezone": "Australia/Sydney",
+      "interval_value": null,
+      "interval_unit": null,
+      "interval_anchor": null,
+      "ends_type": "never",
+      "ends_on_date": null,
+      "ends_after_count": null
+    }
+  },
+  "description": "Every hour, emails the staff of every branch whose weekly availability request is due"
+}

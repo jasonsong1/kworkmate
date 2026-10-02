@@ -48,7 +48,14 @@ export default async function (req) {
             brand_color: branch.brand_color || '#4338ca'
           }
         : null,
-      company: company ? { id: company.id, name: company.name, logo_url: company.logo_url || '' } : null
+      company: company
+        ? {
+            id: company.id,
+            name: company.name,
+            logo_url: company.logo_url || '',
+            job_design: company.job_design || {}
+          }
+        : null
     });
   } catch (error) {
     return Response.json({ error: error.message }, { status: 500 });
