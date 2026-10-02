@@ -17,31 +17,35 @@ import {
 } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 import { useWorkspace } from '@/lib/WorkspaceContext';
+import { usePermissions } from '@/lib/permissions';
 import { cn } from '@/lib/utils';
 
 const MANAGER_ITEMS = [
   { to: '/', key: 'nav.dashboard', icon: LayoutDashboard, end: true },
-  { to: '/branches', key: 'nav.branches', icon: Store },
-  { to: '/employees', key: 'nav.employees', icon: Users },
-  { to: '/jobs', key: 'nav.jobs', icon: Briefcase },
-  { to: '/applicants', key: 'nav.applicants', icon: UserSearch },
-  { to: '/interviews', key: 'nav.interviews', icon: CalendarClock },
-  { to: '/roster', key: 'nav.roster', icon: CalendarDays },
-  { to: '/attendance', key: 'nav.attendance', icon: Timer },
-  { to: '/interview-settings', key: 'nav.interview', icon: Mic },
-  { to: '/email-templates', key: 'nav.emails', icon: Mail },
-  { to: '/settings', key: 'nav.settings', icon: Settings }
+  { to: '/branches', key: 'nav.branches', icon: Store, area: 'branch_settings' },
+  { to: '/employees', key: 'nav.employees', icon: Users, area: 'employees' },
+  { to: '/jobs', key: 'nav.jobs', icon: Briefcase, area: 'jobs' },
+  { to: '/applicants', key: 'nav.applicants', icon: UserSearch, area: 'jobs' },
+  { to: '/interviews', key: 'nav.interviews', icon: CalendarClock, area: 'jobs' },
+  { to: '/roster', key: 'nav.roster', icon: CalendarDays, area: 'roster' },
+  { to: '/attendance', key: 'nav.attendance', icon: Timer, area: 'attendance' },
+  { to: '/interview-settings', key: 'nav.interview', icon: Mic, area: 'templates' },
+  { to: '/email-templates', key: 'nav.emails', icon: Mail, area: 'templates' },
+  { to: '/settings', key: 'nav.settings', icon: Settings, area: 'company_settings' }
 ];
 
 const STAFF_ITEMS = [
   { to: '/', key: 'nav.mySpace', icon: UserCircle2, end: true },
-  { to: '/clock', key: 'nav.clock', icon: QrCode }
+  { to: '/clock', key: 'nav.clock', icon: QrCode, area: 'attendance' }
 ];
 
 export default function AppSidebar({ onNavigate }) {
   const { t } = useI18n();
   const { isManager } = useWorkspace();
-  const items = isManager ? MANAGER_ITEMS : STAFF_ITEMS;
+  const { canView } = usePermissions();
+  const items = (isManager ? MANAGER_ITEMS : STAFF_ITEMS).filter(
+    (item) => !item.area || canView(item.area)
+  );
 
   return (
     <div className="flex h-full flex-col">

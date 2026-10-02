@@ -78,6 +78,9 @@
     },
     "email_templates": {
       "type": "object"
+    },
+    "role_permissions": {
+      "type": "object"
     }
   },
   "required": [

@@ -34,7 +34,7 @@ export default function AvailabilityMatrix({ value, onChange, disabled }) {
               <span className="text-sm text-muted-foreground">to</span>
               <Select
                 value={entry.to || undefined}
-                disabled={disabled || !entry.from}
+                disabled={disabled}
                 onValueChange={(v) => update(day.key, { to: v })}
               >
                 <SelectTrigger className="h-9 w-[118px] text-sm">
@@ -49,6 +49,7 @@ export default function AvailabilityMatrix({ value, onChange, disabled }) {
                 </SelectContent>
               </Select>
               {wrongOrder && <span className="text-xs text-destructive">Finish time must be later</span>}
+              {entry.to && !entry.from && <span className="text-xs text-destructive">Pick a start time too</span>}
             </div>
           );
         })}

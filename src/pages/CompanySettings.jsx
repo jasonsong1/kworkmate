@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
+import PermissionMatrixEditor from '@/components/PermissionMatrixEditor';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -35,7 +36,8 @@ export default function CompanySettings() {
       auto_reject_email: company.auto_reject_email !== false,
       mini_interview_enabled: company.mini_interview_enabled !== false,
       video_interview_enabled: company.video_interview_enabled === true,
-      screening_criteria: company.screening_criteria || ''
+      screening_criteria: company.screening_criteria || '',
+      role_permissions: company.role_permissions || {}
     });
   }, [company]);
 
@@ -114,6 +116,21 @@ export default function CompanySettings() {
               <Label>{t('common.phone')}</Label>
               <Input value={form.default_super_fund_phone} onChange={(e) => set('default_super_fund_phone', e.target.value)} />
             </div>
+          </CardContent>
+        </Card>
+
+        <Card className="lg:col-span-2">
+          <CardHeader>
+            <CardTitle className="text-base">{t('perm.companyTitle')}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="mb-4 text-xs text-muted-foreground">{t('perm.companyHint')}</p>
+            <PermissionMatrixEditor
+              value={form.role_permissions}
+              onChange={(next) => set('role_permissions', next)}
+              disabled={role !== 'company_admin'}
+            />
+            <p className="mt-3 text-xs text-muted-foreground">{t('perm.locked')}</p>
           </CardContent>
         </Card>
 

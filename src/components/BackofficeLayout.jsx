@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Outlet, useNavigate } from 'react-router-dom';
+import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { LogOut, Menu, Languages } from 'lucide-react';
 import AppSidebar from '@/components/AppSidebar';
 import { Button } from '@/components/ui/button';
@@ -7,13 +7,19 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { useI18n } from '@/lib/i18n';
 import { WorkspaceProvider, useWorkspace } from '@/lib/WorkspaceContext';
+import { areaForPath, usePermissions } from '@/lib/permissions';
+import { Card, CardContent } from '@/components/ui/card';
 import { base44 } from '@/api/base44Client';
 
 function BackofficeShell() {
   const { t, toggle } = useI18n();
   const { me, company, branches, activeBranchId, selectBranch, role } = useWorkspace();
+  const { canView } = usePermissions();
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
+  const { pathname } = useLocation();
+  const requiredArea = areaForPath(pathname);
+  const allowed = !requiredArea || canView(requiredArea);
 
   const handleLogout = async () => {
     await base44.auth.logout();
@@ -72,7 +78,15 @@ function BackofficeShell() {
         </header>
 
         <main className="min-w-0 flex-1 px-4 py-6 lg:px-8">
-          <Outlet />
+          {allowed ? (
+            <Outlet />
+          ) : (
+            <Card>
+              <CardContent className="p-10 text-center text-sm text-muted-foreground">
+                {t('perm.noAccess')}
+              </CardContent>
+            </Card>
+          )}
         </main>
       </div>
     </div>);

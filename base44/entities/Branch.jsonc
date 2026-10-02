@@ -61,6 +61,9 @@
     },
     "brand_color": {
       "type": "string"
+    },
+    "role_permissions": {
+      "type": "object"
     }
   },
   "required": [

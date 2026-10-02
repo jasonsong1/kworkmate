@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Loader2, MapPin } from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
+import PermissionMatrixEditor from '@/components/PermissionMatrixEditor';
 import TradingHoursEditor, { hasOverlappingTradingHours } from '@/components/TradingHoursEditor';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -15,7 +16,7 @@ import { base44 } from '@/api/base44Client';
 
 export default function PropertySetup() {
   const { t } = useI18n();
-  const { branches, activeBranch, patchBranch } = useWorkspace();
+  const { branches, activeBranch, patchBranch, company } = useWorkspace();
   const { toast } = useToast();
   const navigate = useNavigate();
   const [params] = useSearchParams();
@@ -42,7 +43,8 @@ export default function PropertySetup() {
       employee_next_number: branch.employee_next_number || 1,
       gps_lat: branch.gps_lat ?? '',
       gps_lng: branch.gps_lng ?? '',
-      gps_radius_m: branch.gps_radius_m || 100
+      gps_radius_m: branch.gps_radius_m || 100,
+      role_permissions: branch.role_permissions || {}
     });
   }, [branch]);
 
@@ -208,6 +210,21 @@ export default function PropertySetup() {
                   <MapPin className="mr-2 h-4 w-4" /> {t('property.useLocation')}
                 </Button>
               </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">{t('perm.branchTitle')}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="mb-4 text-xs text-muted-foreground">{t('perm.branchHint')}</p>
+              <PermissionMatrixEditor
+                value={form.role_permissions}
+                onChange={(next) => set('role_permissions', next)}
+                base={company && company.role_permissions}
+                allowInherit
+              />
             </CardContent>
           </Card>
         </div>
