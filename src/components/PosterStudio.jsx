@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/components/ui/use-toast';
 import { downloadPdfFromCanvas, downloadPng, renderPoster } from '@/lib/poster';
 import { base44 } from '@/api/base44Client';
@@ -108,7 +109,8 @@ export default function PosterStudio({ job, branch, company, applyUrl, onJobChan
             </div>
             <div>
               <Label>Note line</Label>
-              <Input
+              <Textarea
+                rows={3}
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
                 onBlur={() => base44.entities.Job.update(job.id, { poster_note: note })}

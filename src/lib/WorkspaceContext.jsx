@@ -61,6 +61,14 @@ export function WorkspaceProvider({ children }) {
     load();
   }, [load]);
 
+  const patchBranch = useCallback((id, data) => {
+    setBranches((prev) => prev.map((b) => (b.id === id ? { ...b, ...data } : b)));
+  }, []);
+
+  const patchCompany = useCallback((data) => {
+    setCompany((prev) => (prev ? { ...prev, ...data } : prev));
+  }, []);
+
   const selectBranch = (id) => {
     setActiveBranchId(id);
     localStorage.setItem('bh_branch', id);
@@ -83,7 +91,9 @@ export function WorkspaceProvider({ children }) {
         activeBranchId,
         selectBranch,
         loading,
-        reload: load
+        reload: load,
+        patchBranch,
+        patchCompany
       }}
     >
       {children}
@@ -104,7 +114,9 @@ export function useWorkspace() {
       activeBranchId: '',
       selectBranch: () => {},
       loading: true,
-      reload: () => {}
+      reload: () => {},
+      patchBranch: () => {},
+      patchCompany: () => {}
     }
   );
 }

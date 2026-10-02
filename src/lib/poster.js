@@ -26,23 +26,35 @@ function roundRect(ctx, x, y, w, h, r) {
   ctx.closePath();
 }
 
-function wrapText(ctx, text, x, y, maxWidth, lineHeight, maxLines) {
-  const words = String(text || '')
-    .split(/\s+/)
-    .filter(Boolean);
+// Breaks at spaces when it can and mid-word when a single word is wider than the column,
+// so text never runs past maxWidth (and behind the QR code).
+function wrapLines(ctx, text, maxWidth) {
   const lines = [];
-  let line = '';
-  words.forEach((word) => {
-    const test = line ? `${line} ${word}` : word;
-    if (ctx.measureText(test).width > maxWidth && line) {
-      lines.push(line);
-      line = word;
-    } else {
-      line = test;
-    }
-  });
-  if (line) lines.push(line);
-  const shown = lines.slice(0, maxLines);
+  String(text || '')
+    .split(/\r?\n/)
+    .forEach((paragraph) => {
+      let line = '';
+      Array.from(paragraph.trim()).forEach((char) => {
+        if (line && ctx.measureText(line + char).width > maxWidth) {
+          const space = line.lastIndexOf(' ');
+          if (char !== ' ' && space > 0) {
+            lines.push(line.slice(0, space));
+            line = line.slice(space + 1) + char;
+          } else {
+            lines.push(line.trimEnd());
+            line = char === ' ' ? '' : char;
+          }
+        } else {
+          line += char;
+        }
+      });
+      if (line) lines.push(line);
+    });
+  return lines;
+}
+
+function wrapText(ctx, text, x, y, maxWidth, lineHeight, maxLines) {
+  const shown = wrapLines(ctx, text, maxWidth).slice(0, maxLines);
   shown.forEach((value, index) => ctx.fillText(value, x, y + index * lineHeight));
   return shown.length || 1;
 }
@@ -106,11 +118,11 @@ export async function renderPoster(canvas, { title, storeName, rate, address, ap
   ctx.fillStyle = '#475569';
   ctx.font = '400 32px Inter, Arial, sans-serif';
   if (address) {
-    const lines = wrapText(ctx, address, 70, y + 60, 420, 44, 3);
+    const lines = wrapText(ctx, address, 70, y + 60, 400, 44, 4);
     y += 44 * lines + 12;
   }
   if (note) {
-    wrapText(ctx, note, 70, y + 60, 420, 44, 2);
+    wrapText(ctx, note, 70, y + 60, 400, 44, 8);
   }
 
   const qrX = W - qrSize - 90;

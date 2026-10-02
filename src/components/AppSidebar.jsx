@@ -11,6 +11,7 @@ import {
   Timer,
   Settings,
   Mic,
+  Mail,
   UserCircle2,
   QrCode
 } from 'lucide-react';
@@ -28,6 +29,7 @@ const MANAGER_ITEMS = [
   { to: '/roster', key: 'nav.roster', icon: CalendarDays },
   { to: '/attendance', key: 'nav.attendance', icon: Timer },
   { to: '/interview-settings', key: 'nav.interview', icon: Mic },
+  { to: '/email-templates', key: 'nav.emails', icon: Mail },
   { to: '/settings', key: 'nav.settings', icon: Settings }
 ];
 

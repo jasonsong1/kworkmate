@@ -2,6 +2,7 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.52';
 import { buildInterviewIcs } from '../../shared/ics.ts';
 import { base64Encode, addMinutesToTime } from '../../shared/util.ts';
 import { sendEmail, brandedEmail } from '../../shared/email.ts';
+import { renderStageEmail } from '../../shared/emailStages.ts';
 
 export default async function (req) {
   try {
@@ -77,22 +78,21 @@ export default async function (req) {
 
     const attachments = [{ filename: 'interview.ics', content: base64Encode(ics) }];
 
-    await sendEmail(base44, {
-      to: applicant.email,
-      subject: `Interview confirmed — ${claimed.date} at ${claimed.start_time}`,
-      html: brandedEmail({
-        heading: 'Your interview is confirmed',
-        brandColor: (job && job.brand_color) || (branch && branch.brand_color),
-        lines: [
-          `Hi ${applicant.full_name},`,
-          `Your interview for <b>${job ? job.title : 'the role'}</b> is confirmed for <b>${claimed.date} at ${claimed.start_time}</b> (${duration} minutes).`,
-          location ? `Location: ${location}` : '',
-          'A calendar invitation is attached. If you need to change your time, reply to this email.'
-        ].filter(Boolean),
-        footer: `${company ? company.name : ''} · K-Workmate`
-      }),
-      attachments
-    });
+    const mail = renderStageEmail(
+      company,
+      'booked',
+      {
+        name: applicant.full_name,
+        job_title: job ? job.title : 'the role',
+        store: branch ? branch.name : 'our store',
+        date: claimed.date,
+        time: claimed.start_time,
+        duration: String(duration),
+        location
+      },
+      { brandColor: (job && job.brand_color) || (branch && branch.brand_color) }
+    );
+    await sendEmail(base44, { to: applicant.email, subject: mail.subject, html: mail.html, attachments });
 
     const recipients = [
       ...new Set([...(branch && branch.manager_emails) || [], (job && job.contact_email) || ''].filter(Boolean))

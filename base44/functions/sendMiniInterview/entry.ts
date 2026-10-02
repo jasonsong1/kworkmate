@@ -1,5 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.52';
-import { sendEmail, brandedEmail, cleanOrigin } from '../../shared/email.ts';
+import { sendEmail, cleanOrigin } from '../../shared/email.ts';
+import { renderStageEmail } from '../../shared/emailStages.ts';
 
 export default async function (req: Request) {
   try {
@@ -33,25 +34,16 @@ export default async function (req: Request) {
     const origin = cleanOrigin(body.origin || req.headers.get('origin') || '');
     const link = `${origin}/mini-interview/${token}`;
 
-    const sent = await sendEmail(base44, {
-      to: applicant.email,
-      subject: `Voice interview invitation — ${job ? job.title : 'your application'}`,
-      html: brandedEmail({
-        heading: 'Your voice interview is ready',
+    const mail = renderStageEmail(
+      company,
+      'mini',
+      { name: applicant.full_name, job_title: job ? job.title : 'the role', store: branch ? branch.name : 'our store' },
+      {
         brandColor: (job && job.brand_color) || (branch && branch.brand_color) || (company && company.brand_color),
-        lines: [
-          `Hi ${applicant.full_name},`,
-          `You have been shortlisted for <b>${job ? job.title : 'the role'}</b>${
-            branch ? ` at ${branch.name}` : ''
-          }.`,
-          'Please answer a few short questions using your voice. It takes about five minutes and you can do it from your phone.',
-          'Open the link below when you are somewhere quiet.'
-        ],
-        ctaText: 'Start voice interview',
-        ctaUrl: link,
-        footer: `${company ? company.name : ''} · K-Workmate`
-      })
-    });
+        ctaUrl: link
+      }
+    );
+    const sent = await sendEmail(base44, { to: applicant.email, subject: mail.subject, html: mail.html });
 
     await base44.asServiceRole.entities.Applicant.update(applicant.id, {
       mini_interview_token: token,

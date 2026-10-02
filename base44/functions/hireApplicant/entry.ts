@@ -1,6 +1,7 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.52';
 import { formatEmployeeNumber, randomToken } from '../../shared/util.ts';
-import { sendEmail, brandedEmail, portalLink } from '../../shared/email.ts';
+import { sendEmail, portalLink } from '../../shared/email.ts';
+import { renderStageEmail } from '../../shared/emailStages.ts';
 
 export default async function (req) {
   try {
@@ -68,22 +69,18 @@ export default async function (req) {
     });
 
     const link = portalLink(body.origin, `/onboarding/${token}`);
-    const emailSent = await sendEmail(base44, {
-      to: applicant.email,
-      subject: `Congratulations — you are hired at ${branch.name}`,
-      html: brandedEmail({
-        heading: 'Congratulations, you got the job!',
-        brandColor: branch.brand_color || '#4338ca',
-        lines: [
-          `Hi ${applicant.full_name},`,
-          `Welcome to the team at <b>${branch.name}</b>. Your employee number is <b>${employeeNumber}</b>.`,
-          'Before your first shift, please complete your tax file number declaration, superannuation choice and bank details. It takes about 3 minutes on your phone.'
-        ],
-        ctaText: 'Complete onboarding',
-        ctaUrl: link,
-        footer: `${company ? company.name : ''} · K-Workmate`
-      })
-    });
+    const mail = renderStageEmail(
+      company,
+      'hired',
+      {
+        name: applicant.full_name,
+        job_title: job ? job.title : 'the role',
+        store: branch.name,
+        employee_number: employeeNumber
+      },
+      { brandColor: branch.brand_color || '#4338ca', ctaUrl: link }
+    );
+    const emailSent = await sendEmail(base44, { to: applicant.email, subject: mail.subject, html: mail.html });
 
     return Response.json({ ok: true, employee: profile, onboarding_token: token, onboarding_link: link, email_sent: emailSent });
   } catch (error) {

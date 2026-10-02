@@ -1,5 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.52';
 import { sendEmail, brandedEmail } from '../../shared/email.ts';
+import { renderStageEmail } from '../../shared/emailStages.ts';
 
 const RESUME_SCHEMA = {
   type: 'object',
@@ -65,6 +66,41 @@ export default async function (req) {
       ? await base44.asServiceRole.entities.Branch.get(job.branch_id).catch(() => null)
       : null;
     const topN = Number(company && company.ai_top_n) || 10;
+    // Each "Run screening" press adds another batch of topN candidates to the shortlist.
+    const cycle = Number(job.top_n_cycle) || 1;
+    const limit = topN * cycle;
+
+    if (body.action === 'extend') {
+      const me = await base44.auth.me();
+      if (!me) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+      if (me.company_id && job.company_id && me.company_id !== job.company_id) {
+        return Response.json({ error: 'Forbidden' }, { status: 403 });
+      }
+      const everyone = await base44.asServiceRole.entities.Applicant.filter({ job_id: jobId });
+      const ranked = everyone
+        .filter((a) => typeof a.ai_score === 'number')
+        .sort((x, y) => y.ai_score - x.ai_score);
+
+      const canExtend = limit < ranked.length;
+      const nextCycle = canExtend ? cycle + 1 : cycle;
+      const nextLimit = topN * nextCycle;
+      if (canExtend) await base44.asServiceRole.entities.Job.update(jobId, { top_n_cycle: nextCycle });
+
+      const changes = ranked.map((a, index) => {
+        const rank = index + 1;
+        const patch = { id: a.id, rank };
+        if (rank <= nextLimit && ['submitted', 'top10'].includes(a.status)) patch.status = 'top10';
+        return patch;
+      });
+      if (changes.length > 0) await base44.asServiceRole.entities.Applicant.bulkUpdate(changes);
+
+      return Response.json({
+        ok: true,
+        extended: canExtend,
+        selected: Math.min(nextLimit, ranked.length),
+        total: ranked.length
+      });
+    }
 
     if (body.action === 'send_rejections') {
       const me = await base44.auth.me();
@@ -75,25 +111,18 @@ export default async function (req) {
       const all = await base44.asServiceRole.entities.Applicant.filter({ job_id: jobId });
       const targets = all
         .filter((a) => ['submitted', 'top10', 'mini_interview', 'final_interview'].includes(a.status))
-        .filter((a) => (a.rank || 9999) > topN)
+        .filter((a) => (a.rank || 9999) > limit)
         .slice(0, 40);
 
       let sent = 0;
       for (const a of targets) {
-        const ok = await sendEmail(base44, {
-          to: a.email,
-          subject: `Update on your application — ${job.title}`,
-          html: brandedEmail({
-            heading: 'Thank you for your application',
-            brandColor: job.brand_color,
-            lines: [
-              `Hi ${a.full_name},`,
-              `Thank you for your interest in <b>${job.title}</b> at ${branch ? branch.name : 'our store'}.`,
-              'After reviewing this round of applications we are not moving forward with your application. We keep your details on file and would be glad to consider you for future openings.'
-            ],
-            footer: `${company ? company.name : ''} · K-Workmate`
-          })
-        });
+        const mail = renderStageEmail(
+          company,
+          'rejected',
+          { name: a.full_name, job_title: job.title, store: branch ? branch.name : 'our store' },
+          { brandColor: job.brand_color }
+        );
+        const ok = await sendEmail(base44, { to: a.email, subject: mail.subject, html: mail.html });
         if (ok) {
           sent += 1;
           await base44.asServiceRole.entities.Applicant.update(a.id, {
@@ -106,6 +135,7 @@ export default async function (req) {
     }
 
     let targets = [];
+    let pendingLeft = 0;
     if (body.applicant_id) {
       const one = await base44.asServiceRole.entities.Applicant.get(body.applicant_id).catch(() => null);
       if (one) targets = [one];
@@ -114,6 +144,7 @@ export default async function (req) {
       if (!me) return Response.json({ error: 'Unauthorized' }, { status: 401 });
       const pending = await base44.asServiceRole.entities.Applicant.filter({ job_id: jobId, analysis_status: 'pending' });
       targets = pending.slice(0, 8);
+      pendingLeft = Math.max(0, pending.length - targets.length);
     }
 
     let analysed = 0;
@@ -165,15 +196,15 @@ export default async function (req) {
     const updates = scored.map((a, index) => {
       const rank = index + 1;
       const patch = { id: a.id, rank };
-      if (rank <= topN && ['submitted', 'top10'].includes(a.status)) patch.status = 'top10';
+      if (rank <= limit && ['submitted', 'top10'].includes(a.status)) patch.status = 'top10';
       return patch;
     });
     if (updates.length > 0) await base44.asServiceRole.entities.Applicant.bulkUpdate(updates);
 
     if (body.applicant_id) {
       const mine = updates.find((u) => u.id === body.applicant_id);
-      if (mine && mine.rank <= topN && mine.status === 'top10') {
-        const shortlist = updates.slice(0, topN).map((u, i) => `${i + 1}. ${scored[i].full_name} — ${scored[i].ai_score}`).join('\n');
+      if (mine && mine.rank <= limit && mine.status === 'top10') {
+        const shortlist = updates.slice(0, limit).map((u, i) => `${i + 1}. ${scored[i].full_name} — ${scored[i].ai_score}`).join('\n');
         const recipients = [
           ...new Set([...(branch && branch.manager_emails) || [], job.contact_email].filter(Boolean))
         ].slice(0, 3);
@@ -196,7 +227,7 @@ export default async function (req) {
       }
     }
 
-    return Response.json({ ok: true, analysed, ranked: updates.length });
+    return Response.json({ ok: true, analysed, ranked: updates.length, pending_left: pendingLeft });
   } catch (error) {
     return Response.json({ error: error.message }, { status: 500 });
   }

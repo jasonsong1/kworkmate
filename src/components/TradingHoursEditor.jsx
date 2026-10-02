@@ -31,6 +31,19 @@ function rowKey(row) {
   return `${row.days} ${row.open}-${row.close}`;
 }
 
+function toMinutes(time) {
+  const [hours, minutes] = time.split(':').map(Number);
+  return hours * 60 + minutes;
+}
+
+// A close time at or before the open time means the store closes after midnight.
+function intervalOf(row) {
+  const start = toMinutes(row.open);
+  let end = toMinutes(row.close);
+  if (end <= start) end += 24 * 60;
+  return [start, end];
+}
+
 export function parseTradingHours(value) {
   return String(value || '')
     .split('·')
@@ -46,29 +59,32 @@ export function serializeTradingHours(rows) {
   return rows.map((row) => rowKey(row)).join(' · ');
 }
 
-export function duplicateTradingHours(value) {
-  const rows = parseTradingHours(value);
-  const seen = new Set();
-  return rows.some((row) => {
-    const key = rowKey(row);
-    if (seen.has(key)) return true;
-    seen.add(key);
-    return false;
-  });
+// Indexes of rows whose hours overlap another row on the same day.
+export function overlappingRowIndexes(rows) {
+  const bad = new Set();
+  for (let i = 0; i < rows.length; i += 1) {
+    for (let j = i + 1; j < rows.length; j += 1) {
+      if (rows[i].days !== rows[j].days) continue;
+      const [startA, endA] = intervalOf(rows[i]);
+      const [startB, endB] = intervalOf(rows[j]);
+      if (startA < endB && startB < endA) {
+        bad.add(i);
+        bad.add(j);
+      }
+    }
+  }
+  return bad;
+}
+
+export function hasOverlappingTradingHours(value) {
+  return overlappingRowIndexes(parseTradingHours(value)).size > 0;
 }
 
 export default function TradingHoursEditor({ value, onChange }) {
   const { t } = useI18n();
   const parsed = parseTradingHours(value);
   const rows = parsed.length > 0 ? parsed : [{ days: 'Mon', open: '09:00', close: '22:00' }];
-
-  const seen = new Set();
-  const duplicated = new Set();
-  rows.forEach((row) => {
-    const key = rowKey(row);
-    if (seen.has(key)) duplicated.add(key);
-    seen.add(key);
-  });
+  const overlapping = overlappingRowIndexes(rows);
 
   const commit = (next) => onChange(serializeTradingHours(next));
 
@@ -87,11 +103,12 @@ export default function TradingHoursEditor({ value, onChange }) {
   return (
     <div className="space-y-2">
       {rows.map((row, index) => {
-        const dup = duplicated.has(rowKey(row));
+        const clash = overlapping.has(index);
+        const errorClass = clash ? 'border-destructive bg-destructive/5' : '';
         return (
           <div key={index} className="grid items-center gap-2 sm:grid-cols-[1fr_1fr_1fr_auto]">
             <Select value={row.days} onValueChange={(v) => update(index, { days: v })}>
-              <SelectTrigger className={dup ? 'border-destructive' : ''}>
+              <SelectTrigger className={errorClass}>
                 <SelectValue placeholder={t('property.day')} />
               </SelectTrigger>
               <SelectContent>
@@ -104,7 +121,7 @@ export default function TradingHoursEditor({ value, onChange }) {
             </Select>
 
             <Select value={row.open} onValueChange={(v) => update(index, { open: v })}>
-              <SelectTrigger className={dup ? 'border-destructive' : ''}>
+              <SelectTrigger className={errorClass}>
                 <SelectValue placeholder={t('property.open')} />
               </SelectTrigger>
               <SelectContent>
@@ -117,7 +134,7 @@ export default function TradingHoursEditor({ value, onChange }) {
             </Select>
 
             <Select value={row.close} onValueChange={(v) => update(index, { close: v })}>
-              <SelectTrigger className={dup ? 'border-destructive' : ''}>
+              <SelectTrigger className={errorClass}>
                 <SelectValue placeholder={t('property.close')} />
               </SelectTrigger>
               <SelectContent>
@@ -142,7 +159,11 @@ export default function TradingHoursEditor({ value, onChange }) {
         );
       })}
 
-      {duplicated.size > 0 && <p className="text-xs text-destructive">{t('property.dupHours')}</p>}
+      {overlapping.size > 0 && (
+        <p className="rounded-md bg-destructive/10 px-3 py-2 text-xs font-medium text-destructive">
+          {t('property.overlapHours')}
+        </p>
+      )}
 
       <Button variant="outline" size="sm" onClick={addRow}>
         <Plus className="mr-1 h-3.5 w-3.5" /> {t('property.addHours')}

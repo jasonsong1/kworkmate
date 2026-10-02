@@ -69,6 +69,15 @@
     "ai_top_n": {
       "type": "number",
       "default": 10
+    },
+    "email_brand_color": {
+      "type": "string"
+    },
+    "email_footer": {
+      "type": "string"
+    },
+    "email_templates": {
+      "type": "object"
     }
   },
   "required": [

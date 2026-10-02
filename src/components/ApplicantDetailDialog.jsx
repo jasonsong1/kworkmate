@@ -1,7 +1,7 @@
 import React from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import AvailabilityChart from '@/components/AvailabilityChart';
+import AvailabilityTable from '@/components/AvailabilityTable';
 import MiniInterviewPanel from '@/components/MiniInterviewPanel';
 import { APPLICANT_STATUS, noticePeriodLabel, visaLabel } from '@/lib/bh';
 
@@ -73,7 +73,7 @@ export default function ApplicantDetailDialog({ applicant, open, onOpenChange })
             <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               Weekly availability
             </p>
-            <AvailabilityChart matrix={applicant.availability} />
+            <AvailabilityTable matrix={applicant.availability} />
           </div>
 
           <MiniInterviewPanel responses={applicant.mini_interview_responses} />

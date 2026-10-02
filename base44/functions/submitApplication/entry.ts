@@ -1,7 +1,8 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.52';
 import { waitUntil } from 'base44:runtime';
 import { normalizePhone } from '../../shared/util.ts';
-import { sendEmail, brandedEmail, portalLink } from '../../shared/email.ts';
+import { sendEmail } from '../../shared/email.ts';
+import { renderStageEmail } from '../../shared/emailStages.ts';
 
 export default async function (req) {
   try {
@@ -66,20 +67,13 @@ export default async function (req) {
     });
 
     const place = branch ? `${branch.name}${branch.suburb ? ` (${branch.suburb})` : ''}` : 'our store';
-    const emailSent = await sendEmail(base44, {
-      to: email,
-      subject: `We received your application — ${job.title}`,
-      html: brandedEmail({
-        heading: 'Your application has been received',
-        brandColor: job.brand_color || (branch && branch.brand_color),
-        lines: [
-          `Hi ${fullName},`,
-          `Thanks for applying for <b>${job.title}</b> at ${place}.`,
-          'Our hiring team reviews every application with AI-assisted screening. If your profile matches, you will receive an interview invitation with a booking link.'
-        ],
-        footer: `${company ? company.name : ''} · K-Workmate`
-      })
-    });
+    const mail = renderStageEmail(
+      company,
+      'applied',
+      { name: fullName, job_title: job.title, store: place },
+      { brandColor: job.brand_color || (branch && branch.brand_color) }
+    );
+    const emailSent = await sendEmail(base44, { to: email, subject: mail.subject, html: mail.html });
 
     waitUntil(
       base44.functions.invoke('analyzeApplicants', {

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, Copy, Loader2, Sparkles } from 'lucide-react';
+import { ArrowLeft, Copy, Loader2 } from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
 import QuestionBuilder from '@/components/QuestionBuilder';
 import PosterStudio from '@/components/PosterStudio';
@@ -27,7 +27,6 @@ export default function JobDetail() {
   const [job, setJob] = useState(null);
   const [branch, setBranch] = useState(null);
   const [saving, setSaving] = useState(false);
-  const [aiRunning, setAiRunning] = useState(false);
 
   const load = useCallback(async () => {
     const found = await base44.entities.Job.get(jobId).catch(() => null);
@@ -72,17 +71,6 @@ export default function JobDetail() {
     patch({ status: next });
   };
 
-  const runAi = async () => {
-    setAiRunning(true);
-    const response = await base44.functions.invoke('analyzeApplicants', { job_id: job.id });
-    setAiRunning(false);
-    if (response.data?.error) {
-      toast({ title: response.data.error, variant: 'destructive' });
-      return;
-    }
-    toast({ title: `AI screened ${response.data.analysed || 0} resume(s)` });
-  };
-
   if (!job) {
     return (
       <p className="py-10 text-center text-sm text-muted-foreground">
@@ -105,10 +93,6 @@ export default function JobDetail() {
               <Link to="/jobs">
                 <ArrowLeft className="mr-2 h-4 w-4" /> {t('jobs.title')}
               </Link>
-            </Button>
-            <Button variant="outline" onClick={runAi} disabled={aiRunning}>
-              {aiRunning ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
-              {aiRunning ? t('jobs.aiRunning') : t('jobs.runAi')}
             </Button>
             <Button onClick={save} disabled={saving}>
               {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

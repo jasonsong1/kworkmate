@@ -1,5 +1,8 @@
-export function brandedEmail({ heading, lines, ctaText, ctaUrl, brandColor, footer }) {
+export function brandedEmail({ heading, lines, ctaText, ctaUrl, brandColor, footer, logoUrl }) {
   const color = brandColor || '#4338ca';
+  const logo = logoUrl
+    ? `<img src="${logoUrl}" alt="" style="display:block;max-height:52px;max-width:200px;margin:0 0 18px" />`
+    : '';
   const body = (lines || [])
     .map((l) => `<p style="margin:0 0 12px;font-size:15px;line-height:1.6;color:#334155">${l}</p>`)
     .join('');
@@ -9,6 +12,7 @@ export function brandedEmail({ heading, lines, ctaText, ctaUrl, brandColor, foot
       : '';
   return `<div style="font-family:Inter,Arial,sans-serif;background:#f1f5f9;padding:24px">
   <div style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:16px;padding:28px;border:1px solid #e2e8f0">
+    ${logo}
     <h1 style="margin:0 0 16px;font-size:20px;color:#0f172a;line-height:1.3">${heading}</h1>
     ${body}
     ${cta}

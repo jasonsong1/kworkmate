@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Loader2, MapPin } from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
-import TradingHoursEditor, { duplicateTradingHours } from '@/components/TradingHoursEditor';
+import TradingHoursEditor, { hasOverlappingTradingHours } from '@/components/TradingHoursEditor';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -15,7 +15,7 @@ import { base44 } from '@/api/base44Client';
 
 export default function PropertySetup() {
   const { t } = useI18n();
-  const { branches, activeBranch } = useWorkspace();
+  const { branches, activeBranch, patchBranch } = useWorkspace();
   const { toast } = useToast();
   const navigate = useNavigate();
   const [params] = useSearchParams();
@@ -60,8 +60,8 @@ export default function PropertySetup() {
 
   const save = async () => {
     if (!branch || !form || savingRef.current) return;
-    if (duplicateTradingHours(form.trading_hours)) {
-      toast({ title: t('property.dupHours'), variant: 'destructive' });
+    if (hasOverlappingTradingHours(form.trading_hours)) {
+      toast({ title: t('property.overlapHours'), variant: 'destructive' });
       return;
     }
     savingRef.current = true;
@@ -84,6 +84,8 @@ export default function PropertySetup() {
         await new Promise((resolve) => setTimeout(resolve, 1500));
         await base44.entities.Branch.update(branch.id, payload);
       }
+      // Keep the shared branch list in step so re-opening settings shows what was just saved.
+      patchBranch(branch.id, payload);
       toast({ title: t('property.saved') });
       navigate('/branches');
     } catch {

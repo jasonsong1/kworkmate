@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { ChevronLeft, ChevronRight, Loader2, MailWarning, Sparkles, UserCheck, UserPlus, UserX } from 'lucide-react';
+import { Loader2, MailWarning, Sparkles, UserCheck, UserPlus, UserX } from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
 import ApplicantCard from '@/components/ApplicantCard';
 import ApplicantDetailDialog from '@/components/ApplicantDetailDialog';
@@ -27,6 +27,7 @@ export default function Applicants() {
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState(null);
   const [detail, setDetail] = useState(null);
+  const [screening, setScreening] = useState(false);
 
   const topN = (company && company.ai_top_n) || 10;
 
@@ -121,11 +122,35 @@ export default function Applicants() {
     }
   };
 
-  const shiftWindow = async (delta) => {
+  // Scores any unscored resumes, then adds the next batch (shortlist size setting) to the shortlist.
+  const runScreening = async () => {
     if (!job) return;
-    const next = Math.max(1, (job.top_n_cycle || 1) + delta);
-    await base44.entities.Job.update(job.id, { top_n_cycle: next });
-    setJob({ ...job, top_n_cycle: next });
+    setScreening(true);
+    try {
+      const hadScores = applicants.some((a) => typeof a.ai_score === 'number');
+      let analysed = 0;
+      for (let round = 0; round < 15; round += 1) {
+        const response = await base44.functions.invoke('analyzeApplicants', { job_id: job.id });
+        if (response.data?.error) throw new Error(response.data.error);
+        analysed += response.data.analysed || 0;
+        if (!response.data.pending_left) break;
+      }
+
+      let message = `${analysed} resume(s) screened`;
+      if (hadScores) {
+        const extend = await base44.functions.invoke('analyzeApplicants', { job_id: job.id, action: 'extend' });
+        if (extend.data?.error) throw new Error(extend.data.error);
+        message = extend.data.extended
+          ? `Shortlist extended to ${extend.data.selected} of ${extend.data.total} candidates`
+          : 'No more scored candidates to add';
+      }
+      toast({ title: message });
+      await loadApplicants();
+    } catch (error) {
+      toast({ title: error.message, variant: 'destructive' });
+    } finally {
+      setScreening(false);
+    }
   };
 
   const rejectUnselected = async () => {
@@ -144,10 +169,8 @@ export default function Applicants() {
 
   const ranked = applicants.filter((a) => typeof a.ai_score === 'number');
   const cycle = (job && job.top_n_cycle) || 1;
-  const windowStart = (cycle - 1) * topN;
-  const shortlist = ranked.slice(windowStart, windowStart + topN);
+  const shortlist = ranked.slice(0, cycle * topN);
   const interviewList = applicants.filter((a) => INTERVIEW_STATUSES.includes(a.status));
-  const maxCycle = Math.max(1, Math.ceil(ranked.length / topN));
 
   const actionButtons = (applicant) => (
     <>
@@ -200,9 +223,15 @@ export default function Applicants() {
               </SelectContent>
             </Select>
             {job && (
-              <Button variant="outline" onClick={rejectUnselected}>
-                <MailWarning className="mr-2 h-4 w-4" /> {t('applicants.rejectAll')}
-              </Button>
+              <>
+                <Button variant="outline" onClick={runScreening} disabled={screening}>
+                  {screening ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
+                  {screening ? t('jobs.aiRunning') : t('jobs.runAi')}
+                </Button>
+                <Button variant="outline" onClick={rejectUnselected}>
+                  <MailWarning className="mr-2 h-4 w-4" /> {t('applicants.rejectAll')}
+                </Button>
+              </>
             )}
           </div>
         }
@@ -232,19 +261,11 @@ export default function Applicants() {
           </TabsList>
 
           <TabsContent value="shortlist" className="mt-6">
-            <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-muted/30 px-4 py-3">
+            <div className="mb-4 rounded-xl border bg-muted/30 px-4 py-3">
               <p className="text-sm text-muted-foreground">
-                Showing candidates {ranked.length === 0 ? 0 : windowStart + 1}–
-                {Math.min(windowStart + topN, ranked.length)} of {ranked.length} scored
+                Showing the top {shortlist.length} of {ranked.length} scored candidates · each screening run adds{' '}
+                {topN} more
               </p>
-              <div className="flex items-center gap-2">
-                <Button size="sm" variant="outline" disabled={cycle <= 1} onClick={() => shiftWindow(-1)}>
-                  <ChevronLeft className="mr-1 h-3.5 w-3.5" /> Previous 10
-                </Button>
-                <Button size="sm" disabled={cycle >= maxCycle} onClick={() => shiftWindow(1)}>
-                  {t('applicants.next10')} <ChevronRight className="ml-1 h-3.5 w-3.5" />
-                </Button>
-              </div>
             </div>
 
             {shortlist.length === 0 ? (

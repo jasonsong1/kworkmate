@@ -1,6 +1,7 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.52';
 import { randomToken } from '../../shared/util.ts';
-import { sendEmail, brandedEmail, portalLink } from '../../shared/email.ts';
+import { sendEmail, portalLink } from '../../shared/email.ts';
+import { renderStageEmail } from '../../shared/emailStages.ts';
 
 export default async function (req) {
   try {
@@ -23,20 +24,13 @@ export default async function (req) {
     const brand = (job && job.brand_color) || (branch && branch.brand_color) || '#4338ca';
 
     if (body.type === 'rejection') {
-      const ok = await sendEmail(base44, {
-        to: applicant.email,
-        subject: `Your application for ${job ? job.title : 'the role'}`,
-        html: brandedEmail({
-          heading: 'Thank you for your time',
-          brandColor: brand,
-          lines: [
-            `Hi ${applicant.full_name},`,
-            `Thank you for applying for <b>${job ? job.title : 'the role'}</b> at ${branch ? branch.name : 'our store'} and for taking the time to speak with us.`,
-            'We have decided to move forward with other candidates for this position. We truly appreciate your interest and wish you the very best.'
-          ],
-          footer: `${company ? company.name : ''} · K-Workmate`
-        })
-      });
+      const mail = renderStageEmail(
+        company,
+        'rejected',
+        { name: applicant.full_name, job_title: job ? job.title : 'the role', store: branch ? branch.name : 'our store' },
+        { brandColor: brand }
+      );
+      const ok = await sendEmail(base44, { to: applicant.email, subject: mail.subject, html: mail.html });
       await base44.asServiceRole.entities.Applicant.update(applicant.id, {
         status: 'rejected',
         rejection_sent_at: new Date().toISOString()
@@ -48,25 +42,22 @@ export default async function (req) {
     const link = portalLink(body.origin, `/interview/${token}`);
     const slots = await base44.asServiceRole.entities.InterviewSlot.filter({ job_id: applicant.job_id, status: 'open' });
 
-    const ok = await sendEmail(base44, {
-      to: applicant.email,
-      subject: `You are invited to interview — ${job ? job.title : 'the role'}`,
-      html: brandedEmail({
-        heading: 'Congratulations — you are invited to interview',
-        brandColor: brand,
-        lines: [
-          `Hi ${applicant.full_name},`,
-          `We reviewed your application for <b>${job ? job.title : 'the role'}</b> at ${branch ? branch.name : 'our store'} and would love to meet you.`,
-          slots.length > 0
-            ? `Please pick the time that suits you best — ${slots.length} slot${slots.length > 1 ? 's are' : ' is'} currently open.`
-            : 'Our team will contact you shortly to arrange a time.',
-          'The interview is a short face-to-face conversation at the store.'
-        ],
-        ctaText: 'Choose your interview time',
-        ctaUrl: link,
-        footer: `${company ? company.name : ''} · K-Workmate`
-      })
-    });
+    const slotInfo =
+      slots.length > 0
+        ? `Please pick the time that suits you best — ${slots.length} slot${slots.length > 1 ? 's are' : ' is'} currently open.`
+        : 'Our team will contact you shortly to arrange a time.';
+    const mail = renderStageEmail(
+      company,
+      'invite',
+      {
+        name: applicant.full_name,
+        job_title: job ? job.title : 'the role',
+        store: branch ? branch.name : 'our store',
+        slot_info: slotInfo
+      },
+      { brandColor: brand, ctaUrl: link }
+    );
+    const ok = await sendEmail(base44, { to: applicant.email, subject: mail.subject, html: mail.html });
 
     await base44.asServiceRole.entities.Applicant.update(applicant.id, {
       interview_token: token,

@@ -1,8 +1,9 @@
 import React from 'react';
 import { AlertTriangle, CheckCircle2, Eye, FileText } from 'lucide-react';
+import AvailabilityTable from '@/components/AvailabilityTable';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { APPLICANT_STATUS, availabilitySummary, coverageDays, formatDateTime, visaLabel } from '@/lib/bh';
+import { APPLICANT_STATUS, coverageDays, formatDateTime, visaLabel } from '@/lib/bh';
 
 export default function ApplicantCard({ applicant, actions, onOpen, onViewResume }) {
   const meta = APPLICANT_STATUS[applicant.status] || APPLICANT_STATUS.submitted;
@@ -50,37 +51,43 @@ export default function ApplicantCard({ applicant, actions, onOpen, onViewResume
         </div>
       </div>
 
-      {(applicant.ai_summary || applicant.ai_notes) && (
-        <p className="mt-3 rounded-lg bg-muted/50 px-3 py-2 text-sm text-foreground/90">
-          {applicant.ai_summary}
-        </p>
-      )}
+      <div className="mt-3 grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
+        <div className="min-w-0 space-y-3">
+          {(applicant.ai_summary || applicant.ai_notes) && (
+            <p className="rounded-lg bg-muted/50 px-3 py-2 text-sm text-foreground/90">{applicant.ai_summary}</p>
+          )}
 
-      {(applicant.ai_skills || []).length > 0 && (
-        <div className="mt-3 flex flex-wrap gap-1.5">
-          {(applicant.ai_skills || []).slice(0, 8).map((skill) => (
-            <Badge key={skill} variant="secondary" className="font-normal">
-              {skill}
-            </Badge>
-          ))}
+          {(applicant.ai_skills || []).length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {(applicant.ai_skills || []).slice(0, 8).map((skill) => (
+                <Badge key={skill} variant="secondary" className="font-normal">
+                  {skill}
+                </Badge>
+              ))}
+            </div>
+          )}
+
+          <div className="grid gap-1 text-xs text-muted-foreground sm:grid-cols-2">
+            <span>Starts immediately: {applicant.available_immediately ? 'yes' : 'no'}</span>
+            <span>Visa expiry: {applicant.visa_expiry || '—'}</span>
+            <span>Applied: {formatDateTime(applicant.created_date)}</span>
+          </div>
+
+          {unreadable && (
+            <p className="flex items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              <AlertTriangle className="h-3.5 w-3.5" />
+              Text could not be extracted from this resume — open the original file to review it.
+            </p>
+          )}
         </div>
-      )}
 
-      <div className="mt-3 grid gap-1 text-xs text-muted-foreground sm:grid-cols-2">
-        <span>Availability: {availabilitySummary(applicant.availability)}</span>
-        <span>
-          {coverageDays(applicant.availability)}/7 days · starts immediately: {applicant.available_immediately ? 'yes' : 'no'}
-        </span>
-        <span>Visa expiry: {applicant.visa_expiry || '—'}</span>
-        <span>Applied: {formatDateTime(applicant.created_date)}</span>
+        <div>
+          <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Availability · {coverageDays(applicant.availability)}/7 days
+          </p>
+          <AvailabilityTable matrix={applicant.availability} />
+        </div>
       </div>
-
-      {unreadable && (
-        <p className="mt-3 flex items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
-          <AlertTriangle className="h-3.5 w-3.5" />
-          Text could not be extracted from this resume — open the original file to review it.
-        </p>
-      )}
 
       <div className="mt-4 flex flex-wrap gap-2">
         <Button size="sm" variant="outline" onClick={onOpen}>
