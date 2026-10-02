@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Loader2, MapPin } from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
@@ -24,6 +24,7 @@ export default function PropertySetup() {
 
   const [form, setForm] = useState(null);
   const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
 
   useEffect(() => {
     if (!branch) return;
@@ -58,23 +59,39 @@ export default function PropertySetup() {
   };
 
   const save = async () => {
-    if (!branch || !form) return;
+    if (!branch || !form || savingRef.current) return;
     if (duplicateTradingHours(form.trading_hours)) {
       toast({ title: t('property.dupHours'), variant: 'destructive' });
       return;
     }
+    savingRef.current = true;
     setSaving(true);
-    await base44.entities.Branch.update(branch.id, {
+    const payload = {
       ...form,
       employee_number_padding: Number(form.employee_number_padding) || 3,
       employee_next_number: Number(form.employee_next_number) || 1,
       gps_lat: Number(form.gps_lat) || 0,
       gps_lng: Number(form.gps_lng) || 0,
       gps_radius_m: Number(form.gps_radius_m) || 100
-    });
-    setSaving(false);
-    toast({ title: t('property.saved') });
-    navigate('/branches');
+    };
+
+    try {
+      try {
+        await base44.entities.Branch.update(branch.id, payload);
+      } catch (err) {
+        // A short burst can trip the per-app request limit; pause briefly and try once more.
+        if (err?.response?.status !== 429) throw err;
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+        await base44.entities.Branch.update(branch.id, payload);
+      }
+      toast({ title: t('property.saved') });
+      navigate('/branches');
+    } catch {
+      toast({ title: t('property.saveFailed'), variant: 'destructive' });
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
+    }
   };
 
   if (!branch || !form) {
