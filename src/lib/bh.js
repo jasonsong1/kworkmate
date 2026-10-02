@@ -17,31 +17,11 @@ export const DAYS = [
   { key: 'sun', label: 'Sunday', short: 'Sun' }
 ];
 
-// Half-hour slots an applicant or staff member can pick for each day.
-export const TIME_OPTIONS = (() => {
-  const list = [];
-  for (let mins = 6 * 60; mins <= 23 * 60 + 30; mins += 30) {
-    const h = String(Math.floor(mins / 60)).padStart(2, '0');
-    const m = String(mins % 60).padStart(2, '0');
-    list.push(`${h}:${m}`);
-  }
-  return list;
-})();
-
-// Older applications stored shift blocks instead of a time window.
-const BLOCK_RANGES = {
-  morning: ['06:00', '12:00'],
-  afternoon: ['12:00', '17:00'],
-  close: ['17:00', '23:00']
-};
-
-const toMinutes = (time) => {
-  const [h, m] = String(time || '0:0').split(':').map(Number);
-  return h * 60 + m;
-};
-
-const toTime = (mins) =>
-  `${String(Math.floor(mins / 60)).padStart(2, '0')}:${String(mins % 60).padStart(2, '0')}`;
+export const SHIFT_BLOCKS = [
+  { key: 'morning', label: 'Morning' },
+  { key: 'afternoon', label: 'Afternoon' },
+  { key: 'close', label: 'Close' }
+];
 
 export const POSITIONS = ['Crew', 'Barista', 'Kitchen', 'Cashier', 'Shift Supervisor', 'Assistant Manager', 'Store Manager'];
 
@@ -96,82 +76,34 @@ export function employeeNumberPreview(prefix, padding, next) {
 }
 
 export function emptyAvailability() {
-  return {};
+  const result = {};
+  DAYS.forEach((d) => {
+    result[d.key] = [];
+  });
+  return result;
 }
 
-export function dayWindow(matrix, dayKey) {
-  const value = matrix ? matrix[dayKey] : null;
-  if (!value) return null;
-  if (Array.isArray(value)) {
-    const ranges = value.map((b) => BLOCK_RANGES[b]).filter(Boolean);
-    if (ranges.length === 0) return null;
-    const from = ranges.reduce((min, r) => (r[0] < min ? r[0] : min), ranges[0][0]);
-    const to = ranges.reduce((max, r) => (r[1] > max ? r[1] : max), ranges[0][1]);
-    return { from, to };
-  }
-  if (value.from && value.to) return { from: value.from, to: value.to };
-  return null;
-}
-
-export function setDayWindow(matrix, dayKey, patch) {
-  const current = dayWindow(matrix, dayKey) || { from: '09:00', to: '17:00' };
-  const merged = { ...current, ...patch };
-  let from = toMinutes(merged.from);
-  let to = toMinutes(merged.to);
-  if (to <= from) {
-    if (patch.to) from = Math.max(6 * 60, to - 60);
-    else to = Math.min(23 * 60 + 30, from + 60);
-  }
-  return { ...(matrix || {}), [dayKey]: { from: toTime(from), to: toTime(to) } };
-}
-
-export function clearDayWindow(matrix, dayKey) {
-  const next = { ...(matrix || {}) };
-  delete next[dayKey];
+export function toggleAvailability(current, dayKey, blockKey) {
+  const next = { ...(current || {}) };
+  const list = Array.isArray(next[dayKey]) ? [...next[dayKey]] : [];
+  const index = list.indexOf(blockKey);
+  if (index >= 0) list.splice(index, 1);
+  else list.push(blockKey);
+  next[dayKey] = list;
   return next;
 }
 
-export function windowHours(win) {
-  if (!win) return 0;
-  const mins = toMinutes(win.to) - toMinutes(win.from);
-  return mins > 0 ? mins / 60 : 0;
-}
-
-export function coverageDays(matrix) {
-  return DAYS.filter((d) => dayWindow(matrix, d.key)).length;
-}
-
-export function weeklyHours(matrix) {
-  return DAYS.reduce((total, d) => total + windowHours(dayWindow(matrix, d.key)), 0);
-}
-
 export function availabilitySummary(matrix) {
-  const parts = DAYS.map((d) => {
-    const win = dayWindow(matrix, d.key);
-    return win ? `${d.short} ${win.from}–${win.to}` : null;
-  }).filter(Boolean);
+  if (!matrix) return '—';
+  const parts = DAYS.filter((d) => Array.isArray(matrix[d.key]) && matrix[d.key].length > 0).map(
+    (d) => `${d.short}: ${matrix[d.key].map((b) => (b === 'close' ? 'close' : b)).join('/')}`
+  );
   return parts.length > 0 ? parts.join(' · ') : '—';
 }
 
-export function availabilityText(matrix) {
-  const parts = DAYS.map((d) => {
-    const win = dayWindow(matrix, d.key);
-    return win ? `${d.label} ${win.from}-${win.to}` : null;
-  }).filter(Boolean);
-  return parts.length > 0 ? parts.join('; ') : 'not available';
-}
-
-export function slugify(value) {
-  return String(value || '')
-    .toLowerCase()
-    .replace(/[^a-z0-9\s-]/g, '')
-    .trim()
-    .replace(/\s+/g, '-')
-    .replace(/-{2,}/g, '-');
-}
-
-export function jobSlugPath(branchName, jobTitle) {
-  return [slugify(branchName), slugify(jobTitle)].filter(Boolean).join('/');
+export function coverageDays(matrix) {
+  if (!matrix) return 0;
+  return DAYS.filter((d) => Array.isArray(matrix[d.key]) && matrix[d.key].length > 0).length;
 }
 
 export const DEFAULT_INTERVIEW_QUESTIONS = [

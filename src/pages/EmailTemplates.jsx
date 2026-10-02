@@ -13,7 +13,7 @@ import { EMAIL_STAGES, diffTemplates, getStage, mergeTemplates, renderEmailPrevi
 import { cn } from '@/lib/utils';
 import { base44 } from '@/api/base44Client';
 
-export default function EmailTemplates({ embedded = false }) {
+export default function EmailTemplates() {
   const { t } = useI18n();
   const { company, role, patchCompany } = useWorkspace();
   const { toast } = useToast();
@@ -82,20 +82,18 @@ export default function EmailTemplates({ embedded = false }) {
     companyName: company ? company.name : ''
   });
 
-  const saveButton = (
-    <Button onClick={save} disabled={saving || !canEdit}>
-      {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-      {t('common.save')}
-    </Button>
-  );
-
   return (
     <div>
-      {embedded ? (
-        <div className="mb-6 flex justify-end">{saveButton}</div>
-      ) : (
-        <PageHeader title={t('email.title')} subtitle={t('email.subtitle')} actions={saveButton} />
-      )}
+      <PageHeader
+        title={t('email.title')}
+        subtitle={t('email.subtitle')}
+        actions={
+          <Button onClick={save} disabled={saving || !canEdit}>
+            {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {t('common.save')}
+          </Button>
+        }
+      />
 
       <div className="grid gap-6 xl:grid-cols-2">
         <div className="space-y-6">

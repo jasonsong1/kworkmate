@@ -5,17 +5,9 @@ export default async function (req) {
     const base44 = createClientFromRequest(req);
     const body = await req.json();
     const jobId = body.job_id;
-    const slug = String(body.slug || '')
-      .trim()
-      .toLowerCase()
-      .replace(/^\/+|\/+$/g, '');
-    if (!jobId && !slug) return Response.json({ error: 'job_id is required' }, { status: 400 });
+    if (!jobId) return Response.json({ error: 'job_id is required' }, { status: 400 });
 
-    let job = jobId ? await base44.asServiceRole.entities.Job.get(jobId).catch(() => null) : null;
-    if (!job && slug) {
-      const matches = await base44.asServiceRole.entities.Job.filter({ slug });
-      job = matches[0] || null;
-    }
+    const job = await base44.asServiceRole.entities.Job.get(jobId).catch(() => null);
     if (!job) return Response.json({ error: 'Job not found' }, { status: 404 });
 
     const branch = job.branch_id
@@ -39,7 +31,6 @@ export default async function (req) {
         custom_questions: job.custom_questions || [],
         logo_url: job.logo_url || '',
         header_image_url: job.header_image_url || '',
-        slug: job.slug || '',
         brand_color: job.brand_color || '#4338ca',
         location: job.postal_address || ''
       },
