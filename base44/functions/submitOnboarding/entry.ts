@@ -1,6 +1,7 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.52';
 import { isDigits } from '../../shared/util.ts';
 import { sendEmail, brandedEmail } from '../../shared/email.ts';
+import { sendAccountAccessEmail } from '../../shared/account.ts';
 
 export default async function (req) {
   try {
@@ -95,7 +96,15 @@ export default async function (req) {
       })
     });
 
-    return Response.json({ ok: true, email_sent: emailSent });
+    // Onboarding is done, so the employee can now be handed their account access.
+    const account = await sendAccountAccessEmail(base44, employee.user_email);
+
+    return Response.json({
+      ok: true,
+      email_sent: emailSent,
+      invited: account.invited,
+      password_email_sent: account.passwordEmail
+    });
   } catch (error) {
     return Response.json({ error: error.message }, { status: 500 });
   }

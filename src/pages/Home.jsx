@@ -3,10 +3,11 @@ import { Navigate } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import Dashboard from '@/pages/Dashboard';
 import StaffHome from '@/pages/StaffHome';
+import CompanyPicker from '@/components/platform/CompanyPicker';
 import { useWorkspace } from '@/lib/WorkspaceContext';
 
 export default function Home() {
-  const { loading, me, company, isManager } = useWorkspace();
+  const { loading, me, company, isManager, isPlatformAdmin } = useWorkspace();
 
   if (loading) {
     return (
@@ -17,7 +18,10 @@ export default function Home() {
   }
 
   if (!me) return <Navigate to="/login" replace />;
-  if (!company) return <Navigate to="/setup" replace />;
+  // A super admin is not tied to a company, so they pick one instead of being sent to setup.
+  if (!company) {
+    return isPlatformAdmin ? <CompanyPicker /> : <Navigate to="/setup" replace />;
+  }
   if (!isManager) return <StaffHome />;
   return <Dashboard />;
 }

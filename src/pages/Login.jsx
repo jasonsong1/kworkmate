@@ -40,18 +40,8 @@ export default function Login() {
     <AuthLayout
       icon={LogIn}
       title="Welcome back"
-      subtitle="Log in to your account"
-      footer={
-        <>
-          Don't have an account?{" "}
-          <Link
-            to={"/register" + (returnTo !== "/" ? "?returnTo=" + encodeURIComponent(returnTo) : "")}
-            className="text-primary font-medium hover:underline"
-          >
-            Create one
-          </Link>
-        </>
-      }
+      subtitle="Log in with your work account"
+      footer="Accounts are created by your employer. Ask your manager if you need access."
     >
       <Button
         variant="outline"

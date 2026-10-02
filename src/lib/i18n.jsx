@@ -377,7 +377,22 @@ const dict = {
     'clock.inDone': 'Clocked in',
     'clock.outDone': 'Clocked out',
     'setup.title': 'Set up your company',
-    'setup.subtitle': 'Create your company and first store to unlock the back office'
+    'setup.subtitle': 'Create your company and first store to unlock the back office',
+    'nav.platform': 'Platform',
+    'platform.title': 'Super admins',
+    'platform.subtitle': 'Give someone full access to every company',
+    'platform.search': 'Search by name or email',
+    'platform.empty': 'No users found',
+    'platform.superAdmin': 'Super admin',
+    'platform.you': 'you',
+    'platform.grant': 'Make super admin',
+    'platform.revoke': 'Remove',
+    'platform.granted': 'Super admin access granted',
+    'platform.revoked': 'Super admin access removed',
+    'platform.pickCompany': 'Choose a company to manage',
+    'platform.pickCompanyHint': 'You can switch companies at any time from the top bar.',
+    'employees.resetEmail': 'Send password setup email',
+    'employees.resetSent': 'Password setup email sent'
   },
   ko: {
     'app.name': 'K-Workmate',
@@ -755,7 +770,22 @@ const dict = {
     'clock.inDone': '출근 완료',
     'clock.outDone': '퇴근 완료',
     'setup.title': '회사 설정 시작하기',
-    'setup.subtitle': '회사와 첫 지점을 만들면 백오피스가 열립니다'
+    'setup.subtitle': '회사와 첫 지점을 만들면 백오피스가 열립니다',
+    'nav.platform': '플랫폼 관리',
+    'platform.title': '슈퍼어드민 관리',
+    'platform.subtitle': '다른 사람에게 모든 회사에 대한 전체 권한을 부여합니다',
+    'platform.search': '이름 또는 이메일로 검색',
+    'platform.empty': '사용자를 찾을 수 없습니다',
+    'platform.superAdmin': '슈퍼어드민',
+    'platform.you': '나',
+    'platform.grant': '슈퍼어드민 지정',
+    'platform.revoke': '해제',
+    'platform.granted': '슈퍼어드민으로 지정했습니다',
+    'platform.revoked': '슈퍼어드민 권한을 해제했습니다',
+    'platform.pickCompany': '관리할 회사를 선택하세요',
+    'platform.pickCompanyHint': '상단에서 언제든 다른 회사로 전환할 수 있습니다.',
+    'employees.resetEmail': '비밀번호 설정 메일 보내기',
+    'employees.resetSent': '비밀번호 설정 메일을 보냈습니다'
   }
 };
 

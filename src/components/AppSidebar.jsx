@@ -1,6 +1,7 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
 import {
+  ShieldCheck,
   LayoutDashboard,
   Store,
   Users,
@@ -39,9 +40,12 @@ const STAFF_ITEMS = [
   { to: '/clock', key: 'nav.clock', icon: QrCode, area: 'attendance' }
 ];
 
+// Only a super admin (platform admin) ever sees this section.
+const PLATFORM_ITEMS = [{ to: '/platform', key: 'nav.platform', icon: ShieldCheck }];
+
 export default function AppSidebar({ onNavigate }) {
   const { t } = useI18n();
-  const { isManager } = useWorkspace();
+  const { isManager, isPlatformAdmin } = useWorkspace();
   const { canView, canEdit } = usePermissions();
   // Roster and attendance are visible to every employee, so those two only open the
   // back office menu when a role actually manages them; the rest follow "can see".
@@ -50,6 +54,11 @@ export default function AppSidebar({ onNavigate }) {
   const items = isManager
     ? MANAGER_ITEMS.filter((item) => !item.area || canView(item.area))
     : [...STAFF_ITEMS, ...MANAGER_ITEMS.filter((item) => item.area && granted(item.area))];
+  const linkClass = ({ isActive }) =>
+    cn(
+      'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+      isActive ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+    );
 
   return (
     <div className="flex h-full flex-col">
@@ -71,20 +80,24 @@ export default function AppSidebar({ onNavigate }) {
             to={item.to}
             end={item.end}
             onClick={onNavigate}
-            className={({ isActive }) =>
-              cn(
-                'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
-                isActive
-                  ? 'bg-primary/10 text-primary'
-                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-              )
-            }
+            className={linkClass}
           >
             <item.icon className="h-4 w-4 shrink-0" />
             {t(item.key)}
           </NavLink>
         ))}
       </nav>
+
+      {isPlatformAdmin && (
+        <div className="border-t px-3 py-3">
+          {PLATFORM_ITEMS.map((item) => (
+            <NavLink key={item.to} to={item.to} onClick={onNavigate} className={linkClass}>
+              <item.icon className="h-4 w-4 shrink-0" />
+              {t(item.key)}
+            </NavLink>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

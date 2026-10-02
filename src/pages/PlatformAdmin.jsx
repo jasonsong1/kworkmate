@@ -1,0 +1,30 @@
+import React from 'react';
+import PageHeader from '@/components/PageHeader';
+import PlatformAdminManager from '@/components/platform/PlatformAdminManager';
+import { Card, CardContent } from '@/components/ui/card';
+import { useI18n } from '@/lib/i18n';
+import { useWorkspace } from '@/lib/WorkspaceContext';
+
+// Super admin only: company admins, branch managers and staff never see this screen
+// or its menu entry.
+export default function PlatformAdmin() {
+  const { t } = useI18n();
+  const { isPlatformAdmin, loading } = useWorkspace();
+
+  if (loading) return null;
+
+  if (!isPlatformAdmin) {
+    return (
+      <Card>
+        <CardContent className="p-10 text-center text-sm text-muted-foreground">{t('perm.noAccess')}</CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <div>
+      <PageHeader title={t('platform.title')} subtitle={t('platform.subtitle')} />
+      <PlatformAdminManager />
+    </div>
+  );
+}

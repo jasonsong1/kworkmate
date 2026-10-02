@@ -36,6 +36,7 @@ import VideoInterview from '@/pages/VideoInterview';
 import EmailTemplates from '@/pages/EmailTemplates';
 import TemplateDesign from '@/pages/TemplateDesign';
 import JobDesign from '@/pages/JobDesign';
+import PlatformAdmin from '@/pages/PlatformAdmin';
 
 const PUBLIC_PATHS = ['/apply/', '/interview/', '/onboarding/', '/mini-interview/', '/video-interview/'];
 
@@ -103,6 +104,7 @@ const AuthenticatedApp = () => {
           <Route path="/template-design" element={<TemplateDesign />} />
           <Route path="/job-design" element={<JobDesign />} />
           <Route path="/clock" element={<Clock />} />
+          <Route path="/platform" element={<PlatformAdmin />} />
         </Route>
       </Route>
 

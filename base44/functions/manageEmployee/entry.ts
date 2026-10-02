@@ -1,15 +1,7 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.52';
 import { formatEmployeeNumber, randomToken } from '../../shared/util.ts';
 import { sendEmail, brandedEmail, portalLink } from '../../shared/email.ts';
-
-async function inviteUser(base44, email) {
-  try {
-    await base44.asServiceRole.users.inviteUser(email, 'user');
-    return { invited: true };
-  } catch (error) {
-    return { invited: false, invite_error: error && error.message };
-  }
-}
+import { sendAccountAccessEmail } from '../../shared/account.ts';
 
 // Applies a role chosen by a company admin to the person's app user record.
 async function applyRole(base44, company, branch, email, roleKey) {
@@ -73,7 +65,8 @@ export default async function (req) {
         if (!isCompanyAdmin) patch.app_role = 'branch_manager';
         await base44.asServiceRole.entities.User.update(u.id, patch);
       }
-      const invite = users.length === 0 ? await inviteUser(base44, target) : { invited: false };
+      const invite =
+        users.length === 0 ? await sendAccountAccessEmail(base44, target) : { invited: false, passwordEmail: false };
       return Response.json({ ok: true, manager_emails: next, ...invite });
     }
 
@@ -218,8 +211,10 @@ export default async function (req) {
 
     if (roleKey) await applyRole(base44, company, branch, email, roleKey);
 
-    let invite = { invited: false };
-    if (input.send_invite !== false) invite = await inviteUser(base44, email);
+    // The employee sets their own password from the platform email, so the invite and
+    // the password setup link always go out together.
+    let invite = { invited: false, passwordEmail: false };
+    if (input.send_invite !== false) invite = await sendAccountAccessEmail(base44, email);
 
     if (input.send_onboarding_email) {
       const link = portalLink(body.origin, `/onboarding/${token}`);

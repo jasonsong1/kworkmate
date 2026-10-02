@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { FileText, Pencil, Plus, Power, Search, Send, Trash2 } from 'lucide-react';
+import { FileText, KeyRound, Pencil, Plus, Power, Search, Send, Trash2 } from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
 import EmployeeDialog from '@/components/EmployeeDialog';
 import EmployeeDocumentsDialog from '@/components/EmployeeDocumentsDialog';
@@ -24,6 +24,7 @@ export default function Employees() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [docsFor, setDocsFor] = useState(null);
+  const [resettingId, setResettingId] = useState('');
 
   const load = useCallback(async () => {
     if (!activeBranch) {
@@ -66,6 +67,18 @@ export default function Employees() {
     });
     toast({ title: t('common.save') });
     load();
+  };
+
+  // The platform owns passwords, so this asks it to email the employee a setup link.
+  const sendPasswordEmail = async (row) => {
+    setResettingId(row.id);
+    const response = await base44.functions.invoke('sendPasswordSetup', { employee_id: row.id });
+    setResettingId('');
+    if (response.data?.error) {
+      toast({ title: response.data.error, variant: 'destructive' });
+      return;
+    }
+    toast({ title: t('employees.resetSent') });
   };
 
   const removeEmployee = async (row) => {
@@ -155,6 +168,15 @@ export default function Employees() {
                           >
                             <FileText className="h-3.5 w-3.5" />
                             <span className="ml-1 text-xs">{(row.docs || []).length}</span>
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            title={t('employees.resetEmail')}
+                            onClick={() => sendPasswordEmail(row)}
+                            disabled={resettingId === row.id}
+                          >
+                            <KeyRound className="h-3.5 w-3.5" />
                           </Button>
                           <Button
                             size="sm"
