@@ -17,11 +17,22 @@ export const DAYS = [
   { key: 'sun', label: 'Sunday', short: 'Sun' }
 ];
 
-export const SHIFT_BLOCKS = [
-  { key: 'morning', label: 'Morning' },
-  { key: 'afternoon', label: 'Afternoon' },
-  { key: 'close', label: 'Close' }
-];
+// Half-hour start / finish times a person can choose from.
+export const AVAILABILITY_TIMES = (() => {
+  const times = [];
+  for (let hour = 5; hour <= 23; hour += 1) {
+    times.push(`${String(hour).padStart(2, '0')}:00`);
+    if (hour < 23) times.push(`${String(hour).padStart(2, '0')}:30`);
+  }
+  return times;
+})();
+
+// Older applications stored shift blocks instead of times; convert them to a time range.
+const LEGACY_BLOCK_HOURS = {
+  morning: { from: '06:00', to: '12:00' },
+  afternoon: { from: '12:00', to: '17:00' },
+  close: { from: '17:00', to: '23:00' }
+};
 
 export const POSITIONS = ['Crew', 'Barista', 'Kitchen', 'Cashier', 'Shift Supervisor', 'Assistant Manager', 'Store Manager'];
 
@@ -78,32 +89,56 @@ export function employeeNumberPreview(prefix, padding, next) {
 export function emptyAvailability() {
   const result = {};
   DAYS.forEach((d) => {
-    result[d.key] = [];
+    result[d.key] = { from: '', to: '' };
   });
   return result;
 }
 
-export function toggleAvailability(current, dayKey, blockKey) {
-  const next = { ...(current || {}) };
-  const list = Array.isArray(next[dayKey]) ? [...next[dayKey]] : [];
-  const index = list.indexOf(blockKey);
-  if (index >= 0) list.splice(index, 1);
-  else list.push(blockKey);
-  next[dayKey] = list;
-  return next;
+export function normalizeAvailability(raw) {
+  const result = emptyAvailability();
+  if (!raw || typeof raw !== 'object') return result;
+  DAYS.forEach((d) => {
+    const value = raw[d.key];
+    if (Array.isArray(value)) {
+      const hours = value.map((key) => LEGACY_BLOCK_HOURS[key]).filter(Boolean);
+      if (hours.length > 0) {
+        result[d.key] = {
+          from: hours.map((h) => h.from).sort()[0],
+          to: hours.map((h) => h.to).sort().slice(-1)[0]
+        };
+      }
+    } else if (value && value.from && value.to) {
+      result[d.key] = { from: value.from, to: value.to };
+    }
+  });
+  return result;
+}
+
+export function setDayAvailability(current, dayKey, patch) {
+  const matrix = normalizeAvailability(current);
+  return { ...matrix, [dayKey]: { ...matrix[dayKey], ...patch } };
+}
+
+export function isDayAvailable(day) {
+  return Boolean(day && day.from && day.to && day.from < day.to);
+}
+
+export function hasAnyAvailability(matrix) {
+  const clean = normalizeAvailability(matrix);
+  return DAYS.some((d) => isDayAvailable(clean[d.key]));
 }
 
 export function availabilitySummary(matrix) {
-  if (!matrix) return '—';
-  const parts = DAYS.filter((d) => Array.isArray(matrix[d.key]) && matrix[d.key].length > 0).map(
-    (d) => `${d.short}: ${matrix[d.key].map((b) => (b === 'close' ? 'close' : b)).join('/')}`
+  const clean = normalizeAvailability(matrix);
+  const parts = DAYS.filter((d) => isDayAvailable(clean[d.key])).map(
+    (d) => `${d.short} ${clean[d.key].from}–${clean[d.key].to}`
   );
   return parts.length > 0 ? parts.join(' · ') : '—';
 }
 
 export function coverageDays(matrix) {
-  if (!matrix) return 0;
-  return DAYS.filter((d) => Array.isArray(matrix[d.key]) && matrix[d.key].length > 0).length;
+  const clean = normalizeAvailability(matrix);
+  return DAYS.filter((d) => isDayAvailable(clean[d.key])).length;
 }
 
 export const DEFAULT_INTERVIEW_QUESTIONS = [

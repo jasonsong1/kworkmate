@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Building2, ChevronRight, Plus, Search, UserCog, Users } from 'lucide-react';
+import { Building2, ChevronRight, Plus, Search, UserCog, Users, X } from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
 import AddBranchDialog from '@/components/AddBranchDialog';
 import { Badge } from '@/components/ui/badge';
@@ -96,6 +96,23 @@ export default function Branches() {
     setManagerQuery('');
     await reload();
     toast({ title: response.data?.invited ? 'Manager assigned and invited' : 'Manager assigned' });
+  };
+
+  const removeManager = async (email) => {
+    if (!activeBranch || !window.confirm(t('employees.removeManagerConfirm'))) return;
+    setSaving(true);
+    const response = await base44.functions.invoke('manageEmployee', {
+      action: 'remove_manager',
+      branch_id: activeBranch.id,
+      email
+    });
+    setSaving(false);
+    if (response.data?.error) {
+      toast({ title: response.data.error, variant: 'destructive' });
+      return;
+    }
+    await reload();
+    toast({ title: t('employees.managerRemoved') });
   };
 
   const managerMatches = (() => {
@@ -211,12 +228,22 @@ export default function Branches() {
                   )}
                   {(activeBranch.manager_emails || []).map((email) => {
                     const profile = managers.find((m) => m.user_email === email);
+                    const label = profile
+                      ? `${profile.full_name}${profile.phone ? ` · ${profile.phone}` : ''}`
+                      : email;
+                    if (!isAdmin) return <Badge key={email} variant="outline">{label}</Badge>;
                     return (
-                      <Badge key={email} variant="outline">
-                        {profile
-                          ? `${profile.full_name}${profile.phone ? ` · ${profile.phone}` : ''}`
-                          : email}
-                      </Badge>
+                      <button
+                        key={email}
+                        type="button"
+                        disabled={saving}
+                        onClick={() => removeManager(email)}
+                        title={t('employees.removeManagerConfirm')}
+                        className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-0.5 text-xs font-medium transition-colors hover:border-destructive hover:text-destructive disabled:opacity-50"
+                      >
+                        {label}
+                        <X className="h-3 w-3" />
+                      </button>
                     );
                   })}
                 </div>

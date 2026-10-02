@@ -1,53 +1,61 @@
 import React from 'react';
-import { DAYS, SHIFT_BLOCKS, toggleAvailability } from '@/lib/bh';
-import { cn } from '@/lib/utils';
+import { AVAILABILITY_TIMES, DAYS, normalizeAvailability, setDayAvailability, isDayAvailable } from '@/lib/bh';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 export default function AvailabilityMatrix({ value, onChange, disabled }) {
-  const matrix = value || {};
+  const matrix = normalizeAvailability(value);
+  const update = (dayKey, patch) => onChange(setDayAvailability(matrix, dayKey, patch));
 
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full min-w-[420px] border-collapse text-sm">
-        <thead>
-          <tr>
-            <th className="w-24" />
-            {DAYS.map((day) => (
-              <th key={day.key} className="px-1 py-2 text-center text-xs font-medium text-muted-foreground">
-                {day.short}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {SHIFT_BLOCKS.map((block) => (
-            <tr key={block.key}>
-              <td className="py-1 pr-2 text-xs text-muted-foreground">{block.label}</td>
-              {DAYS.map((day) => {
-                const active = Array.isArray(matrix[day.key]) && matrix[day.key].includes(block.key);
-                return (
-                  <td key={`${day.key}-${block.key}`} className="p-0.5">
-                    <button
-                      type="button"
-                      disabled={disabled}
-                      onClick={() => !disabled && onChange(toggleAvailability(matrix, day.key, block.key))}
-                      className={cn(
-                        'h-9 w-full rounded-md border text-xs transition-colors',
-                        active
-                          ? 'border-primary bg-primary text-primary-foreground'
-                          : 'border-input bg-background text-muted-foreground hover:bg-muted',
-                        disabled && 'opacity-60'
-                      )}
-                      aria-label={`${day.label} ${block.label}`}
-                    >
-                      {active ? '✓' : ''}
-                    </button>
-                  </td>
-                );
-              })}
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <div className="space-y-2">
+      <div className="divide-y rounded-lg border">
+        {DAYS.map((day) => {
+          const entry = matrix[day.key];
+          const wrongOrder = Boolean(entry.from && entry.to) && !isDayAvailable(entry);
+          return (
+            <div key={day.key} className="flex flex-wrap items-center gap-2 px-3 py-2">
+              <span className="w-24 text-sm font-medium">{day.label}</span>
+              <Select
+                value={entry.from || undefined}
+                disabled={disabled}
+                onValueChange={(v) => update(day.key, { from: v })}
+              >
+                <SelectTrigger className="h-9 w-[118px] text-sm">
+                  <SelectValue placeholder="Not available" />
+                </SelectTrigger>
+                <SelectContent>
+                  {AVAILABILITY_TIMES.map((time) => (
+                    <SelectItem key={time} value={time}>
+                      {time}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <span className="text-sm text-muted-foreground">to</span>
+              <Select
+                value={entry.to || undefined}
+                disabled={disabled || !entry.from}
+                onValueChange={(v) => update(day.key, { to: v })}
+              >
+                <SelectTrigger className="h-9 w-[118px] text-sm">
+                  <SelectValue placeholder="Finish" />
+                </SelectTrigger>
+                <SelectContent>
+                  {AVAILABILITY_TIMES.map((time) => (
+                    <SelectItem key={time} value={time}>
+                      {time}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {wrongOrder && <span className="text-xs text-destructive">Finish time must be later</span>}
+            </div>
+          );
+        })}
+      </div>
+      <p className="text-xs text-muted-foreground">
+        Pick a start and finish time for every day you can work. Leave the day blank if you cannot work it.
+      </p>
     </div>
   );
 }

@@ -34,18 +34,66 @@ export default async function (req) {
       const next = emails.includes(target) ? emails : [...emails, target];
       await base44.asServiceRole.entities.Branch.update(branch.id, { manager_emails: next });
 
+      // A company owner keeps full access even when they also manage a store.
+      const companies = await base44.asServiceRole.entities.Company.filter({ id: branch.company_id });
+      const isCompanyAdmin =
+        companies.length > 0 && (companies[0].member_emails || []).includes(target);
+
       const users = await base44.asServiceRole.entities.User.filter({ email: target });
       for (const u of users) {
         const ids = Array.isArray(u.branch_ids) ? u.branch_ids : [];
-        await base44.asServiceRole.entities.User.update(u.id, {
+        const patch = {
           company_id: branch.company_id,
           branch_id: branch.id,
-          branch_ids: ids.includes(branch.id) ? ids : [...ids, branch.id],
-          app_role: 'branch_manager'
-        });
+          branch_ids: ids.includes(branch.id) ? ids : [...ids, branch.id]
+        };
+        if (!isCompanyAdmin) patch.app_role = 'branch_manager';
+        await base44.asServiceRole.entities.User.update(u.id, patch);
       }
       const invite = users.length === 0 ? await inviteUser(base44, target) : { invited: false };
       return Response.json({ ok: true, manager_emails: next, ...invite });
+    }
+
+    if (action === 'remove_manager') {
+      if (!me.company_id || me.app_role !== 'company_admin') {
+        return Response.json({ error: 'Only a company admin can remove managers' }, { status: 403 });
+      }
+      const branch = await base44.asServiceRole.entities.Branch.get(body.branch_id);
+      if (!branch || branch.company_id !== me.company_id) {
+        return Response.json({ error: 'Branch not found' }, { status: 404 });
+      }
+      const target = String(body.email || '').trim().toLowerCase();
+      if (!target) return Response.json({ error: 'Email is required' }, { status: 400 });
+
+      const emails = Array.isArray(branch.manager_emails) ? branch.manager_emails : [];
+      await base44.asServiceRole.entities.Branch.update(branch.id, {
+        manager_emails: emails.filter((email) => email !== target)
+      });
+
+      // Only drop this branch from the person's access when it was their last manager assignment
+      // and they are not a company level admin.
+      const companies = await base44.asServiceRole.entities.Company.filter({ id: branch.company_id });
+      const isCompanyAdmin =
+        companies.length > 0 && (companies[0].member_emails || []).includes(target);
+      const otherBranches = await base44.asServiceRole.entities.Branch.filter({
+        company_id: branch.company_id,
+        manager_emails: target
+      });
+      const stillManages = otherBranches.some((item) => item.id !== branch.id);
+
+      if (!isCompanyAdmin && !stillManages) {
+        const users = await base44.asServiceRole.entities.User.filter({ email: target });
+        for (const u of users) {
+          if (u.app_role !== 'branch_manager') continue;
+          const ids = (Array.isArray(u.branch_ids) ? u.branch_ids : []).filter((id) => id !== branch.id);
+          await base44.asServiceRole.entities.User.update(u.id, {
+            branch_ids: ids,
+            branch_id: ids[0] || null,
+            app_role: 'staff'
+          });
+        }
+      }
+      return Response.json({ ok: true });
     }
 
     if (!me.company_id || !me.branch_ids || me.branch_ids.length === 0) {

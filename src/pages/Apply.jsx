@@ -11,7 +11,15 @@ import { Progress } from '@/components/ui/progress';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
-import { NOTICE_PERIODS, VISA_TYPES, defaultRequiredQuestions, emptyAvailability, isDigits, money } from '@/lib/bh';
+import {
+  NOTICE_PERIODS,
+  VISA_TYPES,
+  defaultRequiredQuestions,
+  emptyAvailability,
+  hasAnyAvailability,
+  isDigits,
+  money
+} from '@/lib/bh';
 import { base44 } from '@/api/base44Client';
 
 const initialForm = {
@@ -70,7 +78,7 @@ export default function Apply() {
       Boolean(form.visa_type),
       Boolean(form.visa_expiry),
       enabled.includes('notice_period') ? Boolean(form.notice_period) : true,
-      enabled.includes('availability') ? Object.values(availability).some((d) => d.length > 0) : true,
+      enabled.includes('availability') ? hasAnyAvailability(availability) : true,
       enabled.includes('emergency_contact')
         ? Boolean(form.emergency_contact_name && isDigits(form.emergency_contact_phone, 10))
         : true,
@@ -268,7 +276,7 @@ export default function Apply() {
               </div>
             )}
             <div>
-              <Label className="mb-2 block">Which shifts can you work each week? *</Label>
+              <Label className="mb-2 block">Which days and hours can you work each week? *</Label>
               <AvailabilityMatrix value={availability} onChange={setAvailability} />
             </div>
           </div>
