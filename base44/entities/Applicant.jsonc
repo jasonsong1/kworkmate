@@ -33,13 +33,13 @@
       "type": "boolean",
       "default": true
     },
+    "notice_period": {
+      "type": "string"
+    },
     "emergency_contact_name": {
       "type": "string"
     },
     "emergency_contact_phone": {
-      "type": "string"
-    },
-    "pre_interview_url": {
       "type": "string"
     },
     "answers": {
@@ -120,6 +120,57 @@
       "type": "string"
     },
     "rejection_sent_at": {
+      "type": "string"
+    },
+    "meeting_url": {
+      "type": "string"
+    },
+    "video_interview_token": {
+      "type": "string"
+    },
+    "video_interview_status": {
+      "type": "string",
+      "enum": [
+        "none",
+        "sent",
+        "completed"
+      ],
+      "default": "none"
+    },
+    "video_interview_responses": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "video_interview_sent_at": {
+      "type": "string"
+    },
+    "video_interview_completed_at": {
+      "type": "string"
+    },
+    "mini_interview_token": {
+      "type": "string"
+    },
+    "mini_interview_status": {
+      "type": "string",
+      "enum": [
+        "none",
+        "sent",
+        "completed"
+      ],
+      "default": "none"
+    },
+    "mini_interview_responses": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "mini_interview_sent_at": {
+      "type": "string"
+    },
+    "mini_interview_completed_at": {
       "type": "string"
     },
     "onboarding_token": {

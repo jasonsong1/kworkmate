@@ -11,7 +11,7 @@ import { Progress } from '@/components/ui/progress';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
-import { VISA_TYPES, defaultRequiredQuestions, emptyAvailability, isDigits, money } from '@/lib/bh';
+import { NOTICE_PERIODS, VISA_TYPES, defaultRequiredQuestions, emptyAvailability, isDigits, money } from '@/lib/bh';
 import { base44 } from '@/api/base44Client';
 
 const initialForm = {
@@ -20,6 +20,7 @@ const initialForm = {
   phone: '',
   visa_type: '',
   visa_expiry: '',
+  notice_period: '',
   available_immediately: true,
   emergency_contact_name: '',
   emergency_contact_phone: ''
@@ -52,7 +53,9 @@ export default function Apply() {
 
   const enabled = useMemo(() => {
     const list = (data && data.job && data.job.required_questions) || defaultRequiredQuestions();
-    return list.filter((q) => q.enabled !== false).map((q) => q.key);
+    return list
+      .filter((q) => q.enabled !== false)
+      .map((q) => (q.key === 'available_immediately' ? 'notice_period' : q.key));
   }, [data]);
 
   const set = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
@@ -66,6 +69,7 @@ export default function Apply() {
       isDigits(form.phone, 10),
       Boolean(form.visa_type),
       Boolean(form.visa_expiry),
+      enabled.includes('notice_period') ? Boolean(form.notice_period) : true,
       enabled.includes('availability') ? Object.values(availability).some((d) => d.length > 0) : true,
       enabled.includes('emergency_contact')
         ? Boolean(form.emergency_contact_name && isDigits(form.emergency_contact_phone, 10))
@@ -90,7 +94,8 @@ export default function Apply() {
       visa_type: form.visa_type,
       visa_expiry: form.visa_expiry,
       availability,
-      available_immediately: form.available_immediately,
+      notice_period: form.notice_period,
+      available_immediately: form.notice_period === 'immediately',
       emergency_contact_name: form.emergency_contact_name,
       emergency_contact_phone: form.emergency_contact_phone,
       answers: customQuestions.map((q) => ({ question: q.label, answer: answers[q.id] || '' })),
@@ -245,13 +250,23 @@ export default function Apply() {
               <Label>Visa expiry date *</Label>
               <Input type="date" value={form.visa_expiry} onChange={(e) => set('visa_expiry', e.target.value)} />
             </div>
-            <div className="flex items-center justify-between rounded-xl border px-4 py-3">
-              <span className="text-sm">I can start immediately</span>
-              <Switch
-                checked={form.available_immediately}
-                onCheckedChange={(v) => set('available_immediately', v)}
-              />
-            </div>
+            {enabled.includes('notice_period') && (
+              <div>
+                <Label>Notice period *</Label>
+                <Select value={form.notice_period} onValueChange={(v) => set('notice_period', v)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="When can you start?" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {NOTICE_PERIODS.map((n) => (
+                      <SelectItem key={n.value} value={n.value}>
+                        {n.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <div>
               <Label className="mb-2 block">Which shifts can you work each week? *</Label>
               <AvailabilityMatrix value={availability} onChange={setAvailability} />

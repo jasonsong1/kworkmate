@@ -2,18 +2,18 @@ import React from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import AvailabilityChart from '@/components/AvailabilityChart';
-import { APPLICANT_STATUS, visaLabel } from '@/lib/bh';
+import MiniInterviewPanel from '@/components/MiniInterviewPanel';
+import { APPLICANT_STATUS, noticePeriodLabel, visaLabel } from '@/lib/bh';
 
 const ROWS = [
   ['Email', (a) => a.email],
   ['Phone', (a) => a.phone],
   ['Visa type', (a) => visaLabel(a.visa_type)],
   ['Visa expiry', (a) => a.visa_expiry],
-  ['Available immediately', (a) => (a.available_immediately ? 'Yes' : 'No')],
+  ['Notice period', (a) => noticePeriodLabel(a.notice_period)],
   ['Emergency contact', (a) => a.emergency_contact_name],
   ['Emergency phone', (a) => a.emergency_contact_phone],
   ['Resume file', (a) => a.resume_filename],
-  ['Pre-interview link', (a) => a.pre_interview_url],
   ['Interview booked', (a) => a.interview_confirmed_at],
   ['Onboarding', (a) => a.onboarding_status]
 ];
@@ -75,6 +75,8 @@ export default function ApplicantDetailDialog({ applicant, open, onOpenChange })
             </p>
             <AvailabilityChart matrix={applicant.availability} />
           </div>
+
+          <MiniInterviewPanel responses={applicant.mini_interview_responses} />
 
           {(applicant.answers || []).length > 0 && (
             <div className="space-y-2">

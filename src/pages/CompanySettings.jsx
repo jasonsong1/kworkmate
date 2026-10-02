@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
 import { Button } from '@/components/ui/button';
@@ -6,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/components/ui/use-toast';
 import { useI18n } from '@/lib/i18n';
 import { useWorkspace } from '@/lib/WorkspaceContext';
@@ -31,7 +33,9 @@ export default function CompanySettings() {
       default_super_fund_phone: company.default_super_fund_phone || '',
       ai_top_n: company.ai_top_n || 10,
       auto_reject_email: company.auto_reject_email !== false,
-      mini_interview_enabled: company.mini_interview_enabled !== false
+      mini_interview_enabled: company.mini_interview_enabled !== false,
+      video_interview_enabled: company.video_interview_enabled === true,
+      screening_criteria: company.screening_criteria || ''
     });
   }, [company]);
 
@@ -127,8 +131,33 @@ export default function CompanySettings() {
               <Switch checked={form.auto_reject_email} onCheckedChange={(v) => set('auto_reject_email', v)} />
             </div>
             <div className="flex items-center justify-between rounded-lg border px-4 py-3">
-              <span className="text-sm">Mini interview</span>
+              <span className="text-sm">{t('interview.mini')}</span>
               <Switch checked={form.mini_interview_enabled} onCheckedChange={(v) => set('mini_interview_enabled', v)} />
+            </div>
+            <div className="flex items-center justify-between gap-3 rounded-lg border px-4 py-3 sm:col-span-3">
+              <div>
+                <p className="text-sm">{t('settings.videoInterview')}</p>
+                <p className="text-xs text-muted-foreground">{t('settings.videoInterviewHint')}</p>
+              </div>
+              <Switch
+                checked={form.video_interview_enabled}
+                onCheckedChange={(v) => set('video_interview_enabled', v)}
+              />
+            </div>
+            <div className="sm:col-span-3">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <Label>{t('settings.screeningFocus')}</Label>
+                <Button variant="outline" size="sm" asChild>
+                  <Link to="/interview-settings">{t('settings.interviewSetup')}</Link>
+                </Button>
+              </div>
+              <Textarea
+                rows={4}
+                value={form.screening_criteria}
+                onChange={(e) => set('screening_criteria', e.target.value)}
+                placeholder="예: 바리스타 경력 2년 이상, 주말 야간 근무 가능, 장기 근무 의향"
+              />
+              <p className="mt-1 text-xs text-muted-foreground">{t('settings.screeningFocusHint')}</p>
             </div>
           </CardContent>
         </Card>

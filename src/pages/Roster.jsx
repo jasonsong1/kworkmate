@@ -183,9 +183,9 @@ export default function Roster() {
                                       <Trash2 className="h-3 w-3 text-destructive" />
                                     </button>
                                   </div>
-                                  <p className="truncate text-[11px] text-muted-foreground">
-                                    {shift.position || ''}
-                                  </p>
+                                  {shift.notes ? (
+                                    <p className="truncate text-[11px] text-muted-foreground">{shift.notes}</p>
+                                  ) : null}
                                 </div>
                               ))}
                               <button

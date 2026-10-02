@@ -66,6 +66,9 @@
       "type": "number",
       "default": 60
     },
+    "screening_criteria": {
+      "type": "string"
+    },
     "auto_reject_email": {
       "type": "boolean",
       "default": true
@@ -73,6 +76,10 @@
     "mini_interview_enabled": {
       "type": "boolean",
       "default": true
+    },
+    "video_interview_enabled": {
+      "type": "boolean",
+      "default": false
     },
     "contact_email": {
       "type": "string"

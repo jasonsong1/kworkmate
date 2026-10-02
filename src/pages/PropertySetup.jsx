@@ -59,6 +59,10 @@ export default function PropertySetup() {
 
   const save = async () => {
     if (!branch || !form) return;
+    if (duplicateTradingHours(form.trading_hours)) {
+      toast({ title: t('property.dupHours'), variant: 'destructive' });
+      return;
+    }
     setSaving(true);
     await base44.entities.Branch.update(branch.id, {
       ...form,

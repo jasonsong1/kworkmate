@@ -30,8 +30,10 @@ import Clock from '@/pages/Clock';
 import Apply from '@/pages/Apply';
 import InterviewBooking from '@/pages/InterviewBooking';
 import Onboarding from '@/pages/Onboarding';
+import InterviewSettings from '@/pages/InterviewSettings';
+import MiniInterview from '@/pages/MiniInterview';
 
-const PUBLIC_PATHS = ['/apply/', '/interview/', '/onboarding/'];
+const PUBLIC_PATHS = ['/apply/', '/interview/', '/onboarding/', '/mini-interview/'];
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
@@ -64,6 +66,7 @@ const AuthenticatedApp = () => {
       <Route path="/apply/:jobId" element={<Apply />} />
       <Route path="/interview/:token" element={<InterviewBooking />} />
       <Route path="/onboarding/:token" element={<Onboarding />} />
+      <Route path="/mini-interview/:token" element={<MiniInterview />} />
 
       {/* Authentication */}
       <Route path="/login" element={<Login />} />
@@ -90,6 +93,7 @@ const AuthenticatedApp = () => {
           <Route path="/roster" element={<Roster />} />
           <Route path="/attendance" element={<Attendance />} />
           <Route path="/settings" element={<CompanySettings />} />
+          <Route path="/interview-settings" element={<InterviewSettings />} />
           <Route path="/clock" element={<Clock />} />
         </Route>
       </Route>

@@ -117,7 +117,10 @@ export default function Employees() {
                 </TableHeader>
                 <TableBody>
                   {rows.map((row) => (
-                    <TableRow key={row.id}>
+                    <TableRow
+                      key={row.id}
+                      className={row.status === 'inactive' ? 'bg-red-50 text-red-900 hover:bg-red-50' : ''}
+                    >
                       <TableCell>
                         <div className="flex items-center gap-2">
                           <p className="font-medium">{row.full_name}</p>

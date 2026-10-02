@@ -56,6 +56,7 @@ export default function JobDetail() {
       screening_min_score: Number(job.screening_min_score) || 60,
       auto_reject_email: job.auto_reject_email !== false,
       mini_interview_enabled: job.mini_interview_enabled !== false,
+      screening_criteria: job.screening_criteria || '',
       required_questions: job.required_questions || [],
       custom_questions: job.custom_questions || [],
       brand_color: job.brand_color,
@@ -240,9 +241,21 @@ export default function JobDetail() {
                       onCheckedChange={(v) => patch({ auto_reject_email: v })}
                     />
                   </div>
-                  <p className="text-xs text-muted-foreground">
-                    Shortlist size is {company ? company.ai_top_n || 10 : 10} candidates, set in {t('settings.title')}.
-                  </p>
+                  <div>
+                    <div className="mb-2 flex items-center justify-between gap-2">
+                      <Label>{t('settings.screeningFocus')}</Label>
+                      <Button variant="outline" size="sm" asChild>
+                        <Link to="/interview-settings">{t('settings.interviewSetup')}</Link>
+                      </Button>
+                    </div>
+                    <Textarea
+                      rows={4}
+                      value={job.screening_criteria || (company ? company.screening_criteria || '' : '')}
+                      onChange={(e) => patch({ screening_criteria: e.target.value })}
+                      placeholder="예: 바리스타 경력 2년 이상, 주말 야간 근무 가능, 장기 근무 의향"
+                    />
+                    <p className="mt-1 text-xs text-muted-foreground">{t('settings.screeningFocusHint')}</p>
+                  </div>
                 </CardContent>
               </Card>
             </div>

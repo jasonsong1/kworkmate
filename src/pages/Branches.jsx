@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Building2, ChevronRight, Plus, UserCog, Users } from 'lucide-react';
+import { Building2, ChevronRight, Plus, Search, UserCog, Users } from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
 import AddBranchDialog from '@/components/AddBranchDialog';
 import { Badge } from '@/components/ui/badge';
@@ -20,7 +20,8 @@ export default function Branches() {
   const [addOpen, setAddOpen] = useState(false);
   const [stats, setStats] = useState({});
   const [managers, setManagers] = useState([]);
-  const [managerEmail, setManagerEmail] = useState('');
+  const [managerQuery, setManagerQuery] = useState('');
+  const [branchStaff, setBranchStaff] = useState([]);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -60,23 +61,56 @@ export default function Branches() {
     };
   }, [activeBranch]);
 
-  const assignManager = async () => {
-    if (!managerEmail.trim() || !activeBranch) return;
+  useEffect(() => {
+    if (!activeBranch) {
+      setBranchStaff([]);
+      return;
+    }
+    let cancelled = false;
+    base44.entities.EmployeeProfile
+      .filter({ branch_id: activeBranch.id }, { sort: 'full_name', limit: 200 })
+      .then((page) => {
+        if (!cancelled) setBranchStaff(page.items || []);
+      })
+      .catch(() => {
+        if (!cancelled) setBranchStaff([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeBranch]);
+
+  const assignManager = async (staff) => {
+    if (!staff || !activeBranch || !staff.user_email) return;
     setSaving(true);
     const response = await base44.functions.invoke('manageEmployee', {
       action: 'assign_manager',
       branch_id: activeBranch.id,
-      email: managerEmail.trim().toLowerCase()
+      email: staff.user_email
     });
     setSaving(false);
     if (response.data?.error) {
       toast({ title: response.data.error, variant: 'destructive' });
       return;
     }
-    setManagerEmail('');
+    setManagerQuery('');
     await reload();
     toast({ title: response.data?.invited ? 'Manager assigned and invited' : 'Manager assigned' });
   };
+
+  const managerMatches = (() => {
+    const term = managerQuery.trim().toLowerCase();
+    if (!term) return [];
+    const current = activeBranch ? activeBranch.manager_emails || [] : [];
+    return branchStaff
+      .filter((staff) => staff.user_email && !current.includes(staff.user_email))
+      .filter(
+        (staff) =>
+          String(staff.full_name || '').toLowerCase().includes(term) ||
+          String(staff.employee_number || '').toLowerCase().includes(term)
+      )
+      .slice(0, 8);
+  })();
 
   const isAdmin = role === 'company_admin';
 
@@ -187,18 +221,41 @@ export default function Branches() {
                   })}
                 </div>
                 {isAdmin && (
-                  <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-                    <div className="flex-1">
-                      <Label className="sr-only">{t('employees.assignManager')}</Label>
+                  <div className="mt-4 space-y-2">
+                    <Label>{t('employees.assignManager')}</Label>
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                       <Input
-                        value={managerEmail}
-                        onChange={(e) => setManagerEmail(e.target.value)}
-                        placeholder="manager@company.com.au"
+                        value={managerQuery}
+                        onChange={(e) => setManagerQuery(e.target.value)}
+                        placeholder={t('employees.managerSearch')}
+                        className="pl-9"
                       />
                     </div>
-                    <Button onClick={assignManager} disabled={saving || !managerEmail.trim()}>
-                      {t('employees.assignManager')}
-                    </Button>
+                    {managerQuery.trim().length > 0 && (
+                      <div className="max-h-56 divide-y overflow-y-auto rounded-lg border">
+                        {managerMatches.length === 0 ? (
+                          <p className="px-3 py-3 text-sm text-muted-foreground">{t('common.none')}</p>
+                        ) : (
+                          managerMatches.map((staff) => (
+                            <button
+                              key={staff.id}
+                              onClick={() => assignManager(staff)}
+                              disabled={saving}
+                              className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm hover:bg-muted disabled:opacity-50"
+                            >
+                              <span className="min-w-0">
+                                <span className="font-medium">{staff.full_name}</span>
+                                <span className="ml-2 text-xs text-muted-foreground">
+                                  {[staff.position, staff.phone].filter(Boolean).join(' · ')}
+                                </span>
+                              </span>
+                              <Plus className="h-3.5 w-3.5 shrink-0" />
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
               </CardContent>

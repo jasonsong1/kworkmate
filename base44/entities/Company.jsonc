@@ -47,6 +47,25 @@
       "type": "boolean",
       "default": true
     },
+    "video_interview_enabled": {
+      "type": "boolean",
+      "default": false
+    },
+    "interview_questions": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "video_interview_questions": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "screening_criteria": {
+      "type": "string"
+    },
     "ai_top_n": {
       "type": "number",
       "default": 10

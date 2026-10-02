@@ -83,8 +83,12 @@ export default function Applicants() {
     setBusyId(applicant.id);
     try {
       if (action === 'mini') {
-        await base44.entities.Applicant.update(applicant.id, { status: 'mini_interview' });
-        toast({ title: `${applicant.full_name} → mini interview` });
+        const response = await base44.functions.invoke('sendMiniInterview', {
+          applicant_id: applicant.id,
+          origin: window.location.origin
+        });
+        if (response.data?.error) throw new Error(response.data.error);
+        toast({ title: `Voice interview link sent to ${applicant.full_name}` });
       } else if (action === 'invite') {
         const response = await base44.functions.invoke('notifyApplicant', {
           applicant_id: applicant.id,

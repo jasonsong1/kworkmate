@@ -16,7 +16,7 @@ const RESUME_SCHEMA = {
   required: ['unreadable', 'fit_score', 'summary']
 };
 
-function buildPrompt(job, branch, applicant) {
+function buildPrompt(job, branch, applicant, company) {
   return `You are the AI screening assistant for an Australian hospitality employer.
 
 JOB
@@ -26,12 +26,13 @@ JOB
 - Employment type: ${job.employment_type || 'casual'}
 - Hourly rate: AUD ${job.hourly_rate || 0}
 - Description: ${job.description || 'not provided'}
+- Employer screening focus (weigh this most): ${job.screening_criteria || (company && company.screening_criteria) || 'not specified — use general hospitality suitability'}
 
 APPLICANT SUPPLIED DATA
 - Name: ${applicant.full_name}
 - Visa type: ${applicant.visa_type || 'not supplied'}
 - Visa expiry: ${applicant.visa_expiry || 'not supplied'}
-- Available immediately: ${applicant.available_immediately ? 'yes' : 'no'}
+- Notice period: ${applicant.notice_period || (applicant.available_immediately ? 'immediately' : 'not supplied')}
 - Weekly availability (day -> shifts): ${JSON.stringify(applicant.availability || {})}
 - Emergency contact supplied: ${applicant.emergency_contact_name ? 'yes' : 'no'}
 
@@ -39,8 +40,8 @@ Read the attached resume and return:
 1. experience_years — total relevant hospitality / customer service experience in years.
 2. skills — short list of practical skills.
 3. certificates — list any certification found (RSA, RSG, food safety, first aid, barista, etc).
-4. summary — exactly two short lines in English. Line one: their relevant hospitality / customer service experience. Line two: their weekly availability, naming the days and shift blocks they can work. Say nothing else — no opinions and no fit commentary.
-5. fit_score — 0 to 100 for THIS job. Weight relevant hospitality experience heavily, then certifications, then weekly availability coverage, then visa validity of at least six months, then reliability signals.
+4. summary — exactly two short lines in English about work experience only. Line one: their most recent or longest hospitality / customer service role and how long they held it. Line two: the rest of their relevant experience. Never mention availability, visa, location or opinions.
+5. fit_score — 0 to 100 for THIS job. When an employer screening focus is given, weigh it above everything else. Then weight relevant hospitality experience heavily, then certifications, then weekly availability coverage, then visa validity of at least six months, then reliability signals.
 6. strengths and concerns — short phrases.
 7. unreadable — true when the document is a scan or image with no extractable text; in that case still return fit_score 50 and a summary saying the resume is a scan and needs manual review.
 
@@ -132,7 +133,7 @@ export default async function (req) {
 
       try {
         const result = await base44.asServiceRole.integrations.Core.InvokeLLM({
-          prompt: buildPrompt(job, branch, applicant),
+          prompt: buildPrompt(job, branch, applicant, company),
           file_urls: signedUrl ? [signedUrl] : [],
           response_json_schema: RESUME_SCHEMA
         });

@@ -68,7 +68,7 @@ export default function PosterStudio({ job, branch, company, applyUrl, onJobChan
         </CardHeader>
         <CardContent>
           <div className="overflow-hidden rounded-xl border bg-muted/30 p-3">
-            <canvas ref={canvasRef} className="w-full rounded-lg bg-white shadow-sm" />
+            <canvas ref={canvasRef} className="mx-auto block h-auto max-h-[58vh] w-auto max-w-full rounded-lg bg-white shadow-sm" />
           </div>
         </CardContent>
       </Card>
