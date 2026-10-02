@@ -11,7 +11,15 @@ import { Progress } from '@/components/ui/progress';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
-import { NOTICE_PERIODS, VISA_TYPES, defaultRequiredQuestions, emptyAvailability, isDigits, money } from '@/lib/bh';
+import {
+  NOTICE_PERIODS,
+  VISA_TYPES,
+  coverageDays,
+  defaultRequiredQuestions,
+  emptyAvailability,
+  isDigits,
+  money
+} from '@/lib/bh';
 import { base44 } from '@/api/base44Client';
 
 const initialForm = {
@@ -27,7 +35,9 @@ const initialForm = {
 };
 
 export default function Apply() {
-  const { jobId } = useParams();
+  const params = useParams();
+  const jobId = params.jobId;
+  const slug = params['*'];
   const [state, setState] = useState('loading');
   const [data, setData] = useState(null);
   const [form, setForm] = useState(initialForm);
@@ -39,7 +49,7 @@ export default function Apply() {
 
   useEffect(() => {
     const load = async () => {
-      const response = await base44.functions.invoke('getPublicJob', { job_id: jobId });
+      const response = await base44.functions.invoke('getPublicJob', jobId ? { job_id: jobId } : { slug });
       const payload = response.data || {};
       if (!payload.job) {
         setState('missing');
@@ -49,7 +59,7 @@ export default function Apply() {
       setState(payload.job.status === 'open' ? 'form' : 'closed');
     };
     load();
-  }, [jobId]);
+  }, [jobId, slug]);
 
   const enabled = useMemo(() => {
     const list = (data && data.job && data.job.required_questions) || defaultRequiredQuestions();
@@ -70,7 +80,7 @@ export default function Apply() {
       Boolean(form.visa_type),
       Boolean(form.visa_expiry),
       enabled.includes('notice_period') ? Boolean(form.notice_period) : true,
-      enabled.includes('availability') ? Object.values(availability).some((d) => d.length > 0) : true,
+      enabled.includes('availability') ? coverageDays(availability) > 0 : true,
       enabled.includes('emergency_contact')
         ? Boolean(form.emergency_contact_name && isDigits(form.emergency_contact_phone, 10))
         : true,

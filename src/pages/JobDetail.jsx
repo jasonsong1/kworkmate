@@ -16,7 +16,15 @@ import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/components/ui/use-toast';
 import { useI18n } from '@/lib/i18n';
 import { useWorkspace } from '@/lib/WorkspaceContext';
-import { EMPLOYMENT_TYPES, POSITIONS } from '@/lib/bh';
+import { EMPLOYMENT_TYPES, POSITIONS, jobSlugPath } from '@/lib/bh';
+
+const normalizeSlug = (value) =>
+  String(value || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9/-]/g, '')
+    .replace(/-{2,}/g, '-')
+    .replace(/\/{2,}/g, '/')
+    .replace(/^[/-]+/, '');
 import { base44 } from '@/api/base44Client';
 
 export default function JobDetail() {
@@ -59,7 +67,8 @@ export default function JobDetail() {
       required_questions: job.required_questions || [],
       custom_questions: job.custom_questions || [],
       brand_color: job.brand_color,
-      poster_note: job.poster_note || ''
+      poster_note: job.poster_note || '',
+      slug: normalizeSlug(job.slug || '')
     });
     setSaving(false);
     toast({ title: 'Job ad saved' });
@@ -80,7 +89,10 @@ export default function JobDetail() {
     );
   }
 
-  const applyUrl = `${window.location.origin}/apply/${job.id}`;
+  const slugPath = normalizeSlug(job.slug || '');
+  const applyUrl = slugPath
+    ? `${window.location.origin}/hire/${slugPath}`
+    : `${window.location.origin}/apply/${job.id}`;
 
   return (
     <div>
@@ -189,6 +201,26 @@ export default function JobDetail() {
                     <Switch checked={job.status === 'open'} onCheckedChange={toggleStatus} />
                   </div>
                   <div>
+                    <Label>{t('jobs.slug')}</Label>
+                    <div className="mt-1 flex items-center gap-2">
+                      <span className="shrink-0 font-mono text-xs text-muted-foreground">/hire/</span>
+                      <Input
+                        value={job.slug || ''}
+                        onChange={(e) => patch({ slug: e.target.value })}
+                        placeholder="botany/supervisor"
+                        className="font-mono text-xs"
+                      />
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => patch({ slug: jobSlugPath(branch ? branch.name : '', job.title) })}
+                      >
+                        {t('jobs.slugGenerate')}
+                      </Button>
+                    </div>
+                    <p className="mt-1 text-xs text-muted-foreground">{t('jobs.slugHint')}</p>
+                  </div>
+                  <div>
                     <Label>{t('jobs.applyLink')}</Label>
                     <div className="mt-1 flex gap-2">
                       <Input readOnly value={applyUrl} className="font-mono text-xs" />
@@ -273,7 +305,7 @@ export default function JobDetail() {
       <div className="mt-6 flex items-center gap-2 text-xs text-muted-foreground">
         <Badge variant="outline">{branch ? branch.name : '—'}</Badge>
         <span>
-          {t('jobs.applyLink')}: /apply/{job.id}
+          {t('jobs.applyLink')}: {slugPath ? `/hire/${slugPath}` : `/apply/${job.id}`}
         </span>
       </div>
     </div>

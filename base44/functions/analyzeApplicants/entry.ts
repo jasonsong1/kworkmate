@@ -34,17 +34,17 @@ APPLICANT SUPPLIED DATA
 - Visa type: ${applicant.visa_type || 'not supplied'}
 - Visa expiry: ${applicant.visa_expiry || 'not supplied'}
 - Notice period: ${applicant.notice_period || (applicant.available_immediately ? 'immediately' : 'not supplied')}
-- Weekly availability (day -> shifts): ${JSON.stringify(applicant.availability || {})}
+- Weekly availability (day -> start and finish time): ${JSON.stringify(applicant.availability || {})}
 - Emergency contact supplied: ${applicant.emergency_contact_name ? 'yes' : 'no'}
 
 Read the attached resume and return:
 1. experience_years — total relevant hospitality / customer service experience in years.
 2. skills — short list of practical skills.
 3. certificates — list any certification found (RSA, RSG, food safety, first aid, barista, etc).
-4. summary — exactly two short lines in English about work experience only. Line one: their most recent or longest hospitality / customer service role and how long they held it. Line two: the rest of their relevant experience. Never mention availability, visa, location or opinions.
+4. summary — exactly two short lines written in Korean (한국어) about work experience only. Line one: their most recent or longest hospitality / customer service role and how long they held it. Line two: the rest of their relevant experience. Never mention availability, visa, location or opinions. Write only in Korean, never in English.
 5. fit_score — 0 to 100 for THIS job. When an employer screening focus is given, weigh it above everything else. Then weight relevant hospitality experience heavily, then certifications, then weekly availability coverage, then visa validity of at least six months, then reliability signals.
 6. strengths and concerns — short phrases.
-7. unreadable — true when the document is a scan or image with no extractable text; in that case still return fit_score 50 and a summary saying the resume is a scan and needs manual review.
+7. unreadable — true when the document is a scan or image with no extractable text; in that case still return fit_score 50 and a Korean summary saying the resume is a scan and needs manual review (this one line may name the document problem instead of experience).
 
 Score fairly and consistently. Reply with the JSON object only.`;
 }
@@ -183,7 +183,7 @@ export default async function (req) {
         console.error('analysis failed', error && error.message);
         await base44.asServiceRole.entities.Applicant.update(applicant.id, {
           analysis_status: 'failed',
-          ai_summary: 'AI analysis could not complete. Please review the original resume.'
+          ai_summary: '이력서 분석을 완료하지 못했습니다. 원본 이력서를 확인해 주세요.'
         });
       }
     }

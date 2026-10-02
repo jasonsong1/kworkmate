@@ -33,8 +33,9 @@ import Onboarding from '@/pages/Onboarding';
 import InterviewSettings from '@/pages/InterviewSettings';
 import MiniInterview from '@/pages/MiniInterview';
 import EmailTemplates from '@/pages/EmailTemplates';
+import TemplateDesign from '@/pages/TemplateDesign';
 
-const PUBLIC_PATHS = ['/apply/', '/interview/', '/onboarding/', '/mini-interview/'];
+const PUBLIC_PATHS = ['/apply/', '/hire/', '/interview/', '/onboarding/', '/mini-interview/'];
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
@@ -65,6 +66,7 @@ const AuthenticatedApp = () => {
     <Routes>
       {/* Public applicant, interview booking and onboarding surfaces (no login) */}
       <Route path="/apply/:jobId" element={<Apply />} />
+      <Route path="/hire/*" element={<Apply />} />
       <Route path="/interview/:token" element={<InterviewBooking />} />
       <Route path="/onboarding/:token" element={<Onboarding />} />
       <Route path="/mini-interview/:token" element={<MiniInterview />} />
@@ -96,6 +98,7 @@ const AuthenticatedApp = () => {
           <Route path="/settings" element={<CompanySettings />} />
           <Route path="/interview-settings" element={<InterviewSettings />} />
           <Route path="/email-templates" element={<EmailTemplates />} />
+          <Route path="/template-design" element={<TemplateDesign />} />
           <Route path="/clock" element={<Clock />} />
         </Route>
       </Route>

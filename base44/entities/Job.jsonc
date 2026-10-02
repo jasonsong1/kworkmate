@@ -11,6 +11,9 @@
     "title": {
       "type": "string"
     },
+    "slug": {
+      "type": "string"
+    },
     "position": {
       "type": "string"
     },

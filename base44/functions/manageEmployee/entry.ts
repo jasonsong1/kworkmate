@@ -48,6 +48,33 @@ export default async function (req) {
       return Response.json({ ok: true, manager_emails: next, ...invite });
     }
 
+    if (action === 'remove_manager') {
+      if (!me.company_id || me.app_role !== 'company_admin') {
+        return Response.json({ error: 'Only a company admin can remove managers' }, { status: 403 });
+      }
+      const branch = await base44.asServiceRole.entities.Branch.get(body.branch_id);
+      if (!branch || branch.company_id !== me.company_id) {
+        return Response.json({ error: 'Branch not found' }, { status: 404 });
+      }
+      const target = String(body.email || '').trim().toLowerCase();
+      const emails = Array.isArray(branch.manager_emails) ? branch.manager_emails : [];
+      const next = emails.filter((email) => email !== target);
+      await base44.asServiceRole.entities.Branch.update(branch.id, { manager_emails: next });
+
+      const siblings = await base44.asServiceRole.entities.Branch.filter({ company_id: branch.company_id });
+      const stillManager = siblings.some(
+        (b) => b.id !== branch.id && Array.isArray(b.manager_emails) && b.manager_emails.includes(target)
+      );
+      const users = await base44.asServiceRole.entities.User.filter({ email: target });
+      for (const u of users) {
+        const ids = (Array.isArray(u.branch_ids) ? u.branch_ids : []).filter((id) => id !== branch.id);
+        const patch: any = { branch_ids: ids, branch_id: ids[0] || '' };
+        if (!stillManager) patch.app_role = 'staff';
+        await base44.asServiceRole.entities.User.update(u.id, patch);
+      }
+      return Response.json({ ok: true, manager_emails: next });
+    }
+
     if (!me.company_id || !me.branch_ids || me.branch_ids.length === 0) {
       return Response.json({ error: 'Your account is not linked to a company yet' }, { status: 403 });
     }

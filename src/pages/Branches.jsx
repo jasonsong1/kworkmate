@@ -1,8 +1,18 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Building2, ChevronRight, Plus, Search, UserCog, Users } from 'lucide-react';
+import { Building2, ChevronRight, Plus, Search, UserCog, Users, X } from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
 import AddBranchDialog from '@/components/AddBranchDialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle
+} from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -23,6 +33,7 @@ export default function Branches() {
   const [managerQuery, setManagerQuery] = useState('');
   const [branchStaff, setBranchStaff] = useState([]);
   const [saving, setSaving] = useState(false);
+  const [pendingManager, setPendingManager] = useState(null);
 
   useEffect(() => {
     if (!activeBranch) return;
@@ -96,6 +107,24 @@ export default function Branches() {
     setManagerQuery('');
     await reload();
     toast({ title: response.data?.invited ? 'Manager assigned and invited' : 'Manager assigned' });
+  };
+
+  const removeManager = async (email) => {
+    if (!activeBranch || !email) return;
+    setSaving(true);
+    const response = await base44.functions.invoke('manageEmployee', {
+      action: 'remove_manager',
+      branch_id: activeBranch.id,
+      email
+    });
+    setSaving(false);
+    setPendingManager(null);
+    if (response.data?.error) {
+      toast({ title: response.data.error, variant: 'destructive' });
+      return;
+    }
+    await reload();
+    toast({ title: t('employees.managerRemoved') });
   };
 
   const managerMatches = (() => {
@@ -211,15 +240,30 @@ export default function Branches() {
                   )}
                   {(activeBranch.manager_emails || []).map((email) => {
                     const profile = managers.find((m) => m.user_email === email);
-                    return (
+                    const label = profile
+                      ? `${profile.full_name}${profile.phone ? ` · ${profile.phone}` : ''}`
+                      : email;
+                    return isAdmin ? (
+                      <button
+                        key={email}
+                        type="button"
+                        disabled={saving}
+                        onClick={() => setPendingManager({ email, label })}
+                        className="group inline-flex items-center gap-1.5 rounded-full border border-input bg-background px-3 py-1 text-xs font-medium transition-colors hover:border-destructive/50 hover:bg-destructive/5 hover:text-destructive disabled:opacity-50"
+                      >
+                        {label}
+                        <X className="h-3 w-3 opacity-40 group-hover:opacity-100" />
+                      </button>
+                    ) : (
                       <Badge key={email} variant="outline">
-                        {profile
-                          ? `${profile.full_name}${profile.phone ? ` · ${profile.phone}` : ''}`
-                          : email}
+                        {label}
                       </Badge>
                     );
                   })}
                 </div>
+                {isAdmin && (activeBranch.manager_emails || []).length > 0 && (
+                  <p className="mt-2 text-xs text-muted-foreground">{t('employees.managerRemoveHint')}</p>
+                )}
                 {isAdmin && (
                   <div className="mt-4 space-y-2">
                     <Label>{t('employees.assignManager')}</Label>
@@ -269,6 +313,27 @@ export default function Branches() {
           </Card>
         )}
       </div>
+
+      <AlertDialog open={Boolean(pendingManager)} onOpenChange={(open) => !open && setPendingManager(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('employees.managerRemoveConfirm')}</AlertDialogTitle>
+            <AlertDialogDescription>{pendingManager ? pendingManager.label : ''}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={saving}
+              onClick={(e) => {
+                e.preventDefault();
+                removeManager(pendingManager && pendingManager.email);
+              }}
+            >
+              {t('common.delete')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AddBranchDialog open={addOpen} onOpenChange={setAddOpen} />
     </div>
