@@ -2,6 +2,7 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.52';
 import { formatEmployeeNumber, randomToken } from '../../shared/util.ts';
 import { sendEmail, portalLink } from '../../shared/email.ts';
 import { renderStageEmail } from '../../shared/emailStages.ts';
+import { sendAccountAccessEmail } from '../../shared/account.ts';
 
 export default async function (req) {
   try {
@@ -81,8 +82,19 @@ export default async function (req) {
       { brandColor: branch.brand_color || '#4338ca', ctaUrl: link }
     );
     const emailSent = await sendEmail(base44, { to: applicant.email, subject: mail.subject, html: mail.html });
+    // Hiring is what creates the account, so the app user is invited and handed a
+    // password setup link straight away.
+    const account = await sendAccountAccessEmail(base44, applicant.email);
 
-    return Response.json({ ok: true, employee: profile, onboarding_token: token, onboarding_link: link, email_sent: emailSent });
+    return Response.json({
+      ok: true,
+      employee: profile,
+      onboarding_token: token,
+      onboarding_link: link,
+      email_sent: emailSent,
+      invited: account.invited,
+      password_email_sent: account.passwordEmail
+    });
   } catch (error) {
     return Response.json({ error: error.message }, { status: 500 });
   }
