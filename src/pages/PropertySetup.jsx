@@ -103,7 +103,7 @@ export default function PropertySetup() {
   }
 
   const customRoles = (company && company.custom_roles) || [];
-  const branchMatrixRoles = ['branch_manager', 'staff', ...customRoles.map((role) => role.key)];
+  const branchMatrixRoles = ['branch_manager', ...customRoles.map((role) => role.key)];
   const branchRoleLabels = Object.fromEntries(customRoles.map((role) => [role.key, role.label]));
 
   return (

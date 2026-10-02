@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/components/ui/use-toast';
 import { useI18n } from '@/lib/i18n';
-import { EMPLOYMENT_TYPES, POSITIONS } from '@/lib/bh';
+import { EMPLOYMENT_TYPES } from '@/lib/bh';
 import { useWorkspace } from '@/lib/WorkspaceContext';
 import { base44 } from '@/api/base44Client';
 
@@ -36,12 +36,17 @@ export default function EmployeeDialog({ open, onOpenChange, branch, employee, o
   const [error, setError] = useState('');
 
   const canAssignRole = myRole === 'company_admin';
+  // Company admins are appointed in company settings, so they are never handed out from here.
   const roleOptions = [
+    ...(form.app_role === 'company_admin' ? [{ key: 'company_admin', label: t('perm.role.company_admin') }] : []),
     { key: 'staff', label: t('perm.role.staff') },
     { key: 'branch_manager', label: t('perm.role.branch_manager') },
-    { key: 'company_admin', label: t('perm.role.company_admin') },
     ...(((company && company.custom_roles) || []).map((item) => ({ key: item.key, label: item.label })))
   ];
+  const roleLabelFor = (key) => {
+    const found = roleOptions.find((option) => option.key === key);
+    return found ? found.label : key;
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -81,7 +86,7 @@ export default function EmployeeDialog({ open, onOpenChange, branch, employee, o
       action: employee ? 'update' : 'create',
       branch_id: branch.id,
       origin: window.location.origin,
-      employee: employee ? { ...form, id: employee.id } : form
+      employee: { ...form, position: roleLabelFor(form.app_role), ...(employee ? { id: employee.id } : {}) }
     });
     setSaving(false);
     if (response.data?.error) {
@@ -116,39 +121,22 @@ export default function EmployeeDialog({ open, onOpenChange, branch, employee, o
           </div>
           <div>
             <Label>{t('common.position')}</Label>
-            <Select value={form.position} onValueChange={(v) => set('position', v)}>
+            <Select value={form.app_role} onValueChange={(v) => set('app_role', v)} disabled={!canAssignRole}>
               <SelectTrigger>
-                <SelectValue placeholder={t('common.select')} />
+                <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {POSITIONS.map((p) => (
-                  <SelectItem key={p} value={p}>
-                    {p}
+                {roleOptions.map((option) => (
+                  <SelectItem key={option.key} value={option.key}>
+                    {option.label}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {form.app_role === 'company_admin' ? t('role.adminHint') : t('role.employeeHint')}
+            </p>
           </div>
-          {canAssignRole && (
-            <div>
-              <Label>{t('role.select')}</Label>
-              <Select value={form.app_role} onValueChange={(v) => set('app_role', v)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {roleOptions.map((option) => (
-                    <SelectItem key={option.key} value={option.key}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p className="mt-1 text-xs text-muted-foreground">
-                {form.app_role === 'company_admin' ? t('role.adminHint') : t('role.employeeHint')}
-              </p>
-            </div>
-          )}
           <div>
             <Label>{t('common.rate')} (AUD)</Label>
             <Input type="number" value={form.hourly_rate} onChange={(e) => set('hourly_rate', e.target.value)} />

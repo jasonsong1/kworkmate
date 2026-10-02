@@ -1,5 +1,5 @@
 import React from 'react';
-import { AVAILABILITY_TIMES, DAYS, normalizeAvailability, setDayAvailability } from '@/lib/bh';
+import { AVAILABILITY_TIMES, DAYS, normalizeAvailability, setDayAvailability, timeToMinutes } from '@/lib/bh';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 export default function AvailabilityMatrix({ value, onChange, disabled }) {
@@ -12,16 +12,18 @@ export default function AvailabilityMatrix({ value, onChange, disabled }) {
         {DAYS.map((day) => {
           const entry = matrix[day.key];
           // A finish time can only be picked after the start time, so an invalid range is impossible.
-          const finishTimes = entry.from
-            ? AVAILABILITY_TIMES.filter((time) => time > entry.from)
-            : AVAILABILITY_TIMES;
+          const start = timeToMinutes(entry.from);
+          const finishTimes =
+            start === null ? AVAILABILITY_TIMES : AVAILABILITY_TIMES.filter((time) => timeToMinutes(time) > start);
           return (
             <div key={day.key} className="flex flex-wrap items-center gap-2 px-3 py-2">
               <span className="w-24 text-sm font-medium">{day.label}</span>
               <Select
                 value={entry.from || undefined}
                 disabled={disabled}
-                onValueChange={(v) => update(day.key, { from: v, to: entry.to && entry.to > v ? entry.to : '' })}
+                onValueChange={(v) =>
+                  update(day.key, { from: v, to: timeToMinutes(entry.to) > timeToMinutes(v) ? entry.to : '' })
+                }
               >
                 <SelectTrigger className="h-9 w-[118px] text-sm">
                   <SelectValue placeholder="Not available" />

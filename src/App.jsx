@@ -33,6 +33,8 @@ import Onboarding from '@/pages/Onboarding';
 import InterviewSettings from '@/pages/InterviewSettings';
 import MiniInterview from '@/pages/MiniInterview';
 import EmailTemplates from '@/pages/EmailTemplates';
+import TemplateDesign from '@/pages/TemplateDesign';
+import PosterDesign from '@/pages/PosterDesign';
 
 const PUBLIC_PATHS = ['/apply/', '/interview/', '/onboarding/', '/mini-interview/'];
 
@@ -96,6 +98,8 @@ const AuthenticatedApp = () => {
           <Route path="/settings" element={<CompanySettings />} />
           <Route path="/interview-settings" element={<InterviewSettings />} />
           <Route path="/email-templates" element={<EmailTemplates />} />
+          <Route path="/template-design" element={<TemplateDesign />} />
+          <Route path="/poster-design" element={<PosterDesign />} />
           <Route path="/clock" element={<Clock />} />
         </Route>
       </Route>

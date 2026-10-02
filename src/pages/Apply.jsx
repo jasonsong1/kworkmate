@@ -17,8 +17,9 @@ import {
   defaultRequiredQuestions,
   emptyAvailability,
   hasAnyAvailability,
-  isDigits,
+  isPhoneNumber,
   money,
+  phoneDigits,
   todayIso
 } from '@/lib/bh';
 
@@ -76,25 +77,38 @@ export default function Apply() {
   const emailValid = EMAIL_RE.test(form.email.trim());
   const visaExpiryValid = Boolean(form.visa_expiry) && form.visa_expiry >= todayIso();
 
-  const completeness = useMemo(() => {
+  const progress = useMemo(() => {
     const checks = [
-      form.full_name.trim().length > 1,
-      emailValid,
-      isDigits(form.phone, 10),
-      Boolean(form.visa_type),
-      visaExpiryValid,
-      enabled.includes('notice_period') ? Boolean(form.notice_period) : true,
-      enabled.includes('availability') ? hasAnyAvailability(availability) : true,
-      enabled.includes('emergency_contact')
-        ? Boolean(form.emergency_contact_name && isDigits(form.emergency_contact_phone, 10))
-        : true,
-      enabled.includes('resume') ? Boolean(resume && resume.file_uri) : true,
-      customQuestions.every((q) => !q.required || String(answers[q.id] || '').trim().length > 0)
+      { ok: form.full_name.trim().length > 1, label: 'Full name' },
+      { ok: emailValid, label: 'Email address' },
+      { ok: isPhoneNumber(form.phone), label: 'Mobile number (10 digits)' },
+      { ok: Boolean(form.visa_type), label: 'Visa type' },
+      { ok: visaExpiryValid, label: 'Visa expiry (today or later)' },
+      { ok: !enabled.includes('notice_period') || Boolean(form.notice_period), label: 'Notice period' },
+      {
+        ok: !enabled.includes('availability') || hasAnyAvailability(availability),
+        label: 'Availability — a start and finish time on at least one day'
+      },
+      {
+        ok:
+          !enabled.includes('emergency_contact') ||
+          Boolean(form.emergency_contact_name && isPhoneNumber(form.emergency_contact_phone)),
+        label: 'Emergency contact and phone'
+      },
+      { ok: !enabled.includes('resume') || Boolean(resume && resume.file_uri), label: 'Resume upload' },
+      {
+        ok: customQuestions.every((q) => !q.required || String(answers[q.id] || '').trim().length > 0),
+        label: 'Required questions'
+      }
     ];
-    const done = checks.filter(Boolean).length;
-    return Math.round((done / checks.length) * 100);
+    const done = checks.filter((check) => check.ok).length;
+    return {
+      percent: Math.round((done / checks.length) * 100),
+      missing: checks.filter((check) => !check.ok).map((check) => check.label)
+    };
   }, [form, availability, resume, enabled, answers, customQuestions, emailValid, visaExpiryValid]);
 
+  const completeness = progress.percent;
   const canSubmit = completeness === 100 && !submitting;
 
   const submit = async () => {
@@ -104,14 +118,14 @@ export default function Apply() {
       job_id: jobId,
       full_name: form.full_name.trim(),
       email: form.email.trim(),
-      phone: form.phone.trim(),
+      phone: phoneDigits(form.phone),
       visa_type: form.visa_type,
       visa_expiry: form.visa_expiry,
       availability,
       notice_period: form.notice_period,
       available_immediately: form.notice_period === 'immediately',
       emergency_contact_name: form.emergency_contact_name,
-      emergency_contact_phone: form.emergency_contact_phone,
+      emergency_contact_phone: phoneDigits(form.emergency_contact_phone),
       answers: customQuestions.map((q) => ({ question: q.label, answer: answers[q.id] || '' })),
       resume_file_uri: resume ? resume.file_uri : '',
       resume_filename: resume ? resume.filename : '',
@@ -233,7 +247,7 @@ export default function Apply() {
             <div>
               <Label>Mobile number *</Label>
               <Input inputMode="tel" value={form.phone} onChange={(e) => set('phone', e.target.value)} />
-              {form.phone.length > 0 && !isDigits(form.phone, 10) && (
+              {form.phone.length > 0 && !isPhoneNumber(form.phone) && (
                 <p className="mt-1 text-xs text-destructive">Enter a 10-digit mobile number</p>
               )}
             </div>
@@ -326,7 +340,7 @@ export default function Apply() {
                     value={form.emergency_contact_phone}
                     onChange={(e) => set('emergency_contact_phone', e.target.value)}
                   />
-                  {form.emergency_contact_phone.length > 0 && !isDigits(form.emergency_contact_phone, 10) && (
+                  {form.emergency_contact_phone.length > 0 && !isPhoneNumber(form.emergency_contact_phone) && (
                     <p className="mt-1 text-xs text-destructive">Enter a 10-digit phone number</p>
                   )}
                 </div>
@@ -375,9 +389,13 @@ export default function Apply() {
             {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Submit application
           </Button>
-          <p className="mt-1.5 text-center text-[11px] text-slate-400">
-            Resume required · visa expiry required · PDF/DOC up to 10MB
-          </p>
+          {progress.missing.length > 0 ? (
+            <p className="mt-1.5 text-center text-[11px] text-slate-500">
+              Still needed: {progress.missing.join(' · ')}
+            </p>
+          ) : (
+            <p className="mt-1.5 text-center text-[11px] text-slate-400">PDF/DOC resume up to 10MB</p>
+          )}
         </div>
       </div>
     </div>

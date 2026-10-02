@@ -81,6 +81,22 @@ export function isDigits(value, length) {
   return new RegExp(`^\\d{${length}}$`).test(String(value || '').trim());
 }
 
+export function phoneDigits(value) {
+  return String(value || '').replace(/\D/g, '');
+}
+
+// Australian mobile / phone numbers are often typed with spaces or dashes.
+export function isPhoneNumber(value, length = 10) {
+  return phoneDigits(value).length === length;
+}
+
+// "HH:MM" (24 hour) to minutes, so times compare by value and never as text.
+export function timeToMinutes(value) {
+  const match = /^(\d{1,2}):(\d{2})$/.exec(String(value || '').trim());
+  if (!match) return null;
+  return Number(match[1]) * 60 + Number(match[2]);
+}
+
 export function employeeNumberPreview(prefix, padding, next) {
   const pad = Number(padding) > 0 ? Number(padding) : 3;
   return `${prefix || ''}${String(Number(next) || 1).padStart(pad, '0')}`;
@@ -107,8 +123,9 @@ export function normalizeAvailability(raw) {
           to: hours.map((h) => h.to).sort().slice(-1)[0]
         };
       }
-    } else if (value && value.from && value.to) {
-      result[d.key] = { from: value.from, to: value.to };
+    } else if (value && (value.from || value.to)) {
+      // Keep a half filled day: the start time must survive until a finish time is chosen.
+      result[d.key] = { from: value.from || '', to: value.to || '' };
     }
   });
   return result;
@@ -120,7 +137,9 @@ export function setDayAvailability(current, dayKey, patch) {
 }
 
 export function isDayAvailable(day) {
-  return Boolean(day && day.from && day.to && day.from < day.to);
+  const from = timeToMinutes(day && day.from);
+  const to = timeToMinutes(day && day.to);
+  return from !== null && to !== null && to > from;
 }
 
 export function hasAnyAvailability(matrix) {

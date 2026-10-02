@@ -134,10 +134,9 @@ export default async function (req) {
     const allowedRoles = [
       'staff',
       'branch_manager',
-      'company_admin',
       ...(((company && company.custom_roles) || []).map((role) => role.key))
     ];
-    // Only a company admin may hand out a role.
+    // Only a company admin may hand out a role, and company admins are managed in company settings.
     const roleKey =
       me.app_role === 'company_admin' && allowedRoles.includes(input.app_role) ? input.app_role : null;
 

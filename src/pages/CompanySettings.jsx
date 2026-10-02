@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
+import CompanyAdminsCard from '@/components/CompanyAdminsCard';
 import CompanyRolesManager from '@/components/CompanyRolesManager';
 import PermissionMatrixEditor from '@/components/PermissionMatrixEditor';
 import { Button } from '@/components/ui/button';
@@ -73,7 +74,7 @@ export default function CompanySettings() {
   if (!form) return <p className="text-sm text-muted-foreground">{t('common.loading')}</p>;
 
   const customRoles = form.custom_roles || [];
-  const matrixRoles = ['branch_manager', 'staff', ...customRoles.map((role) => role.key)];
+  const matrixRoles = ['branch_manager', ...customRoles.map((role) => role.key)];
   const roleLabels = Object.fromEntries(customRoles.map((role) => [role.key, role.label]));
 
   return (
@@ -182,6 +183,8 @@ export default function CompanySettings() {
             </div>
           </CardContent>
         </Card>
+
+        <CompanyAdminsCard />
 
         <Card className="lg:col-span-2">
           <CardHeader>

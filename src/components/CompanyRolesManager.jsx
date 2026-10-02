@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useI18n } from '@/lib/i18n';
 
-const FIXED_ROLES = ['company_admin', 'branch_manager', 'staff'];
+const FIXED_ROLES = ['company_admin', 'branch_manager'];
 
 export default function CompanyRolesManager({ value, onChange, disabled }) {
   const { t } = useI18n();
