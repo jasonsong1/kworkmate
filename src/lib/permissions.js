@@ -47,7 +47,7 @@ const AREA_BY_PREFIX = [
   ['/interview-settings', 'templates'],
   ['/email-templates', 'templates'],
   ['/template-design', 'templates'],
-  ['/poster-design', 'templates'],
+  ['/job-design', 'templates'],
   ['/branches', 'branch_settings'],
   ['/property', 'branch_settings'],
   ['/settings', 'company_settings']

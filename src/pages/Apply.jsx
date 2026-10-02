@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { AlertCircle, CheckCircle2, Loader2, MapPin } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
+import ApplyHeader from '@/components/apply/ApplyHeader';
 import ResumeUpload from '@/components/apply/ResumeUpload';
 import AvailabilityMatrix from '@/components/AvailabilityMatrix';
 import { Badge } from '@/components/ui/badge';
@@ -18,7 +19,6 @@ import {
   emptyAvailability,
   hasAnyAvailability,
   isPhoneNumber,
-  money,
   phoneDigits,
   todayIso
 } from '@/lib/bh';
@@ -148,7 +148,10 @@ export default function Apply() {
     setState('done');
   };
 
-  const brand = (data && data.job && data.job.brand_color) || '#4338ca';
+  // Company job ad design is the default; a job's own colours still win when set.
+  const design = (data && data.company && data.company.job_design) || {};
+  const brand = design.brand_color || (data && data.job && data.job.brand_color) || '#4338ca';
+  const logo = design.logo_url || (data && data.job && data.job.logo_url) || '';
 
   if (state === 'loading') {
     return (
@@ -195,24 +198,13 @@ export default function Apply() {
 
   return (
     <div className="min-h-screen bg-slate-50 pb-24">
-      <header className="px-4 pb-8 pt-8 text-white" style={{ backgroundColor: brand }}>
-        <div className="mx-auto max-w-xl">
-          <p className="text-xs uppercase tracking-widest opacity-80">
-            {data.company ? data.company.name : ''} {data.branch ? `· ${data.branch.name}` : ''}
-          </p>
-          <h1 className="mt-2 text-2xl font-bold">{data.job.title}</h1>
-          <div className="mt-3 flex flex-wrap items-center gap-3 text-sm opacity-90">
-            <span>{data.job.position || 'Team member'}</span>
-            {data.job.hourly_rate ? <span>{money(data.job.hourly_rate)}/hr</span> : null}
-            {data.branch && (data.branch.suburb || data.branch.address) ? (
-              <span className="flex items-center gap-1">
-                <MapPin className="h-3.5 w-3.5" />
-                {data.branch.suburb || data.branch.address}
-              </span>
-            ) : null}
-          </div>
-        </div>
-      </header>
+      <ApplyHeader
+        brand={brand}
+        logo={logo}
+        companyName={data.company ? data.company.name : ''}
+        branch={data.branch}
+        job={data.job}
+      />
 
       <div className="sticky top-0 z-10 border-b bg-white/95 backdrop-blur">
         <div className="mx-auto max-w-xl px-4 py-3">

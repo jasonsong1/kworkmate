@@ -42,21 +42,14 @@ const STAFF_ITEMS = [
 export default function AppSidebar({ onNavigate }) {
   const { t } = useI18n();
   const { isManager } = useWorkspace();
-  const { canView } = usePermissions();
-  // A custom role also gets the back office menu once an area has been granted to it.
-  const BACK_OFFICE_AREAS = [
-    'roster',
-    'attendance',
-    'employees',
-    'jobs',
-    'templates',
-    'branch_settings',
-    'company_settings'
-  ];
-  const seesBackOffice = isManager || BACK_OFFICE_AREAS.some((area) => canView(area));
-  const items = (seesBackOffice ? MANAGER_ITEMS : STAFF_ITEMS).filter(
-    (item) => !item.area || canView(item.area)
-  );
+  const { canView, canEdit } = usePermissions();
+  // Roster and attendance are visible to every employee, so those two only open the
+  // back office menu when a role actually manages them; the rest follow "can see".
+  const MANAGES = ['roster', 'attendance'];
+  const granted = (area) => (MANAGES.includes(area) ? canEdit(area) : canView(area));
+  const items = isManager
+    ? MANAGER_ITEMS.filter((item) => !item.area || canView(item.area))
+    : [...STAFF_ITEMS, ...MANAGER_ITEMS.filter((item) => item.area && granted(item.area))];
 
   return (
     <div className="flex h-full flex-col">

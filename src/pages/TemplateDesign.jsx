@@ -7,7 +7,7 @@ import { useI18n } from '@/lib/i18n';
 
 const OPTIONS = [
   { to: '/email-templates', title: 'templates.emailTitle', hint: 'templates.emailHint', icon: Mail },
-  { to: '/poster-design', title: 'templates.posterTitle', hint: 'templates.posterHint', icon: Palette }
+  { to: '/job-design', title: 'templates.posterTitle', hint: 'templates.posterHint', icon: Palette }
 ];
 
 export default function TemplateDesign() {

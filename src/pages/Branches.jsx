@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Building2, ChevronRight, Plus, Search, UserCog, Users, X } from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
 import AddBranchDialog from '@/components/AddBranchDialog';
+import RosterScheduleCard from '@/components/RosterScheduleCard';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -287,6 +288,8 @@ export default function Branches() {
                 )}
               </CardContent>
             </Card>
+
+            <RosterScheduleCard branch={activeBranch} />
           </div>
         ) : (
           <Card>

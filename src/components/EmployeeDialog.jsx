@@ -36,17 +36,15 @@ export default function EmployeeDialog({ open, onOpenChange, branch, employee, o
   const [error, setError] = useState('');
 
   const canAssignRole = myRole === 'company_admin';
-  // Company admins are appointed in company settings, so they are never handed out from here.
+  // Positions come from company settings. Company admins are appointed there too, and a
+  // branch manager keeps the role they were assigned, so both stay listed when already held.
   const roleOptions = [
     ...(form.app_role === 'company_admin' ? [{ key: 'company_admin', label: t('perm.role.company_admin') }] : []),
-    { key: 'staff', label: t('perm.role.staff') },
-    { key: 'branch_manager', label: t('perm.role.branch_manager') },
+    ...(form.app_role === 'branch_manager' ? [{ key: 'branch_manager', label: t('perm.role.branch_manager') }] : []),
     ...(((company && company.custom_roles) || []).map((item) => ({ key: item.key, label: item.label })))
   ];
-  const roleLabelFor = (key) => {
-    const found = roleOptions.find((option) => option.key === key);
-    return found ? found.label : key;
-  };
+  const chosen = roleOptions.find((option) => option.key === form.app_role);
+  const hasPositions = ((company && company.custom_roles) || []).length > 0;
 
   useEffect(() => {
     if (!open) return;
@@ -86,7 +84,11 @@ export default function EmployeeDialog({ open, onOpenChange, branch, employee, o
       action: employee ? 'update' : 'create',
       branch_id: branch.id,
       origin: window.location.origin,
-      employee: { ...form, position: roleLabelFor(form.app_role), ...(employee ? { id: employee.id } : {}) }
+      employee: {
+        ...form,
+        position: chosen ? chosen.label : (employee && employee.position) || '',
+        ...(employee ? { id: employee.id } : {})
+      }
     });
     setSaving(false);
     if (response.data?.error) {
@@ -121,9 +123,13 @@ export default function EmployeeDialog({ open, onOpenChange, branch, employee, o
           </div>
           <div>
             <Label>{t('common.position')}</Label>
-            <Select value={form.app_role} onValueChange={(v) => set('app_role', v)} disabled={!canAssignRole}>
+            <Select
+              value={chosen ? form.app_role : ''}
+              onValueChange={(v) => set('app_role', v)}
+              disabled={!canAssignRole}
+            >
               <SelectTrigger>
-                <SelectValue />
+                <SelectValue placeholder={t('role.select')} />
               </SelectTrigger>
               <SelectContent>
                 {roleOptions.map((option) => (
@@ -134,7 +140,11 @@ export default function EmployeeDialog({ open, onOpenChange, branch, employee, o
               </SelectContent>
             </Select>
             <p className="mt-1 text-xs text-muted-foreground">
-              {form.app_role === 'company_admin' ? t('role.adminHint') : t('role.employeeHint')}
+              {form.app_role === 'company_admin'
+                ? t('role.adminHint')
+                : hasPositions
+                  ? t('role.employeeHint')
+                  : t('role.noneHint')}
             </p>
           </div>
           <div>

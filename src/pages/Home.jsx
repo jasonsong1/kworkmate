@@ -6,7 +6,7 @@ import StaffHome from '@/pages/StaffHome';
 import { useWorkspace } from '@/lib/WorkspaceContext';
 
 export default function Home() {
-  const { loading, me, company, role } = useWorkspace();
+  const { loading, me, company, isManager } = useWorkspace();
 
   if (loading) {
     return (
@@ -18,6 +18,6 @@ export default function Home() {
 
   if (!me) return <Navigate to="/login" replace />;
   if (!company) return <Navigate to="/setup" replace />;
-  if (role === 'staff') return <StaffHome />;
+  if (!isManager) return <StaffHome />;
   return <Dashboard />;
 }
