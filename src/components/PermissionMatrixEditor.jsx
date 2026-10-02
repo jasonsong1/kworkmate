@@ -8,11 +8,13 @@ export default function PermissionMatrixEditor({
   onChange,
   base,
   roles = EDITABLE_ROLES,
+  roleLabels,
   allowInherit = false,
   disabled = false
 }) {
   const { t } = useI18n();
   const matrix = value || {};
+  const roleLabel = (role) => (roleLabels && roleLabels[role]) || t(`perm.role.${role}`);
 
   const setCell = (role, area, level) => {
     const roleSet = { ...(matrix[role] || {}) };
@@ -31,7 +33,7 @@ export default function PermissionMatrixEditor({
             <th className="py-2 pr-4 font-medium">{t('perm.area')}</th>
             {roles.map((role) => (
               <th key={role} className="py-2 pr-2 font-medium">
-                {t(`perm.role.${role}`)}
+                {roleLabel(role)}
               </th>
             ))}
           </tr>

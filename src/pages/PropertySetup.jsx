@@ -102,6 +102,10 @@ export default function PropertySetup() {
     return <p className="text-sm text-muted-foreground">{t('common.loading')}</p>;
   }
 
+  const customRoles = (company && company.custom_roles) || [];
+  const branchMatrixRoles = ['branch_manager', 'staff', ...customRoles.map((role) => role.key)];
+  const branchRoleLabels = Object.fromEntries(customRoles.map((role) => [role.key, role.label]));
+
   return (
     <div>
       <PageHeader title={t('property.title')} subtitle={branch.name} />
@@ -223,6 +227,8 @@ export default function PropertySetup() {
                 value={form.role_permissions}
                 onChange={(next) => set('role_permissions', next)}
                 base={company && company.role_permissions}
+                roles={branchMatrixRoles}
+                roleLabels={branchRoleLabels}
                 allowInherit
               />
             </CardContent>

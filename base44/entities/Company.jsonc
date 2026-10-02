@@ -81,6 +81,12 @@
     },
     "role_permissions": {
       "type": "object"
+    },
+    "custom_roles": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
     }
   },
   "required": [

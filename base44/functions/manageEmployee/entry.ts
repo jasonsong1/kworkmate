@@ -11,6 +11,29 @@ async function inviteUser(base44, email) {
   }
 }
 
+// Applies a role chosen by a company admin to the person's app user record.
+async function applyRole(base44, company, branch, email, roleKey) {
+  const users = await base44.asServiceRole.entities.User.filter({ email });
+  for (const user of users) {
+    const ids = Array.isArray(user.branch_ids) ? user.branch_ids : [];
+    const patch = { company_id: branch.company_id, app_role: roleKey };
+    if (roleKey !== 'company_admin') {
+      patch.branch_id = branch.id;
+      patch.branch_ids = ids.includes(branch.id) ? ids : [...ids, branch.id];
+    }
+    await base44.asServiceRole.entities.User.update(user.id, patch);
+  }
+  // Company admins manage the company itself, so they join the company member list.
+  if (roleKey === 'company_admin' && company) {
+    const members = Array.isArray(company.member_emails) ? company.member_emails : [];
+    if (!members.includes(email)) {
+      await base44.asServiceRole.entities.Company.update(company.id, {
+        member_emails: [...members, email]
+      });
+    }
+  }
+}
+
 export default async function (req) {
   try {
     const base44 = createClientFromRequest(req);
@@ -106,6 +129,18 @@ export default async function (req) {
       return Response.json({ error: 'You cannot manage this branch' }, { status: 403 });
     }
 
+    const companyLookup = await base44.asServiceRole.entities.Company.filter({ id: me.company_id });
+    const company = companyLookup[0] || null;
+    const allowedRoles = [
+      'staff',
+      'branch_manager',
+      'company_admin',
+      ...(((company && company.custom_roles) || []).map((role) => role.key))
+    ];
+    // Only a company admin may hand out a role.
+    const roleKey =
+      me.app_role === 'company_admin' && allowedRoles.includes(input.app_role) ? input.app_role : null;
+
     if (action === 'update') {
       const profile = await base44.asServiceRole.entities.EmployeeProfile.get(input.id);
       if (!profile || profile.company_id !== me.company_id) {
@@ -120,8 +155,11 @@ export default async function (req) {
         phone: input.phone || '',
         start_date: input.start_date || '',
         emergency_contact_name: input.emergency_contact_name || '',
-        emergency_contact_phone: input.emergency_contact_phone || ''
+        emergency_contact_phone: input.emergency_contact_phone || '',
+        app_role: roleKey || profile.app_role || 'staff'
       });
+
+      if (roleKey) await applyRole(base44, company, branch, profile.user_email, roleKey);
 
       if (input.send_onboarding_email && updated.onboarding_token) {
         const link = portalLink(body.origin, `/onboarding/${updated.onboarding_token}`);
@@ -173,10 +211,13 @@ export default async function (req) {
       emergency_contact_phone: input.emergency_contact_phone || '',
       onboarding_status: 'pending',
       onboarding_token: token,
+      app_role: roleKey || 'staff',
       docs: []
     });
 
     await base44.asServiceRole.entities.Branch.update(branch.id, { employee_next_number: nextNumber + 1 });
+
+    if (roleKey) await applyRole(base44, company, branch, email, roleKey);
 
     let invite = { invited: false };
     if (input.send_invite !== false) invite = await inviteUser(base44, email);

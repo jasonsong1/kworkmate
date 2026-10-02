@@ -18,8 +18,11 @@ import {
   emptyAvailability,
   hasAnyAvailability,
   isDigits,
-  money
+  money,
+  todayIso
 } from '@/lib/bh';
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[A-Za-z]{2,}$/;
 import { base44 } from '@/api/base44Client';
 
 const initialForm = {
@@ -70,13 +73,16 @@ export default function Apply() {
 
   const customQuestions = (data && data.job && data.job.custom_questions) || [];
 
+  const emailValid = EMAIL_RE.test(form.email.trim());
+  const visaExpiryValid = Boolean(form.visa_expiry) && form.visa_expiry >= todayIso();
+
   const completeness = useMemo(() => {
     const checks = [
       form.full_name.trim().length > 1,
-      /\S+@\S+\.\S+/.test(form.email),
+      emailValid,
       isDigits(form.phone, 10),
       Boolean(form.visa_type),
-      Boolean(form.visa_expiry),
+      visaExpiryValid,
       enabled.includes('notice_period') ? Boolean(form.notice_period) : true,
       enabled.includes('availability') ? hasAnyAvailability(availability) : true,
       enabled.includes('emergency_contact')
@@ -87,7 +93,7 @@ export default function Apply() {
     ];
     const done = checks.filter(Boolean).length;
     return Math.round((done / checks.length) * 100);
-  }, [form, availability, resume, enabled, answers, customQuestions]);
+  }, [form, availability, resume, enabled, answers, customQuestions, emailValid, visaExpiryValid]);
 
   const canSubmit = completeness === 100 && !submitting;
 
@@ -220,6 +226,9 @@ export default function Apply() {
             <div>
               <Label>Email *</Label>
               <Input type="email" value={form.email} onChange={(e) => set('email', e.target.value)} />
+              {form.email.length > 0 && !emailValid && (
+                <p className="mt-1 text-xs text-destructive">Enter a valid email address, for example name@example.com</p>
+              )}
             </div>
             <div>
               <Label>Mobile number *</Label>
@@ -256,7 +265,15 @@ export default function Apply() {
             </div>
             <div>
               <Label>Visa expiry date *</Label>
-              <Input type="date" value={form.visa_expiry} onChange={(e) => set('visa_expiry', e.target.value)} />
+              <Input
+                type="date"
+                min={todayIso()}
+                value={form.visa_expiry}
+                onChange={(e) => set('visa_expiry', e.target.value)}
+              />
+              {form.visa_expiry.length > 0 && !visaExpiryValid && (
+                <p className="mt-1 text-xs text-destructive">Visa expiry must be today or a future date</p>
+              )}
             </div>
             {enabled.includes('notice_period') && (
               <div>

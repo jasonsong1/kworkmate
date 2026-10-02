@@ -20,6 +20,10 @@
     "position": {
       "type": "string"
     },
+    "app_role": {
+      "type": "string",
+      "default": "staff"
+    },
     "hourly_rate": {
       "type": "number"
     },

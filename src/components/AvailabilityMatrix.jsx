@@ -1,5 +1,5 @@
 import React from 'react';
-import { AVAILABILITY_TIMES, DAYS, normalizeAvailability, setDayAvailability, isDayAvailable } from '@/lib/bh';
+import { AVAILABILITY_TIMES, DAYS, normalizeAvailability, setDayAvailability } from '@/lib/bh';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 export default function AvailabilityMatrix({ value, onChange, disabled }) {
@@ -11,14 +11,17 @@ export default function AvailabilityMatrix({ value, onChange, disabled }) {
       <div className="divide-y rounded-lg border">
         {DAYS.map((day) => {
           const entry = matrix[day.key];
-          const wrongOrder = Boolean(entry.from && entry.to) && !isDayAvailable(entry);
+          // A finish time can only be picked after the start time, so an invalid range is impossible.
+          const finishTimes = entry.from
+            ? AVAILABILITY_TIMES.filter((time) => time > entry.from)
+            : AVAILABILITY_TIMES;
           return (
             <div key={day.key} className="flex flex-wrap items-center gap-2 px-3 py-2">
               <span className="w-24 text-sm font-medium">{day.label}</span>
               <Select
                 value={entry.from || undefined}
                 disabled={disabled}
-                onValueChange={(v) => update(day.key, { from: v })}
+                onValueChange={(v) => update(day.key, { from: v, to: entry.to && entry.to > v ? entry.to : '' })}
               >
                 <SelectTrigger className="h-9 w-[118px] text-sm">
                   <SelectValue placeholder="Not available" />
@@ -41,15 +44,15 @@ export default function AvailabilityMatrix({ value, onChange, disabled }) {
                   <SelectValue placeholder="Finish" />
                 </SelectTrigger>
                 <SelectContent>
-                  {AVAILABILITY_TIMES.map((time) => (
+                  {finishTimes.map((time) => (
                     <SelectItem key={time} value={time}>
                       {time}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-              {wrongOrder && <span className="text-xs text-destructive">Finish time must be later</span>}
               {entry.to && !entry.from && <span className="text-xs text-destructive">Pick a start time too</span>}
+              {entry.from && !entry.to && <span className="text-xs text-destructive">Add a finish time</span>}
             </div>
           );
         })}

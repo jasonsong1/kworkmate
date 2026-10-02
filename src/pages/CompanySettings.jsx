@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
+import CompanyRolesManager from '@/components/CompanyRolesManager';
 import PermissionMatrixEditor from '@/components/PermissionMatrixEditor';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -37,11 +38,25 @@ export default function CompanySettings() {
       mini_interview_enabled: company.mini_interview_enabled !== false,
       video_interview_enabled: company.video_interview_enabled === true,
       screening_criteria: company.screening_criteria || '',
-      role_permissions: company.role_permissions || {}
+      role_permissions: company.role_permissions || {},
+      custom_roles: company.custom_roles || []
     });
   }, [company]);
 
   const set = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
+
+  // Removing a role also drops the permissions that were granted to it.
+  const setCustomRoles = (next) => {
+    const kept = new Set((next || []).map((role) => role.key));
+    const removed = (form.custom_roles || []).filter((role) => !kept.has(role.key)).map((role) => role.key);
+    setForm((prev) => {
+      const permissions = { ...(prev.role_permissions || {}) };
+      removed.forEach((key) => {
+        delete permissions[key];
+      });
+      return { ...prev, custom_roles: next, role_permissions: permissions };
+    });
+  };
 
   const save = async () => {
     if (!company || !form) return;
@@ -56,6 +71,10 @@ export default function CompanySettings() {
   };
 
   if (!form) return <p className="text-sm text-muted-foreground">{t('common.loading')}</p>;
+
+  const customRoles = form.custom_roles || [];
+  const matrixRoles = ['branch_manager', 'staff', ...customRoles.map((role) => role.key)];
+  const roleLabels = Object.fromEntries(customRoles.map((role) => [role.key, role.label]));
 
   return (
     <div>
@@ -121,21 +140,6 @@ export default function CompanySettings() {
 
         <Card className="lg:col-span-2">
           <CardHeader>
-            <CardTitle className="text-base">{t('perm.companyTitle')}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="mb-4 text-xs text-muted-foreground">{t('perm.companyHint')}</p>
-            <PermissionMatrixEditor
-              value={form.role_permissions}
-              onChange={(next) => set('role_permissions', next)}
-              disabled={role !== 'company_admin'}
-            />
-            <p className="mt-3 text-xs text-muted-foreground">{t('perm.locked')}</p>
-          </CardContent>
-        </Card>
-
-        <Card className="lg:col-span-2">
-          <CardHeader>
             <CardTitle className="text-base">{t('settings.screening')}</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-6 sm:grid-cols-3">
@@ -175,6 +179,34 @@ export default function CompanySettings() {
                 placeholder="예: 바리스타 경력 2년 이상, 주말 야간 근무 가능, 장기 근무 의향"
               />
               <p className="mt-1 text-xs text-muted-foreground">{t('settings.screeningFocusHint')}</p>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="lg:col-span-2">
+          <CardHeader>
+            <CardTitle className="text-base">{t('perm.companyTitle')}</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div>
+              <Label className="mb-1 block">{t('role.title')}</Label>
+              <p className="mb-3 text-xs text-muted-foreground">{t('role.hint')}</p>
+              <CompanyRolesManager
+                value={form.custom_roles}
+                onChange={setCustomRoles}
+                disabled={role !== 'company_admin'}
+              />
+            </div>
+            <div>
+              <p className="mb-3 text-xs text-muted-foreground">{t('perm.companyHint')}</p>
+              <PermissionMatrixEditor
+                value={form.role_permissions}
+                onChange={(next) => set('role_permissions', next)}
+                roles={matrixRoles}
+                roleLabels={roleLabels}
+                disabled={role !== 'company_admin'}
+              />
+              <p className="mt-3 text-xs text-muted-foreground">{t('perm.locked')}</p>
             </div>
           </CardContent>
         </Card>
