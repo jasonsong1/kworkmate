@@ -32,11 +32,12 @@ import InterviewBooking from '@/pages/InterviewBooking';
 import Onboarding from '@/pages/Onboarding';
 import InterviewSettings from '@/pages/InterviewSettings';
 import MiniInterview from '@/pages/MiniInterview';
+import VideoInterview from '@/pages/VideoInterview';
 import EmailTemplates from '@/pages/EmailTemplates';
 import TemplateDesign from '@/pages/TemplateDesign';
 import JobDesign from '@/pages/JobDesign';
 
-const PUBLIC_PATHS = ['/apply/', '/interview/', '/onboarding/', '/mini-interview/'];
+const PUBLIC_PATHS = ['/apply/', '/interview/', '/onboarding/', '/mini-interview/', '/video-interview/'];
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
@@ -70,6 +71,7 @@ const AuthenticatedApp = () => {
       <Route path="/interview/:token" element={<InterviewBooking />} />
       <Route path="/onboarding/:token" element={<Onboarding />} />
       <Route path="/mini-interview/:token" element={<MiniInterview />} />
+      <Route path="/video-interview/:token" element={<VideoInterview />} />
 
       {/* Authentication */}
       <Route path="/login" element={<Login />} />

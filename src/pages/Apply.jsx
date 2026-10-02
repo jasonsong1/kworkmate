@@ -73,6 +73,11 @@ export default function Apply() {
   const set = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
 
   const customQuestions = (data && data.job && data.job.custom_questions) || [];
+  const workRightsSection = ['visa_type', 'visa_expiry', 'notice_period', 'availability'].some((key) =>
+    enabled.includes(key)
+  );
+  const finalSection =
+    enabled.includes('resume') || enabled.includes('emergency_contact') || customQuestions.length > 0;
 
   const emailValid = EMAIL_RE.test(form.email.trim());
   const visaExpiryValid = Boolean(form.visa_expiry) && form.visa_expiry >= todayIso();
@@ -82,8 +87,8 @@ export default function Apply() {
       { ok: form.full_name.trim().length > 1, label: 'Full name' },
       { ok: emailValid, label: 'Email address' },
       { ok: isPhoneNumber(form.phone), label: 'Mobile number (10 digits)' },
-      { ok: Boolean(form.visa_type), label: 'Visa type' },
-      { ok: visaExpiryValid, label: 'Visa expiry (today or later)' },
+      { ok: !enabled.includes('visa_type') || Boolean(form.visa_type), label: 'Visa type' },
+      { ok: !enabled.includes('visa_expiry') || visaExpiryValid, label: 'Visa expiry (today or later)' },
       { ok: !enabled.includes('notice_period') || Boolean(form.notice_period), label: 'Notice period' },
       {
         ok: !enabled.includes('availability') || hasAnyAvailability(availability),
@@ -246,6 +251,7 @@ export default function Apply() {
           </div>
         </section>
 
+        {workRightsSection && (
         <section className="rounded-2xl border bg-white p-5 shadow-sm">
           <div className="mb-4 flex items-center gap-2">
             <Badge style={{ backgroundColor: brand }} className="text-white hover:opacity-90">
@@ -254,33 +260,37 @@ export default function Apply() {
             <h2 className="text-sm font-semibold">Work rights & availability</h2>
           </div>
           <div className="space-y-4">
-            <div>
-              <Label>Visa type *</Label>
-              <Select value={form.visa_type} onValueChange={(v) => set('visa_type', v)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select your visa" />
-                </SelectTrigger>
-                <SelectContent>
-                  {VISA_TYPES.map((v) => (
-                    <SelectItem key={v.value} value={v.value}>
-                      {v.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>Visa expiry date *</Label>
-              <Input
-                type="date"
-                min={todayIso()}
-                value={form.visa_expiry}
-                onChange={(e) => set('visa_expiry', e.target.value)}
-              />
-              {form.visa_expiry.length > 0 && !visaExpiryValid && (
-                <p className="mt-1 text-xs text-destructive">Visa expiry must be today or a future date</p>
-              )}
-            </div>
+            {enabled.includes('visa_type') && (
+              <div>
+                <Label>Visa type *</Label>
+                <Select value={form.visa_type} onValueChange={(v) => set('visa_type', v)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select your visa" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {VISA_TYPES.map((v) => (
+                      <SelectItem key={v.value} value={v.value}>
+                        {v.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            {enabled.includes('visa_expiry') && (
+              <div>
+                <Label>Visa expiry date *</Label>
+                <Input
+                  type="date"
+                  min={todayIso()}
+                  value={form.visa_expiry}
+                  onChange={(e) => set('visa_expiry', e.target.value)}
+                />
+                {form.visa_expiry.length > 0 && !visaExpiryValid && (
+                  <p className="mt-1 text-xs text-destructive">Visa expiry must be today or a future date</p>
+                )}
+              </div>
+            )}
             {enabled.includes('notice_period') && (
               <div>
                 <Label>Notice period *</Label>
@@ -298,25 +308,31 @@ export default function Apply() {
                 </Select>
               </div>
             )}
-            <div>
-              <Label className="mb-2 block">Which days and hours can you work each week? *</Label>
-              <AvailabilityMatrix value={availability} onChange={setAvailability} />
-            </div>
+            {enabled.includes('availability') && (
+              <div>
+                <Label className="mb-2 block">Which days and hours can you work each week? *</Label>
+                <AvailabilityMatrix value={availability} onChange={setAvailability} />
+              </div>
+            )}
           </div>
         </section>
+        )}
 
+        {finalSection && (
         <section className="rounded-2xl border bg-white p-5 shadow-sm">
           <div className="mb-4 flex items-center gap-2">
             <Badge style={{ backgroundColor: brand }} className="text-white hover:opacity-90">
-              3
+              {workRightsSection ? '3' : '2'}
             </Badge>
             <h2 className="text-sm font-semibold">Resume & final details</h2>
           </div>
           <div className="space-y-4">
-            <div>
-              <Label className="mb-2 block">Resume *</Label>
-              <ResumeUpload value={resume} onChange={setResume} />
-            </div>
+            {enabled.includes('resume') && (
+              <div>
+                <Label className="mb-2 block">Resume *</Label>
+                <ResumeUpload value={resume} onChange={setResume} />
+              </div>
+            )}
             {enabled.includes('emergency_contact') && (
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
@@ -367,6 +383,7 @@ export default function Apply() {
             ))}
           </div>
         </section>
+        )}
 
         {submitError && (
           <p className="flex items-center gap-2 rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">

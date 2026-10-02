@@ -74,7 +74,8 @@ export default function CompanySettings() {
   if (!form) return <p className="text-sm text-muted-foreground">{t('common.loading')}</p>;
 
   const customRoles = form.custom_roles || [];
-  const matrixRoles = ['branch_manager', ...customRoles.map((role) => role.key)];
+  // Only the roles the company itself defined get a permission column.
+  const matrixRoles = customRoles.map((role) => role.key);
   const roleLabels = Object.fromEntries(customRoles.map((role) => [role.key, role.label]));
 
   return (
@@ -202,13 +203,19 @@ export default function CompanySettings() {
             </div>
             <div>
               <p className="mb-3 text-xs text-muted-foreground">{t('perm.companyHint')}</p>
-              <PermissionMatrixEditor
-                value={form.role_permissions}
-                onChange={(next) => set('role_permissions', next)}
-                roles={matrixRoles}
-                roleLabels={roleLabels}
-                disabled={role !== 'company_admin'}
-              />
+              {matrixRoles.length === 0 ? (
+                <p className="rounded-lg border border-dashed px-4 py-6 text-center text-sm text-muted-foreground">
+                  {t('perm.noRoles')}
+                </p>
+              ) : (
+                <PermissionMatrixEditor
+                  value={form.role_permissions}
+                  onChange={(next) => set('role_permissions', next)}
+                  roles={matrixRoles}
+                  roleLabels={roleLabels}
+                  disabled={role !== 'company_admin'}
+                />
+              )}
               <p className="mt-3 text-xs text-muted-foreground">{t('perm.locked')}</p>
             </div>
           </CardContent>

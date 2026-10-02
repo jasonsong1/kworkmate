@@ -103,7 +103,7 @@ export default function PropertySetup() {
   }
 
   const customRoles = (company && company.custom_roles) || [];
-  const branchMatrixRoles = ['branch_manager', ...customRoles.map((role) => role.key)];
+  const branchMatrixRoles = customRoles.map((role) => role.key);
   const branchRoleLabels = Object.fromEntries(customRoles.map((role) => [role.key, role.label]));
 
   return (
@@ -223,14 +223,20 @@ export default function PropertySetup() {
             </CardHeader>
             <CardContent>
               <p className="mb-4 text-xs text-muted-foreground">{t('perm.branchHint')}</p>
-              <PermissionMatrixEditor
-                value={form.role_permissions}
-                onChange={(next) => set('role_permissions', next)}
-                base={company && company.role_permissions}
-                roles={branchMatrixRoles}
-                roleLabels={branchRoleLabels}
-                allowInherit
-              />
+              {branchMatrixRoles.length === 0 ? (
+                <p className="rounded-lg border border-dashed px-4 py-6 text-center text-sm text-muted-foreground">
+                  {t('perm.noRoles')}
+                </p>
+              ) : (
+                <PermissionMatrixEditor
+                  value={form.role_permissions}
+                  onChange={(next) => set('role_permissions', next)}
+                  base={company && company.role_permissions}
+                  roles={branchMatrixRoles}
+                  roleLabels={branchRoleLabels}
+                  allowInherit
+                />
+              )}
             </CardContent>
           </Card>
         </div>

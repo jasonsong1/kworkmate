@@ -45,11 +45,11 @@ export default function AddBranchDialog({ open, onOpenChange }) {
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="sm:col-span-2">
             <Label>Branch name *</Label>
-            <Input value={form.name} onChange={(e) => set('name', e.target.value)} placeholder="KFC Airport" />
+            <Input value={form.name} onChange={(e) => set('name', e.target.value)} />
           </div>
           <div>
             <Label>Code</Label>
-            <Input value={form.code} onChange={(e) => set('code', e.target.value)} placeholder="AIR" />
+            <Input value={form.code} onChange={(e) => set('code', e.target.value)} />
           </div>
           <div>
             <Label>Suburb</Label>

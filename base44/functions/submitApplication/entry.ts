@@ -18,15 +18,21 @@ export default async function (req) {
     if (!fullName || !email || !phone) {
       return Response.json({ error: 'Name, email and phone are required' }, { status: 400 });
     }
-    if (!body.resume_file_uri) {
-      return Response.json({ error: 'A resume file is required' }, { status: 400 });
-    }
-    if (!body.visa_expiry) {
-      return Response.json({ error: 'Visa expiry date is required' }, { status: 400 });
-    }
-
     const job = await base44.asServiceRole.entities.Job.get(jobId).catch(() => null);
     if (!job) return Response.json({ error: 'Job not found' }, { status: 404 });
+
+    // Questions the employer switched off are not required, so a missing answer never blocks the applicant.
+    const askedKeys = (Array.isArray(job.required_questions) ? job.required_questions : [])
+      .filter((q) => q && q.enabled !== false)
+      .map((q) => q.key);
+    const isAsked = (key) => askedKeys.length === 0 || askedKeys.includes(key);
+
+    if (!body.resume_file_uri && isAsked('resume')) {
+      return Response.json({ error: 'A resume file is required' }, { status: 400 });
+    }
+    if (!body.visa_expiry && isAsked('visa_expiry')) {
+      return Response.json({ error: 'Visa expiry date is required' }, { status: 400 });
+    }
     if (job.status !== 'open') return Response.json({ ok: false, closed: true });
 
     const branch = job.branch_id

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Loader2, MailWarning, Sparkles, UserCheck, UserPlus, UserX } from 'lucide-react';
+import { Loader2, MailWarning, Sparkles, UserCheck, UserPlus, UserX, Video } from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
 import ApplicantCard from '@/components/ApplicantCard';
 import ApplicantDetailDialog from '@/components/ApplicantDetailDialog';
@@ -83,7 +83,14 @@ export default function Applicants() {
   const act = async (applicant, action) => {
     setBusyId(applicant.id);
     try {
-      if (action === 'mini') {
+      if (action === 'video') {
+        const response = await base44.functions.invoke('sendVideoInterview', {
+          applicant_id: applicant.id,
+          origin: window.location.origin
+        });
+        if (response.data?.error) throw new Error(response.data.error);
+        toast({ title: `Video interview link sent to ${applicant.full_name}` });
+      } else if (action === 'mini') {
         const response = await base44.functions.invoke('sendMiniInterview', {
           applicant_id: applicant.id,
           origin: window.location.origin
@@ -179,6 +186,14 @@ export default function Applicants() {
           <UserPlus className="mr-1.5 h-3.5 w-3.5" /> {t('applicants.miniInterview')}
         </Button>
       )}
+      {job &&
+        job.video_interview_enabled === true &&
+        ['top10', 'mini_interview'].includes(applicant.status) &&
+        applicant.video_interview_status !== 'completed' && (
+          <Button size="sm" variant="secondary" disabled={busyId === applicant.id} onClick={() => act(applicant, 'video')}>
+            <Video className="mr-1.5 h-3.5 w-3.5" /> {t('applicants.videoInterview')}
+          </Button>
+        )}
       {['top10', 'mini_interview', 'final_interview'].includes(applicant.status) && (
         <Button size="sm" disabled={busyId === applicant.id} onClick={() => act(applicant, 'invite')}>
           <Sparkles className="mr-1.5 h-3.5 w-3.5" /> {t('applicants.invite')}

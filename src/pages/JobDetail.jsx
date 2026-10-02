@@ -219,6 +219,13 @@ export default function JobDetail() {
                     />
                   </div>
                   <div className="flex items-center justify-between rounded-lg border px-4 py-3">
+                    <span className="text-sm">{t('settings.videoInterviewStep')}</span>
+                    <Switch
+                      checked={job.video_interview_enabled === true}
+                      onCheckedChange={(v) => patch({ video_interview_enabled: v })}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between rounded-lg border px-4 py-3">
                     <span className="text-sm">{t('settings.autoReject')}</span>
                     <Switch
                       checked={job.auto_reject_email !== false}

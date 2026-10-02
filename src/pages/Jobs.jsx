@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/components/ui/use-toast';
 import { useI18n } from '@/lib/i18n';
 import { useWorkspace } from '@/lib/WorkspaceContext';
-import { EMPLOYMENT_TYPES, POSITIONS, defaultRequiredQuestions, money } from '@/lib/bh';
+import { EMPLOYMENT_TYPES, defaultRequiredQuestions, money } from '@/lib/bh';
 import { base44 } from '@/api/base44Client';
 
 const statusTone = {
@@ -26,12 +26,13 @@ export default function Jobs() {
   const { company, activeBranch } = useWorkspace();
   const { toast } = useToast();
   const navigate = useNavigate();
+  const roleOptions = (company && company.custom_roles) || [];
   const [jobs, setJobs] = useState([]);
   const [counts, setCounts] = useState({});
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({ title: '', position: 'Crew', employment_type: 'casual', hourly_rate: '' });
+  const [form, setForm] = useState({ title: '', position: '', employment_type: 'casual', hourly_rate: '' });
 
   const load = useCallback(async () => {
     if (!activeBranch) {
@@ -76,6 +77,7 @@ export default function Jobs() {
       screening_min_score: 60,
       auto_reject_email: company ? company.auto_reject_email !== false : true,
       mini_interview_enabled: company ? company.mini_interview_enabled !== false : true,
+      video_interview_enabled: company ? company.video_interview_enabled === true : false,
       contact_email: company ? company.contact_email : '',
       brand_color: activeBranch.brand_color || '#4338ca',
       logo_url: activeBranch.logo_url || '',
@@ -83,7 +85,7 @@ export default function Jobs() {
     });
     setSaving(false);
     setOpen(false);
-    setForm({ title: '', position: 'Crew', employment_type: 'casual', hourly_rate: '' });
+    setForm({ title: '', position: '', employment_type: 'casual', hourly_rate: '' });
     toast({ title: 'Job ad created' });
     await load();
     navigate(`/jobs/${job.id}`);
@@ -174,18 +176,25 @@ export default function Jobs() {
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
                 <Label>{t('common.position')}</Label>
-                <Select value={form.position} onValueChange={(v) => setForm({ ...form, position: v })}>
+                <Select
+                  value={form.position}
+                  onValueChange={(v) => setForm({ ...form, position: v })}
+                  disabled={roleOptions.length === 0}
+                >
                   <SelectTrigger>
-                    <SelectValue />
+                    <SelectValue placeholder={t('role.select')} />
                   </SelectTrigger>
                   <SelectContent>
-                    {POSITIONS.map((p) => (
-                      <SelectItem key={p} value={p}>
-                        {p}
+                    {roleOptions.map((option) => (
+                      <SelectItem key={option.key} value={option.label}>
+                        {option.label}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
+                {roleOptions.length === 0 && (
+                  <p className="mt-1 text-xs text-muted-foreground">{t('role.noneHint')}</p>
+                )}
               </div>
               <div>
                 <Label>{t('common.rate')} (AUD)</Label>

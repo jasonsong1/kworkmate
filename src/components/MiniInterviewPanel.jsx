@@ -23,7 +23,7 @@ export default function MiniInterviewPanel({ responses }) {
 
   return (
     <div className="space-y-2">
-      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Voice interview</p>
+      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Voice interview answers</p>
       {list.map((item, index) => (
         <div key={index} className="rounded-lg border px-3 py-2">
           <p className="text-xs text-muted-foreground">{item.question}</p>

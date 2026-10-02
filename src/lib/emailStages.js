@@ -29,6 +29,20 @@ export const EMAIL_STAGES = [
     cta: 'Start voice interview'
   },
   {
+    key: 'video',
+    hasCta: true,
+    vars: ['name', 'job_title', 'store', 'company'],
+    subject: 'Video interview invitation — {{job_title}}',
+    heading: 'Your video interview is ready',
+    body: [
+      'Hi {{name}},',
+      'You have been shortlisted for **{{job_title}}** at {{store}}.',
+      'Please record short video answers to a few questions. It takes about five minutes and you can do it from your phone or computer.',
+      'Open the link below when you are somewhere quiet.'
+    ].join('\n'),
+    cta: 'Start video interview'
+  },
+  {
     key: 'invite',
     hasCta: true,
     vars: ['name', 'job_title', 'store', 'company', 'slot_info'],

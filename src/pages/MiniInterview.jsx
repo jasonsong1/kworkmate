@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { AlertCircle, CheckCircle2, Loader2, Mic, Square } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Loader2, Mic, Square, Volume2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { base44 } from '@/api/base44Client';
@@ -36,6 +36,24 @@ export default function MiniInterview() {
   const questions = (data && data.questions) || [];
   const current = questions[index];
   const limit = (current && current.seconds) || 60;
+  const questionText = (current && current.question) || '';
+
+  // The question is read out loud instead of written down, so the applicant answers by voice.
+  const speak = (text) => {
+    if (!text || typeof window === 'undefined' || !window.speechSynthesis) return;
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = /[가-힣]/.test(text) ? 'ko-KR' : 'en-AU';
+    utterance.rate = 0.95;
+    window.speechSynthesis.speak(utterance);
+  };
+
+  useEffect(() => {
+    speak(questionText);
+    return () => {
+      if (typeof window !== 'undefined' && window.speechSynthesis) window.speechSynthesis.cancel();
+    };
+  }, [questionText]);
 
   const upload = async (blob) => {
     setSaving(true);
@@ -74,6 +92,7 @@ export default function MiniInterview() {
 
   const startRecording = async () => {
     setError('');
+    if (typeof window !== 'undefined' && window.speechSynthesis) window.speechSynthesis.cancel();
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const recorder = new MediaRecorder(stream);
@@ -165,10 +184,14 @@ export default function MiniInterview() {
           </div>
           <Progress value={((index + (state === 'recording' ? 0.5 : 0)) / questions.length) * 100} className="h-1.5" />
 
-          <p className="mt-5 text-lg font-semibold leading-snug">{current.question}</p>
-          <p className="mt-2 text-sm text-slate-500">
-            Answer out loud for up to {limit} seconds. You can listen to it before moving on if you need to re-record.
-          </p>
+          <div className="mt-5 flex flex-col items-center gap-3 text-center">
+            <Button variant="outline" size="lg" onClick={() => speak(questionText)}>
+              <Volume2 className="mr-2 h-4 w-4" /> Play the question
+            </Button>
+            <p className="text-sm text-slate-500">
+              Listen to the question, then answer out loud for up to {limit} seconds.
+            </p>
+          </div>
 
           <div className="mt-6 flex flex-col items-center gap-3">
             {state === 'saving' ? (

@@ -3,6 +3,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import AvailabilityTable from '@/components/AvailabilityTable';
 import MiniInterviewPanel from '@/components/MiniInterviewPanel';
+import VideoInterviewPanel from '@/components/VideoInterviewPanel';
 import { APPLICANT_STATUS, noticePeriodLabel, visaLabel } from '@/lib/bh';
 
 const ROWS = [
@@ -77,6 +78,8 @@ export default function ApplicantDetailDialog({ applicant, open, onOpenChange })
           </div>
 
           <MiniInterviewPanel responses={applicant.mini_interview_responses} />
+
+          <VideoInterviewPanel responses={applicant.video_interview_responses} />
 
           {(applicant.answers || []).length > 0 && (
             <div className="space-y-2">
