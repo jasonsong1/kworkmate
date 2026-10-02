@@ -66,7 +66,7 @@ export default async function (req: Request) {
           heading: `${branch.name} roster`,
           brandColor: branch.brand_color || (company && company.brand_color),
           lines: [`Hi ${name},`, 'Here are your shifts for this week:', ...lines],
-          footer: `${company ? company.name : branch.name} · kworkmate`
+          footer: `${company ? company.name : branch.name} · K-Workmate`
         })
       });
       if (ok) sent += 1;

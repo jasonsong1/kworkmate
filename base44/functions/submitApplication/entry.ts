@@ -77,7 +77,7 @@ export default async function (req) {
           `Thanks for applying for <b>${job.title}</b> at ${place}.`,
           'Our hiring team reviews every application with AI-assisted screening. If your profile matches, you will receive an interview invitation with a booking link.'
         ],
-        footer: `${company ? company.name : ''} · kworkmate`
+        footer: `${company ? company.name : ''} · K-Workmate`
       })
     });
 

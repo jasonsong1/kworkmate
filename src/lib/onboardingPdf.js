@@ -64,7 +64,7 @@ function signatureBlock(doc, dataUrl, y, label) {
 }
 
 export function buildTfnPdf({ employee, company, form, signatureDataUrl }) {
-  const doc = newDoc('Tax File Number Declaration', 'ATO NAT 3092 — kworkmate generated record');
+  const doc = newDoc('Tax File Number Declaration', 'ATO NAT 3092 — K-Workmate generated record');
   let y = rows(
     doc,
     [
@@ -84,7 +84,7 @@ export function buildTfnPdf({ employee, company, form, signatureDataUrl }) {
 }
 
 export function buildSuperPdf({ employee, company, form, signatureDataUrl }) {
-  const doc = newDoc('Superannuation Standard Choice Form', 'ATO NAT 13087 — kworkmate generated record');
+  const doc = newDoc('Superannuation Standard Choice Form', 'ATO NAT 13087 — K-Workmate generated record');
   const isDefault = form.super_choice === 'default_fund';
   let y = rows(
     doc,
@@ -106,7 +106,7 @@ export function buildSuperPdf({ employee, company, form, signatureDataUrl }) {
 }
 
 export function buildContractPdf({ employee, branch, company, form, signatureDataUrl }) {
-  const doc = newDoc('Employment Contract Summary', 'kworkmate generated record');
+  const doc = newDoc('Employment Contract Summary', 'K-Workmate generated record');
   const items = [
     ['Employer', company ? company.name : ''],
     ['Store', branch ? branch.name : ''],

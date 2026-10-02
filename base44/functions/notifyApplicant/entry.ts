@@ -34,7 +34,7 @@ export default async function (req) {
             `Thank you for applying for <b>${job ? job.title : 'the role'}</b> at ${branch ? branch.name : 'our store'} and for taking the time to speak with us.`,
             'We have decided to move forward with other candidates for this position. We truly appreciate your interest and wish you the very best.'
           ],
-          footer: `${company ? company.name : ''} · kworkmate`
+          footer: `${company ? company.name : ''} · K-Workmate`
         })
       });
       await base44.asServiceRole.entities.Applicant.update(applicant.id, {
@@ -64,7 +64,7 @@ export default async function (req) {
         ],
         ctaText: 'Choose your interview time',
         ctaUrl: link,
-        footer: `${company ? company.name : ''} · kworkmate`
+        footer: `${company ? company.name : ''} · K-Workmate`
       })
     });
 

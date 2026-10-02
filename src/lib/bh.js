@@ -106,12 +106,32 @@ export function coverageDays(matrix) {
   return DAYS.filter((d) => Array.isArray(matrix[d.key]) && matrix[d.key].length > 0).length;
 }
 
+export const DEFAULT_INTERVIEW_QUESTIONS = [
+  { id: 'q1', question: 'Tell us about your hospitality experience and where you last worked.', seconds: 60 },
+  { id: 'q2', question: 'Describe a busy shift you handled and what you did.', seconds: 60 },
+  { id: 'q3', question: 'How do you handle an unhappy customer?', seconds: 45 },
+  { id: 'q4', question: 'Which days and shifts can you work each week?', seconds: 45 },
+  { id: 'q5', question: 'When can you start, and how long do you plan to stay with us?', seconds: 45 }
+];
+
+export const NOTICE_PERIODS = [
+  { value: 'immediately', label: 'Immediately' },
+  { value: '1_week', label: '1 week' },
+  { value: '2_weeks', label: '2 weeks' },
+  { value: '4_weeks', label: '4 weeks' }
+];
+
+export function noticePeriodLabel(value) {
+  const found = NOTICE_PERIODS.find((n) => n.value === value);
+  return found ? found.label : value || '—';
+}
+
 export function defaultRequiredQuestions() {
   return [
     { key: 'visa_type', label: 'Visa type', required: true, enabled: true },
     { key: 'visa_expiry', label: 'Visa expiry date', required: true, enabled: true },
     { key: 'availability', label: 'Weekly availability matrix', required: true, enabled: true },
-    { key: 'available_immediately', label: 'Available to start immediately', required: true, enabled: true },
+    { key: 'notice_period', label: 'Notice period', required: true, enabled: true },
     { key: 'emergency_contact', label: 'Emergency contact', required: true, enabled: true },
     { key: 'resume', label: 'Resume upload (PDF / DOC / DOCX, max 10MB)', required: true, enabled: true }
   ];

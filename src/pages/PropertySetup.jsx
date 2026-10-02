@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Loader2, MapPin } from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
-import TradingHoursEditor from '@/components/TradingHoursEditor';
+import TradingHoursEditor, { duplicateTradingHours } from '@/components/TradingHoursEditor';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';

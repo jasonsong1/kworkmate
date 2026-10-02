@@ -91,7 +91,7 @@ export default async function (req) {
               `Thank you for your interest in <b>${job.title}</b> at ${branch ? branch.name : 'our store'}.`,
               'After reviewing this round of applications we are not moving forward with your application. We keep your details on file and would be glad to consider you for future openings.'
             ],
-            footer: `${company ? company.name : ''} · kworkmate`
+            footer: `${company ? company.name : ''} · K-Workmate`
           })
         });
         if (ok) {
@@ -189,7 +189,7 @@ export default async function (req) {
                 'Current AI top list:',
                 `<pre style="font-family:monospace;font-size:13px;color:#334155;white-space:pre-wrap">${shortlist}</pre>`
               ],
-              footer: `${company ? company.name : ''} · kworkmate`
+              footer: `${company ? company.name : ''} · K-Workmate`
             })
           });
         }

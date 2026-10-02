@@ -65,7 +65,7 @@ export default async function (req) {
     const ics = buildInterviewIcs({
       uid: `bh-${claimed.id}@branchhire`,
       title,
-      description: 'Face-to-face interview booked through BranchHire. Please arrive 5 minutes early.',
+      description: 'Face-to-face interview booked through K-Workmate. Please arrive 5 minutes early.',
       location,
       date: claimed.date,
       startTime: claimed.start_time,
@@ -89,7 +89,7 @@ export default async function (req) {
           location ? `Location: ${location}` : '',
           'A calendar invitation is attached. If you need to change your time, reply to this email.'
         ].filter(Boolean),
-        footer: `${company ? company.name : ''} · BranchHire`
+        footer: `${company ? company.name : ''} · K-Workmate`
       }),
       attachments
     });
@@ -108,7 +108,7 @@ export default async function (req) {
             `<b>${applicant.full_name}</b> (${applicant.email}) booked <b>${claimed.date} at ${claimed.start_time}</b> for ${job ? job.title : 'the role'}.`,
             applicant.phone ? `Phone: ${applicant.phone}` : ''
           ].filter(Boolean),
-          footer: `${branch ? branch.name : ''} · BranchHire`
+          footer: `${branch ? branch.name : ''} · K-Workmate`
         }),
         attachments
       });
