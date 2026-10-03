@@ -412,7 +412,31 @@ const dict = {
     'employees.uiLanguageHint':
       'The language this person sees when they sign in, and the language of the emails sent to them.',
     'employees.languageKo': '한국어',
-    'employees.languageEn': 'English'
+    'employees.languageEn': 'English',
+    'employees.visa': 'Visa',
+    'employees.secondaryPosition': 'Secondary position',
+    'employees.secondaryPositionHint':
+      'Optional — this person can also cover this position when the roster is built.',
+    'roster.settings': 'Shift settings',
+    'roster.settingsHint': 'Set the shifts your store runs and how many people you need for each position.',
+    'roster.shifts': 'Shifts',
+    'roster.shiftName': 'Shift name',
+    'roster.shiftStart': 'Starts',
+    'roster.shiftEnd': 'Ends',
+    'roster.addShiftType': 'Add shift',
+    'roster.headcount': 'People needed',
+    'roster.headcountHint': 'Row = position, column = day. Enter the number of people you need.',
+    'roster.minRest': 'Minimum rest between shifts (hours)',
+    'roster.settingsSaved': 'Shift settings saved',
+    'roster.autoBuild': 'Auto-build week',
+    'roster.building': 'Building…',
+    'roster.built': 'Draft built · {assigned} shifts placed, {unfilled} still open',
+    'roster.buildNoSettings': 'Set your shifts and required headcount first.',
+    'roster.availabilityTitle': 'Submitted availability',
+    'roster.availabilityHint': 'What the team said they can work this week.',
+    'roster.availabilityNone': 'No availability submitted for this week yet.',
+    'roster.availabilityCount': '{done} of {total} submitted',
+    'roster.unassigned': 'Still open'
   },
   ko: {
     'app.name': 'K-Workmate',
@@ -824,7 +848,30 @@ const dict = {
     'employees.uiLanguageHint':
       '이 직원이 로그인했을 때 보이는 화면 언어이며, 이 직원에게 발송되는 이메일 언어에도 적용됩니다.',
     'employees.languageKo': '한국어',
-    'employees.languageEn': 'English'
+    'employees.languageEn': 'English',
+    'employees.visa': '비자',
+    'employees.secondaryPosition': '세컨더리 포지션',
+    'employees.secondaryPositionHint': '선택 사항 — 로스터를 만들 때 이 포지션도 맡을 수 있습니다.',
+    'roster.settings': '시프트 설정',
+    'roster.settingsHint': '매장에서 운영하는 시프트와 포지션별 필요 인원을 설정하세요.',
+    'roster.shifts': '시프트',
+    'roster.shiftName': '시프트 이름',
+    'roster.shiftStart': '시작',
+    'roster.shiftEnd': '종료',
+    'roster.addShiftType': '시프트 추가',
+    'roster.headcount': '필요 인원',
+    'roster.headcountHint': '행은 포지션, 열은 요일입니다. 필요한 인원수를 입력하세요.',
+    'roster.minRest': '시프트 간 최소 휴식 (시간)',
+    'roster.settingsSaved': '시프트 설정을 저장했습니다',
+    'roster.autoBuild': '주간 자동 생성',
+    'roster.building': '생성 중…',
+    'roster.built': '초안 완성 · {assigned}개 배정, {unfilled}개 미배정',
+    'roster.buildNoSettings': '먼저 시프트와 필요 인원을 설정해 주세요.',
+    'roster.availabilityTitle': '제출된 근무가능시간',
+    'roster.availabilityHint': '이번 주 직원들이 제출한 근무 가능 시간입니다.',
+    'roster.availabilityNone': '이번 주 제출된 근무가능시간이 없습니다.',
+    'roster.availabilityCount': '{done}/{total}명 제출',
+    'roster.unassigned': '미배정 자리'
   }
 };
 

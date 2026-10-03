@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/components/ui/use-toast';
 import { useI18n } from '@/lib/i18n';
-import { EMPLOYMENT_TYPES } from '@/lib/bh';
+import { EMPLOYMENT_TYPES, VISA_TYPES } from '@/lib/bh';
 import { useWorkspace } from '@/lib/WorkspaceContext';
 import { base44 } from '@/api/base44Client';
 
@@ -16,6 +16,8 @@ const empty = {
   full_name: '',
   user_email: '',
   position: '',
+  secondary_position: '',
+  visa_type: '',
   app_role: 'staff',
   hourly_rate: '',
   employment_type: 'casual',
@@ -46,6 +48,8 @@ export default function EmployeeDialog({ open, onOpenChange, branch, employee, o
   ];
   const chosen = roleOptions.find((option) => option.key === form.app_role);
   const hasPositions = ((company && company.custom_roles) || []).length > 0;
+  // The secondary position offers the same list as the position itself.
+  const positionLabels = ((company && company.custom_roles) || []).map((item) => item.label);
 
   useEffect(() => {
     if (!open) return;
@@ -56,6 +60,8 @@ export default function EmployeeDialog({ open, onOpenChange, branch, employee, o
         full_name: employee.full_name || '',
         user_email: employee.user_email || '',
         position: employee.position || '',
+        secondary_position: employee.secondary_position || '',
+        visa_type: employee.visa_type || '',
         app_role: employee.app_role || 'staff',
         hourly_rate: employee.hourly_rate ?? '',
         employment_type: employee.employment_type || 'casual',
@@ -148,6 +154,40 @@ export default function EmployeeDialog({ open, onOpenChange, branch, employee, o
                   ? t('role.employeeHint')
                   : t('role.noneHint')}
             </p>
+          </div>
+          <div>
+            <Label>{t('employees.secondaryPosition')}</Label>
+            <Select value={form.secondary_position || ''} onValueChange={(v) => set('secondary_position', v)}>
+              <SelectTrigger>
+                <SelectValue placeholder={t('role.select')} />
+              </SelectTrigger>
+              <SelectContent>
+                {positionLabels.map((label) => (
+                  <SelectItem key={label} value={label}>
+                    {label}
+                  </SelectItem>
+                ))}
+                {form.secondary_position && !positionLabels.includes(form.secondary_position) && (
+                  <SelectItem value={form.secondary_position}>{form.secondary_position}</SelectItem>
+                )}
+              </SelectContent>
+            </Select>
+            <p className="mt-1 text-xs text-muted-foreground">{t('employees.secondaryPositionHint')}</p>
+          </div>
+          <div>
+            <Label>{t('employees.visa')}</Label>
+            <Select value={form.visa_type || ''} onValueChange={(v) => set('visa_type', v)}>
+              <SelectTrigger>
+                <SelectValue placeholder={t('common.select')} />
+              </SelectTrigger>
+              <SelectContent>
+                {VISA_TYPES.map((v) => (
+                  <SelectItem key={v.value} value={v.value}>
+                    {v.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div>
             <Label>{t('common.rate')} (AUD)</Label>

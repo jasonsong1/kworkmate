@@ -11,7 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { useToast } from '@/components/ui/use-toast';
 import { useI18n } from '@/lib/i18n';
 import { useWorkspace } from '@/lib/WorkspaceContext';
-import { money } from '@/lib/bh';
+import { money, visaLabel } from '@/lib/bh';
 import { base44 } from '@/api/base44Client';
 
 export default function Employees() {
@@ -123,6 +123,7 @@ export default function Employees() {
                     <TableHead>{t('common.name')}</TableHead>
                     <TableHead>{t('employees.number')}</TableHead>
                     <TableHead>{t('common.position')}</TableHead>
+                    <TableHead>{t('employees.visa')}</TableHead>
                     <TableHead>{t('common.rate')}</TableHead>
                     <TableHead>{t('employees.onboarding')}</TableHead>
                     <TableHead className="text-right">{t('common.actions')}</TableHead>
@@ -148,7 +149,13 @@ export default function Employees() {
                         <p className="text-xs text-muted-foreground">{row.user_email}</p>
                       </TableCell>
                       <TableCell className="font-mono text-xs">{row.employee_number || '—'}</TableCell>
-                      <TableCell>{row.position || '—'}</TableCell>
+                      <TableCell>
+                        <span>{row.position || '—'}</span>
+                        {row.secondary_position ? (
+                          <span className="ml-1 text-xs text-muted-foreground">+ {row.secondary_position}</span>
+                        ) : null}
+                      </TableCell>
+                      <TableCell>{visaLabel(row.visa_type)}</TableCell>
                       <TableCell>{row.hourly_rate ? money(row.hourly_rate) : '—'}</TableCell>
                       <TableCell>
                         {row.onboarding_status === 'completed' ? (
@@ -182,17 +189,19 @@ export default function Employees() {
                           >
                             <KeyRound className="h-3.5 w-3.5" />
                           </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            title={t('employees.sendOnboarding')}
-                            onClick={() => {
-                              setEditing(row);
-                              setDialogOpen(true);
-                            }}
-                          >
-                            <Send className="h-3.5 w-3.5" />
-                          </Button>
+                          {(row.onboarding_status === 'pending' || !row.onboarding_status) && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              title={t('employees.sendOnboarding')}
+                              onClick={() => {
+                                setEditing(row);
+                                setDialogOpen(true);
+                              }}
+                            >
+                              <Send className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
                           <Button
                             size="sm"
                             variant="ghost"

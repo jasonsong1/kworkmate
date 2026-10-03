@@ -48,6 +48,7 @@ export default async function (req) {
       full_name: applicant.full_name,
       employee_number: employeeNumber,
       position: body.position || (job ? job.position : '') || '',
+      visa_type: applicant.visa_type || '',
       hourly_rate: Number(body.hourly_rate) || (job ? Number(job.hourly_rate) || 0 : 0),
       employment_type: body.employment_type || (job ? job.employment_type : 'casual') || 'casual',
       status: 'active',

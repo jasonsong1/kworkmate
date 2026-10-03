@@ -30,7 +30,7 @@ export default function ApplicantCard({ applicant, actions, onOpen, onViewResume
             )}
           </div>
           <p className="mt-1 text-xs text-muted-foreground">
-            {applicant.email} · {applicant.phone || '—'} · {visaLabel(applicant.visa_type)}
+            {applicant.email} · {applicant.phone || '—'} · Visa: {visaLabel(applicant.visa_type)}
           </p>
         </div>
 

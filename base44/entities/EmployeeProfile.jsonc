@@ -20,6 +20,12 @@
     "position": {
       "type": "string"
     },
+    "secondary_position": {
+      "type": "string"
+    },
+    "visa_type": {
+      "type": "string"
+    },
     "app_role": {
       "type": "string",
       "default": "staff"
