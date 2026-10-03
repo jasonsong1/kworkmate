@@ -29,7 +29,7 @@ export default function Kiosk() {
 
   useEffect(() => {
     const load = async () => {
-      const response = await base44.functions.invoke('kioskPunch', { token, action: 'info' });
+      const response = await base44.functions.invoke('kioskPunch', { token, action: 'info' }).catch(() => ({ data: {} }));
       const data = response.data || {};
       if (data.error) {
         setError(MESSAGES[data.error] || 'This kiosk link is not available.');

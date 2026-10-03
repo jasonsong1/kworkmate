@@ -14,15 +14,15 @@ export default async function (req) {
     const body = await req.json();
 
     const parsed = decodeKioskToken(body.token);
-    if (!parsed) return Response.json({ error: 'invalid_link' }, { status: 400 });
+    if (!parsed) return Response.json({ error: 'invalid_link' });
 
     const branch = await base44.asServiceRole.entities.Branch.get(parsed.branchId).catch(() => null);
     if (!branch || branch.is_active === false) {
-      return Response.json({ error: 'branch_unavailable' }, { status: 404 });
+      return Response.json({ error: 'branch_unavailable' });
     }
 
     const today = todayIn(timezoneForBranch(branch));
-    if (parsed.date !== today) return Response.json({ error: 'expired_link' }, { status: 400 });
+    if (parsed.date !== today) return Response.json({ error: 'expired_link' });
 
     const company = branch.company_id
       ? await base44.asServiceRole.entities.Company.get(branch.company_id).catch(() => null)
@@ -41,7 +41,7 @@ export default async function (req) {
 
     const action = body.action === 'out' ? 'out' : 'in';
     const number = String(body.employee_number || '').trim();
-    if (!number) return Response.json({ error: 'employee_number_required' }, { status: 400 });
+    if (!number) return Response.json({ error: 'employee_number_required' });
 
     const people = rowsOf(
       await base44.asServiceRole.entities.EmployeeProfile.filter(
@@ -50,9 +50,9 @@ export default async function (req) {
       )
     );
     const person = people[0];
-    if (!person) return Response.json({ error: 'employee_not_found' }, { status: 404 });
+    if (!person) return Response.json({ error: 'employee_not_found' });
     if (person.status && person.status !== 'active') {
-      return Response.json({ error: 'employee_inactive' }, { status: 403 });
+      return Response.json({ error: 'employee_inactive' });
     }
 
     const active = rowsOf(
@@ -64,7 +64,7 @@ export default async function (req) {
     const nowIso = new Date().toISOString();
 
     if (action === 'in') {
-      if (active.length > 0) return Response.json({ error: 'already_clocked_in' }, { status: 400 });
+      if (active.length > 0) return Response.json({ error: 'already_clocked_in' });
 
       const shifts = rowsOf(
         await base44.asServiceRole.entities.Shift.filter(
@@ -93,7 +93,7 @@ export default async function (req) {
       return Response.json({ ok: true, action: 'in', name: person.full_name, employee_number: number });
     }
 
-    if (active.length === 0) return Response.json({ error: 'not_clocked_in' }, { status: 400 });
+    if (active.length === 0) return Response.json({ error: 'not_clocked_in' });
 
     const entry = active[0];
     const minutes = Math.max(0, Math.round((new Date(nowIso).getTime() - new Date(entry.clock_in_at).getTime()) / 60000));

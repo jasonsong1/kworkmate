@@ -106,7 +106,7 @@ export default function AvailabilityEditDialog({ open, onOpenChange, employee, s
                     </Select>
                   </div>
                 ) : (
-                  <span className="text-sm text-muted-foreground">{t('roster.noSubmission')}</span>
+                  <span className="text-sm text-muted-foreground">—</span>
                 )}
               </div>
             );
