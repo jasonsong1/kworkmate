@@ -34,13 +34,13 @@ export default function Roster() {
     }
     setLoading(true);
     const [staff, list] = await Promise.all([
-      base44.entities.EmployeeProfile
-        .filter({ branch_id: activeBranch.id, status: 'active' }, { limit: 200 })
-        .then((page) => page.items || []),
-      base44.entities.Shift
-        .filter({ branch_id: activeBranch.id, date: { $gte: weekStart, $lte: weekEnd } }, { sort: 'date', limit: 500 })
-        .then((page) => page.items || [])
-    ]);
+    base44.entities.EmployeeProfile.
+    filter({ branch_id: activeBranch.id, status: 'active' }, { limit: 200 }).
+    then((page) => page.items || []),
+    base44.entities.Shift.
+    filter({ branch_id: activeBranch.id, date: { $gte: weekStart, $lte: weekEnd } }, { sort: 'date', limit: 500 }).
+    then((page) => page.items || [])]
+    );
     setEmployees(staff);
     setShifts(list);
     setLoading(false);
@@ -88,7 +88,7 @@ export default function Roster() {
         title={t('roster.title')}
         subtitle={activeBranch ? activeBranch.name : t('roster.subtitle')}
         actions={
-          <>
+        <>
             <div className="flex items-center gap-1 rounded-lg border px-2 py-1">
               <Button variant="ghost" size="icon" onClick={() => setWeekStart(addDaysIso(weekStart, -7))}>
                 <ChevronLeft className="h-4 w-4" />
@@ -101,14 +101,14 @@ export default function Roster() {
               </Button>
             </div>
             <Button
-              variant="outline"
-              onClick={() => {
-                setDialogDate(todayIso());
-                setDialogEmployee(null);
-                setDialogOpen(true);
-              }}
-              disabled={!activeBranch || employees.length === 0}
-            >
+            variant="outline"
+            onClick={() => {
+              setDialogDate(todayIso());
+              setDialogEmployee(null);
+              setDialogOpen(true);
+            }}
+            disabled={!activeBranch || employees.length === 0} className="hidden">
+            
               <Plus className="mr-2 h-4 w-4" /> {t('roster.addShift')}
             </Button>
             <Button variant="outline" onClick={saveWeek} disabled={!activeBranch || shifts.length === 0}>
@@ -119,20 +119,20 @@ export default function Roster() {
               {t('roster.send')}
             </Button>
           </>
-        }
-      />
+        } />
+      
 
       <Card>
         <CardContent className="p-4">
-          {loading ? (
-            <p className="py-10 text-center text-sm text-muted-foreground">
+          {loading ?
+          <p className="py-10 text-center text-sm text-muted-foreground">
               <Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin" />
               {t('common.loading')}
-            </p>
-          ) : employees.length === 0 ? (
-            <p className="py-10 text-center text-sm text-muted-foreground">{t('common.none')}</p>
-          ) : (
-            <>
+            </p> :
+          employees.length === 0 ?
+          <p className="py-10 text-center text-sm text-muted-foreground">{t('common.none')}</p> :
+
+          <>
               <p className="mb-4 text-xs text-muted-foreground">
                 {publishedCount} of {shifts.length} shifts published for this week
               </p>
@@ -143,71 +143,71 @@ export default function Roster() {
                       <th className="sticky left-0 z-10 w-44 bg-card px-3 py-2 text-left text-xs font-medium text-muted-foreground">
                         {t('common.employee')}
                       </th>
-                      {days.map((day) => (
-                        <th key={day.date} className="px-2 py-2 text-center text-xs font-medium text-muted-foreground">
+                      {days.map((day) =>
+                    <th key={day.date} className="px-2 py-2 text-center text-xs font-medium text-muted-foreground">
                           <div>{day.short}</div>
                           <div className="font-normal text-[11px]">{day.date.slice(5)}</div>
                         </th>
-                      ))}
+                    )}
                     </tr>
                   </thead>
                   <tbody>
-                    {employees.map((employee) => (
-                      <tr key={employee.id} className="align-top">
+                    {employees.map((employee) =>
+                  <tr key={employee.id} className="align-top">
                         <td className="sticky left-0 z-10 border-t bg-card px-3 py-3">
                           <p className="text-sm font-medium">{employee.full_name}</p>
                           <p className="text-xs text-muted-foreground">{employee.position || '—'}</p>
                         </td>
-                        {days.map((day) => (
-                          <td key={`${employee.id}-${day.date}`} className="border-t p-1">
+                        {days.map((day) =>
+                    <td key={`${employee.id}-${day.date}`} className="border-t p-1">
                             <div className="space-y-1">
-                              {shiftsFor(employee.user_email, day.date).map((shift) => (
-                                <div
-                                  key={shift.id}
-                                  className={`group rounded-lg border px-2 py-1.5 text-xs ${
-                                    shift.status === 'published'
-                                      ? 'border-emerald-200 bg-emerald-50 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-100'
-                                      : shift.status === 'saved'
-                                        ? 'border-sky-200 bg-sky-50 dark:border-sky-500/30 dark:bg-sky-500/10 dark:text-sky-100'
-                                        : 'bg-muted/40'
-                                  }`}
-                                >
+                              {shiftsFor(employee.user_email, day.date).map((shift) =>
+                        <div
+                          key={shift.id}
+                          className={`group rounded-lg border px-2 py-1.5 text-xs ${
+                          shift.status === 'published' ?
+                          'border-emerald-200 bg-emerald-50 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-100' :
+                          shift.status === 'saved' ?
+                          'border-sky-200 bg-sky-50 dark:border-sky-500/30 dark:bg-sky-500/10 dark:text-sky-100' :
+                          'bg-muted/40'}`
+                          }>
+                          
                                   <div className="flex items-center justify-between gap-1">
                                     <span className="font-medium">
                                       {shift.start_time}–{shift.end_time}
                                     </span>
                                     <button
-                                      onClick={() => removeShift(shift)}
-                                      className="opacity-0 transition-opacity group-hover:opacity-100"
-                                    >
+                              onClick={() => removeShift(shift)}
+                              className="opacity-0 transition-opacity group-hover:opacity-100">
+                              
                                       <Trash2 className="h-3 w-3 text-destructive" />
                                     </button>
                                   </div>
-                                  {shift.notes ? (
-                                    <p className="truncate text-[11px] text-muted-foreground">{shift.notes}</p>
-                                  ) : null}
+                                  {shift.notes ?
+                          <p className="truncate text-[11px] text-muted-foreground">{shift.notes}</p> :
+                          null}
                                 </div>
-                              ))}
+                        )}
                               <button
-                                onClick={() => {
-                                  setDialogDate(day.date);
-                                  setDialogEmployee(employee);
-                                  setDialogOpen(true);
-                                }}
-                                className="w-full rounded-lg border border-dashed px-2 py-1 text-[11px] text-muted-foreground hover:bg-muted"
-                              >
+                          onClick={() => {
+                            setDialogDate(day.date);
+                            setDialogEmployee(employee);
+                            setDialogOpen(true);
+                          }}
+                          className="w-full rounded-lg border border-dashed px-2 py-1 text-[11px] text-muted-foreground hover:bg-muted">
+                          
                                 +
                               </button>
                             </div>
                           </td>
-                        ))}
+                    )}
                       </tr>
-                    ))}
+                  )}
                   </tbody>
                 </table>
               </div>
             </>
-          )}
+          }
         </CardContent>
       </Card>
 
@@ -218,8 +218,8 @@ export default function Roster() {
         employees={employees}
         defaultDate={dialogDate}
         defaultEmployee={dialogEmployee}
-        onSaved={load}
-      />
-    </div>
-  );
+        onSaved={load} />
+      
+    </div>);
+
 }
