@@ -100,17 +100,17 @@ export default function Roster() {
                 <ChevronRight className="h-4 w-4" />
               </Button>
             </div>
+            <Button
+            variant="outline"
+            onClick={() => {
+              setDialogDate(todayIso());
+              setDialogEmployee(null);
+              setDialogOpen(true);
+            }}
+            disabled={!activeBranch || employees.length === 0} className="hidden">
             
-
-
-
-
-
-
-
-
-
-          
+              <Plus className="mr-2 h-4 w-4" /> {t('roster.addShift')}
+            </Button>
             <Button variant="outline" onClick={saveWeek} disabled={!activeBranch || shifts.length === 0}>
               {t('roster.save')}
             </Button>
