@@ -37,8 +37,9 @@ import EmailTemplates from '@/pages/EmailTemplates';
 import TemplateDesign from '@/pages/TemplateDesign';
 import JobDesign from '@/pages/JobDesign';
 import PlatformAdmin from '@/pages/PlatformAdmin';
+import Kiosk from '@/pages/Kiosk';
 
-const PUBLIC_PATHS = ['/apply/', '/interview/', '/onboarding/', '/mini-interview/', '/video-interview/'];
+const PUBLIC_PATHS = ['/apply/', '/interview/', '/onboarding/', '/mini-interview/', '/video-interview/', '/kiosk/'];
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
@@ -73,6 +74,7 @@ const AuthenticatedApp = () => {
       <Route path="/onboarding/:token" element={<Onboarding />} />
       <Route path="/mini-interview/:token" element={<MiniInterview />} />
       <Route path="/video-interview/:token" element={<VideoInterview />} />
+      <Route path="/kiosk/:token" element={<Kiosk />} />
 
       {/* Authentication */}
       <Route path="/login" element={<Login />} />

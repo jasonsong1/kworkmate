@@ -23,6 +23,7 @@ function BackofficeShell() {
   const { pathname } = useLocation();
   const requiredArea = areaForPath(pathname);
   const allowed = !requiredArea || canView(requiredArea);
+  const activeBranchOptions = branches.filter((b) => b.is_active !== false);
 
   useEffect(() => {
     applyTheme(theme);
@@ -75,13 +76,13 @@ function BackofficeShell() {
 
           {isPlatformAdmin && <CompanySwitcher />}
 
-          {branches.length > 0 &&
+          {activeBranchOptions.length > 0 &&
           <Select value={activeBranchId} onValueChange={selectBranch}>
               <SelectTrigger className="hidden w-56 sm:flex">
                 <SelectValue placeholder={t('top.branch')} />
               </SelectTrigger>
               <SelectContent>
-                {branches.map((b) =>
+                {activeBranchOptions.map((b) =>
               <SelectItem key={b.id} value={b.id}>
                     {b.name}
                   </SelectItem>

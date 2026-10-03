@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
 import CompanyAdminsCard from '@/components/CompanyAdminsCard';
+import OnboardingDocsCard from '@/components/company/OnboardingDocsCard';
 import CompanyRolesManager from '@/components/CompanyRolesManager';
 import PermissionMatrixEditor from '@/components/PermissionMatrixEditor';
 import { Button } from '@/components/ui/button';
@@ -127,6 +128,9 @@ export default function CompanySettings() {
             </div>
           </CardContent>
         </Card>
+
+        <OnboardingDocsCard />
+...
 
         
 

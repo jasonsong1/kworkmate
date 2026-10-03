@@ -72,6 +72,23 @@ export default async function (req) {
     });
 
     const link = portalLink(body.origin, `/onboarding/${token}`);
+
+    // The company's onboarding documents ride along with the hired email. One email can carry
+    // five files and 10MB in total, so anything past that is named in the body instead.
+    const onboardingDocs = (company && company.onboarding_docs) || [];
+    const attachments = [];
+    const skippedDocs = [];
+    let attachedBytes = 0;
+    for (const doc of onboardingDocs) {
+      const size = Number(doc.size) || 0;
+      if (!doc.file_url || attachments.length >= 5 || attachedBytes + size > 10 * 1024 * 1024) {
+        skippedDocs.push(doc.name || 'document');
+        continue;
+      }
+      attachments.push({ filename: doc.name || 'document', file_url: doc.file_url });
+      attachedBytes += size;
+    }
+
     const mail = renderStageEmail(
       company,
       'hired',
@@ -81,12 +98,20 @@ export default async function (req) {
         store: branch.name,
         employee_number: employeeNumber
       },
-      { brandColor: branch.brand_color || '#4338ca', ctaUrl: link }
+      {
+        brandColor: branch.brand_color || '#4338ca',
+        ctaUrl: link,
+        extraLines:
+          skippedDocs.length > 0
+            ? [`Your remaining onboarding documents (${skippedDocs.join(', ')}) are on your onboarding page.`]
+            : []
+      }
     );
     const emailSent = await sendApplicantEmail(base44, applicant, {
       type: 'hired',
       subject: mail.subject,
-      html: mail.html
+      html: mail.html,
+      attachments
     });
     // Hiring is what creates the account, so the app user is invited and handed a
     // password setup link straight away.

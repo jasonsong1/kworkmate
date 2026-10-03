@@ -14,7 +14,7 @@ import { base44 } from '@/api/base44Client';
 
 export default function Roster() {
   const { t } = useI18n();
-  const { activeBranch } = useWorkspace();
+  const { activeBranch, isManager, me } = useWorkspace();
   const { toast } = useToast();
 
   const [weekStart, setWeekStart] = useState(startOfWeekIso(todayIso()));
@@ -131,6 +131,10 @@ export default function Roster() {
     });
     await load();
   };
+
+  // Managers and the branch's own supervisors can correct what a person submitted.
+  const canEditAvailability =
+    isManager || Boolean(activeBranch && me && (activeBranch.manager_emails || []).includes(me.email));
 
   const shiftsFor = (email, date) => shifts.filter((s) => s.employee_email === email && s.date === date);
   const publishedCount = shifts.filter((s) => s.status === 'published').length;
@@ -287,7 +291,15 @@ export default function Roster() {
         </CardContent>
       </Card>
 
-      <AvailabilityBoard employees={employees} submissions={submissions} days={days} />
+      <AvailabilityBoard
+        employees={employees}
+        submissions={submissions}
+        days={days}
+        branch={activeBranch}
+        weekStart={weekStart}
+        canEdit={canEditAvailability}
+        onSaved={load}
+      />
 
       <ShiftDialog
         open={dialogOpen}

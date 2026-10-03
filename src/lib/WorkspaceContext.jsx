@@ -31,16 +31,19 @@ export function WorkspaceProvider({ children }) {
       ]);
       setCompany(companies[0] || null);
 
-      const allowed =
-        superAdmin || user.app_role === 'company_admin'
-          ? allBranches
-          : allBranches.filter((b) => (user.branch_ids || []).includes(b.id));
-      setBranches(allowed);
+      const isCompanyAdmin = superAdmin || user.app_role === 'company_admin';
+      const allowed = isCompanyAdmin
+        ? allBranches
+        : allBranches.filter((b) => (user.branch_ids || []).includes(b.id));
+      // A deactivated branch disappears for its own staff and managers; a company admin still
+      // sees it so it can be brought back.
+      setBranches(isCompanyAdmin ? allowed : allowed.filter((b) => b.is_active !== false));
 
       const stored = localStorage.getItem('bh_branch');
       const pick =
-        allowed.find((b) => b.id === stored) ||
-        allowed.find((b) => b.id === user.branch_id) ||
+        allowed.find((b) => b.id === stored && b.is_active !== false) ||
+        allowed.find((b) => b.id === user.branch_id && b.is_active !== false) ||
+        allowed.find((b) => b.is_active !== false) ||
         allowed[0];
       setActiveBranchId(pick ? pick.id : '');
     } else {

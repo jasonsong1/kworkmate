@@ -50,6 +50,29 @@ export function onboardingReminderMail(lang: string, { name, store, employeeNumb
   };
 }
 
+// Sent when a manager corrects the availability on someone's behalf, so the change never
+// happens quietly.
+export function availabilityEditedMail(lang: string, { name, branchName }) {
+  if (lang === 'en') {
+    return {
+      subject: `Your availability was updated — ${branchName}`,
+      heading: `${name}, your availability was updated`,
+      lines: [
+        `Your manager updated the availability recorded for <b>${branchName}</b>.`,
+        'If anything is wrong, reply to this email or submit an update from your space.'
+      ]
+    };
+  }
+  return {
+    subject: `근무가능시간이 수정되었습니다 — ${branchName}`,
+    heading: `${name}님, 근무가능시간이 수정되었습니다`,
+    lines: [
+      `<b>${branchName}</b>에 등록된 근무가능시간을 매니저가 수정했습니다.`,
+      '수정된 내용이 맞지 않으면 이 메일에 회신하거나 내 공간에서 다시 제출해 주세요.'
+    ]
+  };
+}
+
 export function rosterMail(lang: string, { name, branchName, range }) {
   if (lang === 'en') {
     return {

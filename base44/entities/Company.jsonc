@@ -90,6 +90,12 @@
     },
     "job_design": {
       "type": "object"
+    },
+    "onboarding_docs": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
     }
   },
   "required": [

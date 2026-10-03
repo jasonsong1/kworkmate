@@ -139,6 +139,9 @@ export function renderStageEmail(company, stageKey, vars, options = {}) {
     .map((line) => fillLine(line, allVars))
     .filter(Boolean);
 
+  // Callers add a line or two of their own, e.g. the documents that would not fit on the email.
+  (options.extraLines || []).map((line) => fillLine(line, allVars)).filter(Boolean).forEach((line) => lines.push(line));
+
   const html = brandedEmail({
     heading: fillHtml(pick('heading'), allVars),
     lines,

@@ -82,6 +82,10 @@
     },
     "roster_email_last_sent": {
       "type": "string"
+    },
+    "is_active": {
+      "type": "boolean",
+      "default": true
     }
   },
   "required": [
