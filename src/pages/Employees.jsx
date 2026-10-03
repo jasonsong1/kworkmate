@@ -123,8 +123,8 @@ export default function Employees() {
                     <TableHead>{t('common.name')}</TableHead>
                     <TableHead>{t('employees.number')}</TableHead>
                     <TableHead>{t('common.position')}</TableHead>
-                    <TableHead className="hidden">{t('employees.visa')}</TableHead>
-                    <TableHead className="hidden">{t('common.rate')}</TableHead>
+                    
+                    
                     <TableHead>{t('employees.onboarding')}</TableHead>
                     <TableHead className="text-right">{t('common.actions')}</TableHead>
                   </TableRow>
@@ -155,8 +155,8 @@ export default function Employees() {
                     <span className="ml-1 text-xs text-muted-foreground">+ {row.secondary_position}</span> :
                     null}
                       </TableCell>
-                      <TableCell className="hidden">{visaLabel(row.visa_type)}</TableCell>
-                      <TableCell className="hidden">{row.hourly_rate ? money(row.hourly_rate) : '—'}</TableCell>
+                      
+                      
                       <TableCell>
                         {row.onboarding_status === 'completed' ?
                     <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100">
