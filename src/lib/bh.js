@@ -1,11 +1,39 @@
 export const VISA_TYPES = [
-  { value: 'whv_417', label: 'Working Holiday (417)' },
-  { value: 'whv_462', label: 'Work & Holiday (462)' },
-  { value: 'student_500', label: 'Student (500)' },
-  { value: 'graduate_485', label: 'Graduate (485)' },
-  { value: 'pr_citizen', label: 'PR / Citizen' },
-  { value: 'other', label: 'Other visa' }
+  { value: 'working_holiday', label: 'Working holiday visa' },
+  { value: 'student', label: 'Student visa' },
+  { value: 'graduate', label: 'Graduate visa' },
+  { value: 'pr_citizen', label: 'PR/Citizen' },
+  { value: 'other', label: 'Other' }
 ];
+
+// Applications saved before the list was simplified still carry these codes; they are read
+// as the matching visa instead of showing a raw code.
+const LEGACY_VISA_KEYS = {
+  whv_417: 'working_holiday',
+  whv_462: 'working_holiday',
+  student_500: 'student',
+  graduate_485: 'graduate'
+};
+
+// Hours each visa allows in one week. Null means no limit. A student visa holder may work at
+// most 20 hours (48 hours a fortnight); the roster builder and its checks respect this.
+export const VISA_WEEKLY_HOURS = {
+  working_holiday: null,
+  student: 20,
+  graduate: null,
+  pr_citizen: null,
+  other: null
+};
+
+export function visaKey(value) {
+  const raw = String(value || '');
+  return LEGACY_VISA_KEYS[raw] || raw;
+}
+
+export function visaWeeklyHours(value) {
+  const cap = VISA_WEEKLY_HOURS[visaKey(value)];
+  return typeof cap === 'number' ? cap : null;
+}
 
 export const DAYS = [
   { key: 'mon', label: 'Monday', short: 'Mon' },
@@ -201,8 +229,9 @@ export function visibleRequiredQuestions(list) {
 }
 
 export function visaLabel(value) {
-  const found = VISA_TYPES.find((v) => v.value === value);
-  return found ? found.label : value || '—';
+  const found = VISA_TYPES.find((v) => v.value === visaKey(value));
+  if (found) return found.label;
+  return value || '—';
 }
 
 export function todayIso() {

@@ -43,9 +43,9 @@ export async function sendEmail(base44, mail) {
 
 // Applicant emails are written back onto the applicant, so the hiring team can see
 // whether the message actually went out and send it again when it did not.
-export async function sendApplicantEmail(base44, applicant, { type, subject, html }) {
+export async function sendApplicantEmail(base44, applicant, { type, subject, html, attachments }) {
   const attemptedAt = new Date().toISOString();
-  const result = await sendEmailDetailed(base44, { to: applicant.email, subject, html });
+  const result = await sendEmailDetailed(base44, { to: applicant.email, subject, html, attachments });
   await base44.asServiceRole.entities.Applicant.update(applicant.id, {
     email_status: result.ok ? 'sent' : 'failed',
     email_type: type,

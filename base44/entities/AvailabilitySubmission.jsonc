@@ -22,6 +22,19 @@
     },
     "note": {
       "type": "string"
+    },
+    "manager_edited": {
+      "type": "boolean",
+      "default": false
+    },
+    "updated_by_email": {
+      "type": "string"
+    },
+    "updated_by_name": {
+      "type": "string"
+    },
+    "manager_edited_at": {
+      "type": "string"
     }
   },
   "required": [

@@ -1,6 +1,16 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Building2, ChevronRight, Plus, Search, UserCog, Users, X } from 'lucide-react';
+import { Building2, ChevronRight, Plus, Power, Search, UserCog, Users, X } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle
+} from '@/components/ui/alert-dialog';
 import PageHeader from '@/components/PageHeader';
 import AddBranchDialog from '@/components/AddBranchDialog';
 import RosterScheduleCard from '@/components/RosterScheduleCard';
@@ -24,6 +34,8 @@ export default function Branches() {
   const [managerQuery, setManagerQuery] = useState('');
   const [branchStaff, setBranchStaff] = useState([]);
   const [saving, setSaving] = useState(false);
+  const [showInactive, setShowInactive] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   useEffect(() => {
     if (!activeBranch) return;
@@ -131,6 +143,18 @@ export default function Branches() {
   })();
 
   const isAdmin = role === 'company_admin';
+  // Staff and managers never see a deactivated branch, so this only ever hides anything for
+  // the company admin who can bring it back.
+  const visibleBranches = showInactive ? branches : branches.filter((branch) => branch.is_active !== false);
+
+  const setBranchActive = async (next) => {
+    if (!activeBranch) return;
+    setSaving(true);
+    await base44.entities.Branch.update(activeBranch.id, { is_active: next });
+    await reload();
+    setSaving(false);
+    toast({ title: next ? t('branches.activated') : t('branches.deactivated') });
+  };
 
   return (
     <div>
@@ -154,8 +178,10 @@ export default function Branches() {
               {company ? company.name : t('common.company')}
             </div>
             <div className="mt-1 space-y-1 pl-3">
-              {branches.length === 0 && <p className="py-3 text-sm text-muted-foreground">{t('branches.noBranches')}</p>}
-              {branches.map((branch) => (
+              {visibleBranches.length === 0 && (
+                <p className="py-3 text-sm text-muted-foreground">{t('branches.noBranches')}</p>
+              )}
+              {visibleBranches.map((branch) => (
                 <button
                   key={branch.id}
                   onClick={() => selectBranch(branch.id)}
@@ -163,14 +189,30 @@ export default function Branches() {
                     activeBranch && activeBranch.id === branch.id
                       ? 'bg-primary/10 text-primary'
                       : 'text-muted-foreground hover:bg-muted'
-                  }`}
+                  } ${branch.is_active === false ? 'opacity-60' : ''}`}
                 >
                   <span className="text-muted-foreground">└</span>
                   <span className="truncate font-medium">{branch.name}</span>
+                  {branch.is_active === false && (
+                    <Badge variant="secondary" className="text-[10px]">
+                      {t('branches.inactive')}
+                    </Badge>
+                  )}
                   <ChevronRight className="ml-auto h-3.5 w-3.5 opacity-60" />
                 </button>
               ))}
             </div>
+            {isAdmin && branches.some((branch) => branch.is_active === false) && (
+              <label className="mt-3 flex cursor-pointer items-center gap-2 pl-3 text-xs text-muted-foreground">
+                <input
+                  type="checkbox"
+                  checked={showInactive}
+                  onChange={(e) => setShowInactive(e.target.checked)}
+                  className="h-3.5 w-3.5"
+                />
+                {t('branches.showInactive')}
+              </label>
+            )}
           </CardContent>
         </Card>
 
@@ -187,7 +229,12 @@ export default function Branches() {
                         .join(', ') || '—'}
                     </p>
                   </div>
-                  <Badge variant="secondary">{activeBranch.code}</Badge>
+                  <div className="flex items-center gap-2">
+                    {activeBranch.is_active === false && (
+                      <Badge variant="secondary">{t('branches.inactive')}</Badge>
+                    )}
+                    <Badge variant="secondary">{activeBranch.code}</Badge>
+                  </div>
                 </div>
 
                 <div className="mt-5 grid grid-cols-3 gap-3">
@@ -216,6 +263,16 @@ export default function Branches() {
                       <Users className="mr-2 h-4 w-4" /> {t('employees.title')}
                     </Link>
                   </Button>
+                  {isAdmin && activeBranch.is_active !== false && (
+                    <Button variant="outline" onClick={() => setConfirmOpen(true)}>
+                      <Power className="mr-2 h-4 w-4" /> {t('branches.deactivate')}
+                    </Button>
+                  )}
+                  {isAdmin && activeBranch.is_active === false && (
+                    <Button onClick={() => setBranchActive(true)} disabled={saving}>
+                      <Power className="mr-2 h-4 w-4" /> {t('branches.activate')}
+                    </Button>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -299,6 +356,26 @@ export default function Branches() {
           </Card>
         )}
       </div>
+
+      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('branches.deactivateTitle')}</AlertDialogTitle>
+            <AlertDialogDescription>{t('branches.deactivateHint')}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                setConfirmOpen(false);
+                setBranchActive(false);
+              }}
+            >
+              {t('branches.deactivate')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AddBranchDialog open={addOpen} onOpenChange={setAddOpen} />
     </div>

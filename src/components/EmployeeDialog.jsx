@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/components/ui/use-toast';
 import { useI18n } from '@/lib/i18n';
-import { EMPLOYMENT_TYPES } from '@/lib/bh';
+import { EMPLOYMENT_TYPES, VISA_TYPES } from '@/lib/bh';
 import { useWorkspace } from '@/lib/WorkspaceContext';
 import { base44 } from '@/api/base44Client';
 
@@ -16,6 +16,8 @@ const empty = {
   full_name: '',
   user_email: '',
   position: '',
+  secondary_position: '',
+  visa_type: '',
   app_role: 'staff',
   hourly_rate: '',
   employment_type: 'casual',
@@ -40,12 +42,14 @@ export default function EmployeeDialog({ open, onOpenChange, branch, employee, o
   // Positions come from company settings. Company admins are appointed there too, and a
   // branch manager keeps the role they were assigned, so both stay listed when already held.
   const roleOptions = [
-    ...(form.app_role === 'company_admin' ? [{ key: 'company_admin', label: t('perm.role.company_admin') }] : []),
-    ...(form.app_role === 'branch_manager' ? [{ key: 'branch_manager', label: t('perm.role.branch_manager') }] : []),
-    ...(((company && company.custom_roles) || []).map((item) => ({ key: item.key, label: item.label })))
-  ];
+  ...(form.app_role === 'company_admin' ? [{ key: 'company_admin', label: t('perm.role.company_admin') }] : []),
+  ...(form.app_role === 'branch_manager' ? [{ key: 'branch_manager', label: t('perm.role.branch_manager') }] : []),
+  ...(company && company.custom_roles || []).map((item) => ({ key: item.key, label: item.label }))];
+
   const chosen = roleOptions.find((option) => option.key === form.app_role);
-  const hasPositions = ((company && company.custom_roles) || []).length > 0;
+  const hasPositions = (company && company.custom_roles || []).length > 0;
+  // The secondary position offers the same list as the position itself.
+  const positionLabels = (company && company.custom_roles || []).map((item) => item.label);
 
   useEffect(() => {
     if (!open) return;
@@ -56,6 +60,8 @@ export default function EmployeeDialog({ open, onOpenChange, branch, employee, o
         full_name: employee.full_name || '',
         user_email: employee.user_email || '',
         position: employee.position || '',
+        secondary_position: employee.secondary_position || '',
+        visa_type: employee.visa_type || '',
         app_role: employee.app_role || 'staff',
         hourly_rate: employee.hourly_rate ?? '',
         employment_type: employee.employment_type || 'casual',
@@ -88,7 +94,7 @@ export default function EmployeeDialog({ open, onOpenChange, branch, employee, o
       origin: window.location.origin,
       employee: {
         ...form,
-        position: chosen ? chosen.label : (employee && employee.position) || '',
+        position: chosen ? chosen.label : employee && employee.position || '',
         ...(employee ? { id: employee.id } : {})
       }
     });
@@ -120,39 +126,73 @@ export default function EmployeeDialog({ open, onOpenChange, branch, employee, o
               value={form.user_email}
               disabled={Boolean(employee)}
               onChange={(e) => set('user_email', e.target.value)}
-              placeholder="staff@email.com"
-            />
+              placeholder="staff@email.com" />
+            
           </div>
           <div>
             <Label>{t('common.position')}</Label>
             <Select
               value={chosen ? form.app_role : ''}
               onValueChange={(v) => set('app_role', v)}
-              disabled={!canAssignRole}
-            >
+              disabled={!canAssignRole}>
+              
               <SelectTrigger>
                 <SelectValue placeholder={t('role.select')} />
               </SelectTrigger>
               <SelectContent>
-                {roleOptions.map((option) => (
-                  <SelectItem key={option.key} value={option.key}>
+                {roleOptions.map((option) =>
+                <SelectItem key={option.key} value={option.key}>
                     {option.label}
                   </SelectItem>
-                ))}
+                )}
               </SelectContent>
             </Select>
             <p className="mt-1 text-xs text-muted-foreground">
-              {form.app_role === 'company_admin'
-                ? t('role.adminHint')
-                : hasPositions
-                  ? t('role.employeeHint')
-                  : t('role.noneHint')}
+              {form.app_role === 'company_admin' ?
+              t('role.adminHint') :
+              hasPositions ?
+              t('role.employeeHint') :
+              t('role.noneHint')}
             </p>
           </div>
           <div>
-            <Label>{t('common.rate')} (AUD)</Label>
-            <Input type="number" value={form.hourly_rate} onChange={(e) => set('hourly_rate', e.target.value)} />
+            <Label>{t('employees.secondaryPosition')}</Label>
+            <Select value={form.secondary_position || ''} onValueChange={(v) => set('secondary_position', v)}>
+              <SelectTrigger>
+                <SelectValue placeholder={t('role.select')} />
+              </SelectTrigger>
+              <SelectContent>
+                {positionLabels.map((label) =>
+                <SelectItem key={label} value={label}>
+                    {label}
+                  </SelectItem>
+                )}
+                {form.secondary_position && !positionLabels.includes(form.secondary_position) &&
+                <SelectItem value={form.secondary_position}>{form.secondary_position}</SelectItem>
+                }
+              </SelectContent>
+            </Select>
+            <p className="mt-1 text-xs text-muted-foreground">{t('employees.secondaryPositionHint')}</p>
           </div>
+          <div>
+            <Label>{t('employees.visa')}</Label>
+            <Select value={form.visa_type || ''} onValueChange={(v) => set('visa_type', v)}>
+              <SelectTrigger>
+                <SelectValue placeholder={t('common.select')} />
+              </SelectTrigger>
+              <SelectContent>
+                {VISA_TYPES.map((v) =>
+                <SelectItem key={v.value} value={v.value}>
+                    {v.label}
+                  </SelectItem>
+                )}
+              </SelectContent>
+            </Select>
+          </div>
+          
+
+
+          
           <div>
             <Label>Employment type</Label>
             <Select value={form.employment_type} onValueChange={(v) => set('employment_type', v)}>
@@ -160,11 +200,11 @@ export default function EmployeeDialog({ open, onOpenChange, branch, employee, o
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {EMPLOYMENT_TYPES.map((e) => (
-                  <SelectItem key={e.value} value={e.value}>
+                {EMPLOYMENT_TYPES.map((e) =>
+                <SelectItem key={e.value} value={e.value}>
                     {e.label}
                   </SelectItem>
-                ))}
+                )}
               </SelectContent>
             </Select>
           </div>
@@ -180,15 +220,15 @@ export default function EmployeeDialog({ open, onOpenChange, branch, employee, o
             <Label>Emergency contact</Label>
             <Input
               value={form.emergency_contact_name}
-              onChange={(e) => set('emergency_contact_name', e.target.value)}
-            />
+              onChange={(e) => set('emergency_contact_name', e.target.value)} />
+            
           </div>
           <div>
             <Label>Emergency phone</Label>
             <Input
               value={form.emergency_contact_phone}
-              onChange={(e) => set('emergency_contact_phone', e.target.value)}
-            />
+              onChange={(e) => set('emergency_contact_phone', e.target.value)} />
+            
           </div>
           <div>
             <Label>{t('employees.uiLanguage')}</Label>
@@ -204,8 +244,8 @@ export default function EmployeeDialog({ open, onOpenChange, branch, employee, o
             <p className="mt-1 text-xs text-muted-foreground">{t('employees.uiLanguageHint')}</p>
           </div>
 
-          {!employee && (
-            <>
+          {!employee &&
+          <>
               <div className="flex items-center justify-between rounded-lg border px-4 py-3">
                 <span className="text-sm">{t('employees.inviteHint')}</span>
                 <Switch checked={form.send_invite} onCheckedChange={(v) => set('send_invite', v)} />
@@ -213,22 +253,22 @@ export default function EmployeeDialog({ open, onOpenChange, branch, employee, o
               <div className="flex items-center justify-between rounded-lg border px-4 py-3">
                 <span className="text-sm">{t('employees.sendOnboarding')}</span>
                 <Switch
-                  checked={form.send_onboarding_email}
-                  onCheckedChange={(v) => set('send_onboarding_email', v)}
-                />
+                checked={form.send_onboarding_email}
+                onCheckedChange={(v) => set('send_onboarding_email', v)} />
+              
               </div>
             </>
-          )}
+          }
 
-          {employee && (
-            <div className="sm:col-span-2 flex items-center justify-between rounded-lg border px-4 py-3">
+          {employee &&
+          <div className="sm:col-span-2 flex items-center justify-between rounded-lg border px-4 py-3">
               <span className="text-sm">{t('employees.sendOnboarding')}</span>
               <Switch
-                checked={form.send_onboarding_email}
-                onCheckedChange={(v) => set('send_onboarding_email', v)}
-              />
+              checked={form.send_onboarding_email}
+              onCheckedChange={(v) => set('send_onboarding_email', v)} />
+            
             </div>
-          )}
+          }
         </div>
 
         {error && <p className="text-sm text-destructive">{error}</p>}
@@ -243,6 +283,6 @@ export default function EmployeeDialog({ open, onOpenChange, branch, employee, o
           </Button>
         </DialogFooter>
       </DialogContent>
-    </Dialog>
-  );
+    </Dialog>);
+
 }

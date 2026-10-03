@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
 import CompanyAdminsCard from '@/components/CompanyAdminsCard';
+import OnboardingDocsCard from '@/components/company/OnboardingDocsCard';
 import CompanyRolesManager from '@/components/CompanyRolesManager';
 import PermissionMatrixEditor from '@/components/PermissionMatrixEditor';
 import { Button } from '@/components/ui/button';
@@ -79,8 +80,8 @@ export default function CompanySettings() {
       <div>
         <PageHeader title={t('settings.title')} subtitle={t('settings.subtitle')} />
         <CompanyPicker />
-      </div>
-    );
+      </div>);
+
   }
 
   if (!form) return <p className="text-sm text-muted-foreground">{t('common.loading')}</p>;
@@ -96,12 +97,12 @@ export default function CompanySettings() {
         title={t('settings.title')}
         subtitle={t('settings.subtitle')}
         actions={
-          <Button onClick={save} disabled={saving || role !== 'company_admin'}>
+        <Button onClick={save} disabled={saving || role !== 'company_admin'}>
             {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             {t('common.save')}
           </Button>
-        }
-      />
+        } />
+      
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
@@ -128,29 +129,32 @@ export default function CompanySettings() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">{t('settings.super')}</CardTitle>
-          </CardHeader>
-          <CardContent className="grid gap-4 sm:grid-cols-2">
-            <div className="sm:col-span-2">
-              <Label>{t('settings.fundName')}</Label>
-              <Input value={form.default_super_fund_name} onChange={(e) => set('default_super_fund_name', e.target.value)} />
-            </div>
-            <div>
-              <Label>{t('settings.usi')}</Label>
-              <Input value={form.default_super_fund_usi} onChange={(e) => set('default_super_fund_usi', e.target.value)} />
-            </div>
-            <div>
-              <Label>{t('settings.abn')}</Label>
-              <Input value={form.default_super_fund_abn} onChange={(e) => set('default_super_fund_abn', e.target.value)} />
-            </div>
-            <div className="sm:col-span-2">
-              <Label>{t('common.phone')}</Label>
-              <Input value={form.default_super_fund_phone} onChange={(e) => set('default_super_fund_phone', e.target.value)} />
-            </div>
-          </CardContent>
-        </Card>
+        <OnboardingDocsCard />
+...
+
+        
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        
 
         <Card className="lg:col-span-2">
           <CardHeader>
@@ -176,8 +180,8 @@ export default function CompanySettings() {
               </div>
               <Switch
                 checked={form.video_interview_enabled}
-                onCheckedChange={(v) => set('video_interview_enabled', v)}
-              />
+                onCheckedChange={(v) => set('video_interview_enabled', v)} />
+              
             </div>
             <div className="sm:col-span-3">
               <div className="mb-2 flex items-center justify-between gap-2">
@@ -190,8 +194,8 @@ export default function CompanySettings() {
                 rows={4}
                 value={form.screening_criteria}
                 onChange={(e) => set('screening_criteria', e.target.value)}
-                placeholder="예: 바리스타 경력 2년 이상, 주말 야간 근무 가능, 장기 근무 의향"
-              />
+                placeholder="예: 바리스타 경력 2년 이상, 주말 야간 근무 가능, 장기 근무 의향" />
+              
               <p className="mt-1 text-xs text-muted-foreground">{t('settings.screeningFocusHint')}</p>
             </div>
           </CardContent>
@@ -210,29 +214,29 @@ export default function CompanySettings() {
               <CompanyRolesManager
                 value={form.custom_roles}
                 onChange={setCustomRoles}
-                disabled={role !== 'company_admin'}
-              />
+                disabled={role !== 'company_admin'} />
+              
             </div>
             <div>
               <p className="mb-3 text-xs text-muted-foreground">{t('perm.companyHint')}</p>
-              {matrixRoles.length === 0 ? (
-                <p className="rounded-lg border border-dashed px-4 py-6 text-center text-sm text-muted-foreground">
+              {matrixRoles.length === 0 ?
+              <p className="rounded-lg border border-dashed px-4 py-6 text-center text-sm text-muted-foreground">
                   {t('perm.noRoles')}
-                </p>
-              ) : (
-                <PermissionMatrixEditor
-                  value={form.role_permissions}
-                  onChange={(next) => set('role_permissions', next)}
-                  roles={matrixRoles}
-                  roleLabels={roleLabels}
-                  disabled={role !== 'company_admin'}
-                />
-              )}
+                </p> :
+
+              <PermissionMatrixEditor
+                value={form.role_permissions}
+                onChange={(next) => set('role_permissions', next)}
+                roles={matrixRoles}
+                roleLabels={roleLabels}
+                disabled={role !== 'company_admin'} />
+
+              }
               <p className="mt-3 text-xs text-muted-foreground">{t('perm.locked')}</p>
             </div>
           </CardContent>
         </Card>
       </div>
-    </div>
-  );
+    </div>);
+
 }

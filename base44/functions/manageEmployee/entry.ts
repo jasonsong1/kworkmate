@@ -142,6 +142,8 @@ export default async function (req) {
       const updated = await base44.asServiceRole.entities.EmployeeProfile.update(profile.id, {
         full_name: input.full_name || profile.full_name,
         position: input.position || '',
+        secondary_position: input.secondary_position || '',
+        visa_type: input.visa_type || profile.visa_type || '',
         hourly_rate: Number(input.hourly_rate) || 0,
         employment_type: input.employment_type || profile.employment_type,
         status: input.status || profile.status,
@@ -199,6 +201,8 @@ export default async function (req) {
       full_name: input.full_name || email,
       employee_number: employeeNumber,
       position: input.position || '',
+      secondary_position: input.secondary_position || '',
+      visa_type: input.visa_type || '',
       hourly_rate: Number(input.hourly_rate) || 0,
       employment_type: input.employment_type || 'casual',
       status: 'active',

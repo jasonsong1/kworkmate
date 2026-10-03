@@ -89,13 +89,8 @@ export default function VideoInterview() {
     window.speechSynthesis.speak(utterance);
   };
 
-  useEffect(() => {
-    if (state !== 'ready') return undefined;
-    speak(questionText);
-    return () => {
-      if (typeof window !== 'undefined' && window.speechSynthesis) window.speechSynthesis.cancel();
-    };
-  }, [state, questionText]);
+  // The question is only read out when the applicant presses "Play the question", so nobody
+  // walks into a question before they are ready.
 
   const upload = async (blob) => {
     setState('saving');
