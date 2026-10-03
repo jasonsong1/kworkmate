@@ -15,7 +15,7 @@ import { Textarea } from '@/components/ui/textarea';
 import {
   NOTICE_PERIODS,
   VISA_TYPES,
-  defaultRequiredQuestions,
+  visibleRequiredQuestions,
   emptyAvailability,
   hasAnyAvailability,
   isPhoneNumber,
@@ -64,7 +64,7 @@ export default function Apply() {
   }, [jobId]);
 
   const enabled = useMemo(() => {
-    const list = (data && data.job && data.job.required_questions) || defaultRequiredQuestions();
+    const list = visibleRequiredQuestions(data && data.job ? data.job.required_questions : null);
     return list
       .filter((q) => q.enabled !== false)
       .map((q) => (q.key === 'available_immediately' ? 'notice_period' : q.key));

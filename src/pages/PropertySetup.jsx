@@ -216,31 +216,32 @@ export default function PropertySetup() {
               </div>
             </CardContent>
           </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">{t('perm.branchTitle')}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="mb-4 text-xs text-muted-foreground">{t('perm.branchHint')}</p>
-              {branchMatrixRoles.length === 0 ? (
-                <p className="rounded-lg border border-dashed px-4 py-6 text-center text-sm text-muted-foreground">
-                  {t('perm.noRoles')}
-                </p>
-              ) : (
-                <PermissionMatrixEditor
-                  value={form.role_permissions}
-                  onChange={(next) => set('role_permissions', next)}
-                  base={company && company.role_permissions}
-                  roles={branchMatrixRoles}
-                  roleLabels={branchRoleLabels}
-                  allowInherit
-                />
-              )}
-            </CardContent>
-          </Card>
         </div>
       </div>
+
+      {/* Full width so every job title fits on one screen of the permission table. */}
+      <Card className="mt-6">
+        <CardHeader>
+          <CardTitle className="text-base">{t('perm.branchTitle')}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="mb-4 text-xs text-muted-foreground">{t('perm.branchHint')}</p>
+          {branchMatrixRoles.length === 0 ? (
+            <p className="rounded-lg border border-dashed px-4 py-6 text-center text-sm text-muted-foreground">
+              {t('perm.noRoles')}
+            </p>
+          ) : (
+            <PermissionMatrixEditor
+              value={form.role_permissions}
+              onChange={(next) => set('role_permissions', next)}
+              base={company && company.role_permissions}
+              roles={branchMatrixRoles}
+              roleLabels={branchRoleLabels}
+              allowInherit
+            />
+          )}
+        </CardContent>
+      </Card>
 
       <Button className="mt-6" onClick={save} disabled={saving}>
         {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

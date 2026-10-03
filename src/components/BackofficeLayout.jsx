@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { LogOut, Menu, Languages } from 'lucide-react';
+import { Languages, LogOut, Menu, Moon, Sun } from 'lucide-react';
 import AppSidebar from '@/components/AppSidebar';
 import CompanySwitcher from '@/components/company/CompanySwitcher';
 import { Button } from '@/components/ui/button';
@@ -10,17 +10,38 @@ import { useI18n } from '@/lib/i18n';
 import { WorkspaceProvider, useWorkspace } from '@/lib/WorkspaceContext';
 import { areaForPath, usePermissions } from '@/lib/permissions';
 import { Card, CardContent } from '@/components/ui/card';
+import { applyTheme, readTheme, saveTheme } from '@/lib/theme';
 import { base44 } from '@/api/base44Client';
 
 function BackofficeShell() {
   const { t, toggle } = useI18n();
-  const { company, branches, activeBranchId, selectBranch, isPlatformAdmin } = useWorkspace();
+  const { company, branches, activeBranchId, selectBranch, isPlatformAdmin, me } = useWorkspace();
   const { canView } = usePermissions();
   const [open, setOpen] = useState(false);
+  const [theme, setTheme] = useState(() => readTheme());
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const requiredArea = areaForPath(pathname);
   const allowed = !requiredArea || canView(requiredArea);
+
+  useEffect(() => {
+    applyTheme(theme);
+  }, [theme]);
+
+  // The look travels with the account, so it comes back on the next sign-in anywhere.
+  useEffect(() => {
+    const saved = me && me.ui_theme;
+    if (saved !== 'dark' && saved !== 'light') return;
+    saveTheme(saved);
+    setTheme(saved);
+  }, [me]);
+
+  const toggleTheme = () => {
+    const next = theme === 'dark' ? 'light' : 'dark';
+    saveTheme(next);
+    setTheme(next);
+    base44.auth.updateMe({ ui_theme: next }).catch(() => {});
+  };
 
   const handleLogout = async () => {
     await base44.auth.logout();
@@ -68,6 +89,15 @@ function BackofficeShell() {
               </SelectContent>
             </Select>
           }
+
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={toggleTheme}
+            title={theme === 'dark' ? t('top.themeLight') : t('top.themeDark')}
+          >
+            {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+          </Button>
 
           <Button variant="ghost" size="sm" onClick={toggle} className="gap-2">
             <Languages className="h-4 w-4" />

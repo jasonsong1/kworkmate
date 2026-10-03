@@ -1,7 +1,7 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.52';
 import { waitUntil } from 'base44:runtime';
 import { normalizePhone } from '../../shared/util.ts';
-import { sendEmail } from '../../shared/email.ts';
+import { sendApplicantEmail } from '../../shared/email.ts';
 import { renderStageEmail } from '../../shared/emailStages.ts';
 
 export default async function (req) {
@@ -79,7 +79,11 @@ export default async function (req) {
       { name: fullName, job_title: job.title, store: place },
       { brandColor: job.brand_color || (branch && branch.brand_color) }
     );
-    const emailSent = await sendEmail(base44, { to: email, subject: mail.subject, html: mail.html });
+    const emailResult = await sendApplicantEmail(base44, applicant, {
+      type: 'applied',
+      subject: mail.subject,
+      html: mail.html
+    });
 
     waitUntil(
       base44.functions.invoke('analyzeApplicants', {
@@ -88,7 +92,7 @@ export default async function (req) {
       })
     );
 
-    return Response.json({ ok: true, applicant_id: applicant.id, email_sent: emailSent });
+    return Response.json({ ok: true, applicant_id: applicant.id, email_sent: emailResult.ok });
   } catch (error) {
     return Response.json({ error: error.message }, { status: 500 });
   }

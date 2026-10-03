@@ -26,7 +26,8 @@ export default function Applicants() {
   const [counts, setCounts] = useState({ total: 0, interview: 0 });
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState(null);
-  const [detail, setDetail] = useState(null);
+  // Held by id so the dialog always shows the freshest record, including email status.
+  const [detailId, setDetailId] = useState('');
   const [screening, setScreening] = useState(false);
 
   const topN = (company && company.ai_top_n) || 10;
@@ -296,7 +297,7 @@ export default function Applicants() {
                     key={applicant.id}
                     applicant={applicant}
                     actions={actionButtons(applicant)}
-                    onOpen={() => setDetail(applicant)}
+                    onOpen={() => setDetailId(applicant.id)}
                     onViewResume={() => viewResume(applicant)}
                   />
                 ))}
@@ -318,7 +319,7 @@ export default function Applicants() {
                     key={applicant.id}
                     applicant={applicant}
                     actions={actionButtons(applicant)}
-                    onOpen={() => setDetail(applicant)}
+                    onOpen={() => setDetailId(applicant.id)}
                     onViewResume={() => viewResume(applicant)}
                   />
                 ))}
@@ -340,7 +341,7 @@ export default function Applicants() {
                     key={applicant.id}
                     applicant={applicant}
                     actions={actionButtons(applicant)}
-                    onOpen={() => setDetail(applicant)}
+                    onOpen={() => setDetailId(applicant.id)}
                     onViewResume={() => viewResume(applicant)}
                   />
                 ))}
@@ -351,9 +352,10 @@ export default function Applicants() {
       )}
 
       <ApplicantDetailDialog
-        applicant={detail}
-        open={Boolean(detail)}
-        onOpenChange={(v) => !v && setDetail(null)}
+        applicant={applicants.find((a) => a.id === detailId) || null}
+        open={Boolean(detailId)}
+        onOpenChange={(v) => !v && setDetailId('')}
+        onResent={loadApplicants}
       />
     </div>
   );

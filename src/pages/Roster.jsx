@@ -166,9 +166,9 @@ export default function Roster() {
                                   key={shift.id}
                                   className={`group rounded-lg border px-2 py-1.5 text-xs ${
                                     shift.status === 'published'
-                                      ? 'border-emerald-200 bg-emerald-50'
+                                      ? 'border-emerald-200 bg-emerald-50 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-100'
                                       : shift.status === 'saved'
-                                        ? 'border-sky-200 bg-sky-50'
+                                        ? 'border-sky-200 bg-sky-50 dark:border-sky-500/30 dark:bg-sky-500/10 dark:text-sky-100'
                                         : 'bg-muted/40'
                                   }`}
                                 >

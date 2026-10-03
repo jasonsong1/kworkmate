@@ -16,7 +16,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/components/ui/use-toast';
 import { useI18n } from '@/lib/i18n';
 import { useWorkspace } from '@/lib/WorkspaceContext';
-import { EMPLOYMENT_TYPES } from '@/lib/bh';
+import { EMPLOYMENT_TYPES, visibleRequiredQuestions } from '@/lib/bh';
 import { base44 } from '@/api/base44Client';
 
 export default function JobDetail() {
@@ -31,7 +31,8 @@ export default function JobDetail() {
 
   const load = useCallback(async () => {
     const found = await base44.entities.Job.get(jobId).catch(() => null);
-    setJob(found);
+    // Older ads still list a question that is no longer asked; drop it on the way in.
+    setJob(found ? { ...found, required_questions: visibleRequiredQuestions(found.required_questions) } : found);
     if (found && found.branch_id) {
       setBranch(branches.find((b) => b.id === found.branch_id) || null);
     }
@@ -58,7 +59,7 @@ export default function JobDetail() {
       mini_interview_enabled: job.mini_interview_enabled !== false,
       video_interview_enabled: job.video_interview_enabled !== false,
       screening_criteria: job.screening_criteria || '',
-      required_questions: job.required_questions || [],
+      required_questions: visibleRequiredQuestions(job.required_questions),
       custom_questions: job.custom_questions || [],
       brand_color: job.brand_color,
       poster_note: job.poster_note || ''

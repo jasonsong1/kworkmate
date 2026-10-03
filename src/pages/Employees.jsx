@@ -132,7 +132,11 @@ export default function Employees() {
                   {rows.map((row) => (
                     <TableRow
                       key={row.id}
-                      className={row.status === 'inactive' ? 'bg-red-50 text-red-900 hover:bg-red-50' : ''}
+                      className={
+                        row.status === 'inactive'
+                          ? 'bg-destructive/5 text-destructive hover:bg-destructive/5'
+                          : ''
+                      }
                     >
                       <TableCell>
                         <div className="flex items-center gap-2">

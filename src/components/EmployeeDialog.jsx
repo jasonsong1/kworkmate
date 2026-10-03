@@ -23,6 +23,7 @@ const empty = {
   phone: '',
   emergency_contact_name: '',
   emergency_contact_phone: '',
+  language: 'ko',
   send_invite: true,
   send_onboarding_email: true
 };
@@ -62,6 +63,7 @@ export default function EmployeeDialog({ open, onOpenChange, branch, employee, o
         phone: employee.phone || '',
         emergency_contact_name: employee.emergency_contact_name || '',
         emergency_contact_phone: employee.emergency_contact_phone || '',
+        language: employee.language === 'en' ? 'en' : 'ko',
         send_invite: false,
         send_onboarding_email: false
       });
@@ -187,6 +189,19 @@ export default function EmployeeDialog({ open, onOpenChange, branch, employee, o
               value={form.emergency_contact_phone}
               onChange={(e) => set('emergency_contact_phone', e.target.value)}
             />
+          </div>
+          <div>
+            <Label>{t('employees.uiLanguage')}</Label>
+            <Select value={form.language} onValueChange={(v) => set('language', v)}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ko">{t('employees.languageKo')}</SelectItem>
+                <SelectItem value="en">{t('employees.languageEn')}</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="mt-1 text-xs text-muted-foreground">{t('employees.uiLanguageHint')}</p>
           </div>
 
           {!employee && (

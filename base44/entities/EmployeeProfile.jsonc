@@ -24,6 +24,14 @@
       "type": "string",
       "default": "staff"
     },
+    "language": {
+      "type": "string",
+      "enum": [
+        "en",
+        "ko"
+      ],
+      "default": "ko"
+    },
     "hourly_rate": {
       "type": "number"
     },

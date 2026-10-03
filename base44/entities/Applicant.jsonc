@@ -122,6 +122,27 @@
     "rejection_sent_at": {
       "type": "string"
     },
+    "email_status": {
+      "type": "string",
+      "enum": [
+        "none",
+        "sent",
+        "failed"
+      ],
+      "default": "none"
+    },
+    "email_type": {
+      "type": "string"
+    },
+    "email_sent_at": {
+      "type": "string"
+    },
+    "email_attempted_at": {
+      "type": "string"
+    },
+    "email_error": {
+      "type": "string"
+    },
     "meeting_url": {
       "type": "string"
     },

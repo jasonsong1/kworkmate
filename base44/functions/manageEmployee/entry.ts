@@ -2,6 +2,7 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.52';
 import { formatEmployeeNumber, randomToken } from '../../shared/util.ts';
 import { sendEmail, brandedEmail, portalLink } from '../../shared/email.ts';
 import { sendAccountAccessEmail } from '../../shared/account.ts';
+import { employeeLanguage, onboardingMail, onboardingReminderMail } from '../../shared/employeeMail.ts';
 
 // Applies a role chosen by a company admin to the person's app user record.
 async function applyRole(base44, company, branch, email, roleKey) {
@@ -148,6 +149,7 @@ export default async function (req) {
         start_date: input.start_date || '',
         emergency_contact_name: input.emergency_contact_name || '',
         emergency_contact_phone: input.emergency_contact_phone || '',
+        language: input.language === 'en' || input.language === 'ko' ? input.language : profile.language || 'ko',
         app_role: roleKey || profile.app_role || 'staff'
       });
 
@@ -155,17 +157,20 @@ export default async function (req) {
 
       if (input.send_onboarding_email && updated.onboarding_token) {
         const link = portalLink(body.origin, `/onboarding/${updated.onboarding_token}`);
+        // The reminder is written in the language set on this person's profile.
+        const reminder = onboardingReminderMail(employeeLanguage(updated.language), {
+          name: updated.full_name,
+          store: branch.name,
+          employeeNumber: updated.employee_number
+        });
         await sendEmail(base44, {
           to: updated.user_email,
-          subject: `Complete your onboarding — ${branch.name}`,
+          subject: reminder.subject,
           html: brandedEmail({
-            heading: `Hi ${updated.full_name}, please finish your onboarding`,
+            heading: reminder.heading,
             brandColor: branch.brand_color,
-            lines: [
-              `Your employee number is <b>${updated.employee_number}</b>.`,
-              'Please complete your tax file number declaration, superannuation choice and bank details. It takes about 3 minutes.'
-            ],
-            ctaText: 'Start onboarding',
+            lines: reminder.lines,
+            ctaText: reminder.cta,
             ctaUrl: link,
             footer: `${branch.name} · K-Workmate`
           })
@@ -203,6 +208,7 @@ export default async function (req) {
       emergency_contact_phone: input.emergency_contact_phone || '',
       onboarding_status: 'pending',
       onboarding_token: token,
+      language: input.language === 'en' ? 'en' : 'ko',
       app_role: roleKey || 'staff',
       docs: []
     });
@@ -218,17 +224,19 @@ export default async function (req) {
 
     if (input.send_onboarding_email) {
       const link = portalLink(body.origin, `/onboarding/${token}`);
+      const welcome = onboardingMail(input.language === 'en' ? 'en' : 'ko', {
+        name: input.full_name || 'team member',
+        store: branch.name,
+        employeeNumber
+      });
       await sendEmail(base44, {
         to: email,
-        subject: `Welcome to ${branch.name} — complete your onboarding`,
+        subject: welcome.subject,
         html: brandedEmail({
-          heading: `Welcome aboard, ${input.full_name || 'team member'}!`,
+          heading: welcome.heading,
           brandColor: branch.brand_color,
-          lines: [
-            `You have been added to <b>${branch.name}</b>. Your employee number is <b>${employeeNumber}</b>.`,
-            'Please complete your TFN declaration, superannuation choice and bank details. It takes about 3 minutes.'
-          ],
-          ctaText: 'Start onboarding',
+          lines: welcome.lines,
+          ctaText: welcome.cta,
           ctaUrl: link,
           footer: `${branch.name} · K-Workmate`
         })

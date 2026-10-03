@@ -1,5 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.52';
 import { sendEmail, brandedEmail, portalLink, cleanOrigin } from '../../shared/email.ts';
+import { availabilityMail, employeeLanguage } from '../../shared/employeeMail.ts';
 
 const STATE_TIMEZONES = {
   NSW: 'Australia/Sydney',
@@ -78,17 +79,19 @@ export default async function (req) {
       let sent = 0;
       for (const person of staff) {
         if (!person.user_email) continue;
+        // Written in the language set on this person's staff profile.
+        const copy = availabilityMail(employeeLanguage(person.language), {
+          name: person.full_name || 'there',
+          branchName: branch.name
+        });
         const ok = await sendEmail(base44, {
           to: person.user_email,
-          subject: `Update your availability — ${branch.name}`,
+          subject: copy.subject,
           html: brandedEmail({
-            heading: `Hi ${person.full_name || 'there'}, please update your availability`,
+            heading: copy.heading,
             brandColor: branch.brand_color || (company && company.brand_color),
-            lines: [
-              `Let us know which days and hours you can work next week at <b>${branch.name}</b>.`,
-              'It only takes a minute — your manager uses this to build the roster.'
-            ],
-            ctaText: 'Update my availability',
+            lines: copy.lines,
+            ctaText: copy.cta,
             ctaUrl: link,
             footer: `${company ? company.name : branch.name} · K-Workmate`
           })

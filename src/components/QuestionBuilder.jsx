@@ -5,14 +5,17 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
+import { RETIRED_QUESTION_KEYS } from '@/lib/bh';
 
 export default function QuestionBuilder({ required, custom, onChangeRequired, onChangeCustom }) {
+  const visible = (required || []).filter((q) => q && !RETIRED_QUESTION_KEYS.includes(q.key));
+
   const toggleRequired = (key) => {
-    onChangeRequired(required.map((q) => (q.key === key ? { ...q, enabled: !q.enabled } : q)));
+    onChangeRequired(visible.map((q) => (q.key === key ? { ...q, enabled: !q.enabled } : q)));
   };
 
   const setRequiredFlag = (key, value) => {
-    onChangeRequired(required.map((q) => (q.key === key ? { ...q, required: value } : q)));
+    onChangeRequired(visible.map((q) => (q.key === key ? { ...q, required: value } : q)));
   };
 
   const setCustomRequired = (id, value) => {
@@ -39,7 +42,7 @@ export default function QuestionBuilder({ required, custom, onChangeRequired, on
       <div>
         <p className="mb-3 text-sm font-semibold">Standard questions</p>
         <div className="divide-y rounded-lg border">
-          {(required || []).map((q) => (
+          {visible.map((q) => (
             <div key={q.key} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
               <div className="min-w-0">
                 <p className="text-sm">{q.label}</p>

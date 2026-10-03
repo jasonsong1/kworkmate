@@ -6,18 +6,25 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/components/ui/use-toast';
-import { POSITIONS } from '@/lib/bh';
+import { useI18n } from '@/lib/i18n';
+import { useWorkspace } from '@/lib/WorkspaceContext';
 import { base44 } from '@/api/base44Client';
 
 export default function ShiftDialog({ open, onOpenChange, branch, employees, defaultDate, defaultEmployee, onSaved }) {
+  const { t } = useI18n();
+  const { company } = useWorkspace();
   const { toast } = useToast();
   const [saving, setSaving] = useState(false);
+  // Job titles always come from the company's own list, so the roster uses the same names everywhere.
+  const roles = ((company && company.custom_roles) || []).map((role) => role.label).filter(Boolean);
+  const held = defaultEmployee && defaultEmployee.position && !roles.includes(defaultEmployee.position) ? [defaultEmployee.position] : [];
+  const positions = [...new Set([...roles, ...held])];
   const [form, setForm] = useState({
     employee_email: '',
     date: defaultDate || '',
     start_time: '09:00',
     end_time: '17:00',
-    position: 'Crew',
+    position: '',
     break_min: 30,
     notes: ''
   });
@@ -28,7 +35,7 @@ export default function ShiftDialog({ open, onOpenChange, branch, employees, def
       ...prev,
       date: defaultDate || prev.date,
       employee_email: defaultEmployee ? defaultEmployee.user_email : '',
-      position: defaultEmployee && defaultEmployee.position ? defaultEmployee.position : prev.position
+      position: defaultEmployee && defaultEmployee.position ? defaultEmployee.position : prev.position || roles[0] || ''
     }));
   }, [open, defaultDate, defaultEmployee]);
 
@@ -114,19 +121,26 @@ export default function ShiftDialog({ open, onOpenChange, branch, employees, def
             <Input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />
           </div>
           <div>
-            <Label>Position</Label>
-            <Select value={form.position} onValueChange={(v) => setForm({ ...form, position: v })}>
+            <Label>{t('common.position')}</Label>
+            <Select
+              value={form.position}
+              onValueChange={(v) => setForm({ ...form, position: v })}
+              disabled={positions.length === 0}
+            >
               <SelectTrigger>
-                <SelectValue />
+                <SelectValue placeholder={t('role.select')} />
               </SelectTrigger>
               <SelectContent>
-                {POSITIONS.map((p) => (
+                {positions.map((p) => (
                   <SelectItem key={p} value={p}>
                     {p}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
+            {positions.length === 0 && (
+              <p className="mt-1 text-xs text-muted-foreground">{t('roster.noPositions')}</p>
+            )}
           </div>
           <div>
             <Label>Start</Label>

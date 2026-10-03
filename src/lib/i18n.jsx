@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
+import { base44 } from '@/api/base44Client';
 
 const dict = {
   en: {
@@ -20,6 +21,8 @@ const dict = {
     'top.branch': 'Branch',
     'top.allBranches': 'All branches',
     'top.language': '한국어',
+    'top.themeLight': 'Light mode',
+    'top.themeDark': 'Dark mode',
     'top.logout': 'Sign out',
     'role.company_admin': 'Company admin',
     'role.branch_manager': 'Branch manager',
@@ -152,6 +155,16 @@ const dict = {
     'applicants.pending': 'AI analysing…',
     'applicants.empty': 'No applicants in this view',
     'applicants.invited': 'Invited',
+    'applicants.videoAnswers': 'Video interview answers',
+    'applicants.watchVideo': 'Watch',
+    'applicants.hideVideo': 'Hide video',
+    'applicants.emailStatus': 'Email',
+    'applicants.emailNone': 'No email sent yet',
+    'applicants.emailSent': 'Sent',
+    'applicants.emailFailed': 'Not delivered',
+    'applicants.resend': 'Send again',
+    'applicants.resendSent': 'Email sent again',
+    'applicants.resendFailed': 'Could not send the email just now',
     'interviews.title': 'Interview scheduling',
     'interviews.subtitle': 'Open times and let shortlisted applicants book themselves',
     'interviews.open': 'Open interview times',
@@ -174,6 +187,7 @@ const dict = {
     'roster.send': 'Send to staff',
     'roster.sent': 'Roster sent to staff',
     'roster.overlap': 'This staff member already has an overlapping shift',
+    'roster.noPositions': 'No job titles yet — add them in Company settings first.',
     'employees.deactivate': 'Deactivate',
     'employees.activate': 'Activate',
     'employees.delete': 'Delete',
@@ -314,6 +328,7 @@ const dict = {
     'email.saved': 'Email templates saved',
     'email.stage.applied': 'Application received',
     'email.stage.mini': 'Voice interview invite',
+    'email.stage.video': 'Video interview invite',
     'email.stage.invite': 'Interview invitation',
     'email.stage.booked': 'Interview confirmed',
     'email.stage.hired': 'Hired · onboarding',
@@ -392,7 +407,12 @@ const dict = {
     'platform.pickCompany': 'Choose a company to manage',
     'platform.pickCompanyHint': 'You can switch companies at any time from the top bar.',
     'employees.resetEmail': 'Send password setup email',
-    'employees.resetSent': 'Password setup email sent'
+    'employees.resetSent': 'Password setup email sent',
+    'employees.uiLanguage': 'UI language',
+    'employees.uiLanguageHint':
+      'The language this person sees when they sign in, and the language of the emails sent to them.',
+    'employees.languageKo': '한국어',
+    'employees.languageEn': 'English'
   },
   ko: {
     'app.name': 'K-Workmate',
@@ -413,6 +433,8 @@ const dict = {
     'top.branch': '지점',
     'top.allBranches': '전체 지점',
     'top.language': 'English',
+    'top.themeLight': '라이트 모드',
+    'top.themeDark': '다크 모드',
     'top.logout': '로그아웃',
     'role.company_admin': '회사 최고 관리자',
     'role.branch_manager': '지점 매니저',
@@ -545,6 +567,16 @@ const dict = {
     'applicants.pending': 'AI 분석 중…',
     'applicants.empty': '해당 목록에 지원자가 없습니다',
     'applicants.invited': '초대 완료',
+    'applicants.videoAnswers': '화상 인터뷰 답변',
+    'applicants.watchVideo': '영상 보기',
+    'applicants.hideVideo': '영상 숨기기',
+    'applicants.emailStatus': '이메일 발송',
+    'applicants.emailNone': '아직 발송된 이메일이 없습니다',
+    'applicants.emailSent': '발송 완료',
+    'applicants.emailFailed': '발송 실패',
+    'applicants.resend': '다시 보내기',
+    'applicants.resendSent': '이메일을 다시 보냈습니다',
+    'applicants.resendFailed': '지금은 이메일을 보내지 못했습니다',
     'interviews.title': '면접 조율',
     'interviews.subtitle': '가능 시간을 열어두면 합격자가 직접 예약합니다',
     'interviews.open': '면접 가능 시간 열기',
@@ -567,6 +599,7 @@ const dict = {
     'roster.send': '보내기',
     'roster.sent': '직원에게 로스터를 보냈습니다',
     'roster.overlap': '해당 직원은 같은 시간에 이미 시프트가 있습니다',
+    'roster.noPositions': '아직 직책이 없습니다. 회사 설정에서 직책을 먼저 추가해 주세요.',
     'employees.deactivate': '비활성화',
     'employees.activate': '활성화',
     'employees.delete': '삭제',
@@ -707,6 +740,7 @@ const dict = {
     'email.saved': '이메일 템플릿이 저장되었습니다',
     'email.stage.applied': '지원 접수',
     'email.stage.mini': '음성 인터뷰 초대',
+    'email.stage.video': '화상 인터뷰 초대',
     'email.stage.invite': '면접 초대',
     'email.stage.booked': '면접 확정',
     'email.stage.hired': '합격 · 온보딩 안내',
@@ -785,21 +819,61 @@ const dict = {
     'platform.pickCompany': '관리할 회사를 선택하세요',
     'platform.pickCompanyHint': '상단에서 언제든 다른 회사로 전환할 수 있습니다.',
     'employees.resetEmail': '비밀번호 설정 메일 보내기',
-    'employees.resetSent': '비밀번호 설정 메일을 보냈습니다'
+    'employees.resetSent': '비밀번호 설정 메일을 보냈습니다',
+    'employees.uiLanguage': 'UI 언어',
+    'employees.uiLanguageHint':
+      '이 직원이 로그인했을 때 보이는 화면 언어이며, 이 직원에게 발송되는 이메일 언어에도 적용됩니다.',
+    'employees.languageKo': '한국어',
+    'employees.languageEn': 'English'
   }
 };
 
 const I18nContext = createContext(null);
 
+function savedLanguage(value) {
+  return value === 'ko' || value === 'en' ? value : '';
+}
+
 export function LanguageProvider({ children }) {
   const [lang, setLang] = useState(() => localStorage.getItem('bh_lang') || 'ko');
+  const [ownProfileId, setOwnProfileId] = useState('');
+
+  // The employer sets each person's UI language on their staff profile: that is the
+  // language the person sees when they sign in.
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const authed = await base44.auth.isAuthenticated();
+        if (!authed) return;
+        const me = await base44.auth.me();
+        if (!me || !me.email) return;
+        const page = await base44.entities.EmployeeProfile.filter({ user_email: me.email }, { limit: 1 });
+        const profile = (page.items || [])[0];
+        if (cancelled || !profile) return;
+        setOwnProfileId(profile.id);
+        const assigned = savedLanguage(profile.language);
+        if (assigned) setLang(assigned);
+      } catch {
+        // Language is only a preference, so a failed lookup keeps the current one.
+      }
+    };
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     localStorage.setItem('bh_lang', lang);
   }, [lang]);
 
   const t = (key) => (dict[lang] && dict[lang][key]) || (dict.en && dict.en[key]) || key;
-  const toggle = () => setLang((prev) => (prev === 'ko' ? 'en' : 'ko'));
+  const toggle = () => {
+    const next = lang === 'ko' ? 'en' : 'ko';
+    setLang(next);
+    if (ownProfileId) base44.entities.EmployeeProfile.update(ownProfileId, { language: next }).catch(() => {});
+  };
 
   return <I18nContext.Provider value={{ lang, setLang, toggle, t }}>{children}</I18nContext.Provider>;
 }

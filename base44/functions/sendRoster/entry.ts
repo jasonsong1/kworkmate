@@ -1,5 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.52';
 import { sendEmail, brandedEmail } from '../../shared/email.ts';
+import { employeeLanguage, rosterMail } from '../../shared/employeeMail.ts';
 
 function addDays(iso: string, days: number) {
   const d = new Date(`${iso}T00:00:00Z`);
@@ -10,6 +11,10 @@ function addDays(iso: string, days: number) {
 function dayLabel(iso: string) {
   const d = new Date(`${iso}T00:00:00Z`);
   return d.toLocaleDateString('en-AU', { weekday: 'short', day: '2-digit', month: 'short', timeZone: 'UTC' });
+}
+
+function rowsOf(result: any) {
+  return Array.isArray(result) ? result : (result && result.items) || [];
 }
 
 export default async function (req: Request) {
@@ -43,6 +48,15 @@ export default async function (req: Request) {
       date: { $gte: weekStart, $lte: weekEnd }
     });
 
+    // Each shift goes out in the language set on that person's staff profile.
+    const staff = rowsOf(
+      await base44.asServiceRole.entities.EmployeeProfile.filter({ branch_id: branchId }, { limit: 500 })
+    );
+    const languageByEmail = new Map<string, any>();
+    staff.forEach((person: any) => {
+      if (person && person.user_email) languageByEmail.set(person.user_email, person.language);
+    });
+
     const byEmployee = new Map<string, any[]>();
     shifts.forEach((shift: any) => {
       if (!shift.employee_email) return;
@@ -51,21 +65,27 @@ export default async function (req: Request) {
       byEmployee.set(shift.employee_email, list);
     });
 
+    const range = `${dayLabel(weekStart)} – ${dayLabel(weekEnd)}`;
     let sent = 0;
     for (const [email, list] of byEmployee) {
       const sorted = list.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
       const name = sorted[0].employee_name || email;
+      const copy = rosterMail(employeeLanguage(languageByEmail.get(email)), {
+        name,
+        branchName: branch.name,
+        range
+      });
       const lines = sorted.map(
         (shift) =>
           `<b>${dayLabel(shift.date)}</b> · ${shift.start_time}–${shift.end_time}${shift.position ? ` · ${shift.position}` : ''}`
       );
       const ok = await sendEmail(base44, {
         to: email,
-        subject: `Your roster · ${dayLabel(weekStart)} – ${dayLabel(weekEnd)}`,
+        subject: copy.subject,
         html: brandedEmail({
-          heading: `${branch.name} roster`,
+          heading: copy.heading,
           brandColor: branch.brand_color || (company && company.brand_color),
-          lines: [`Hi ${name},`, 'Here are your shifts for this week:', ...lines],
+          lines: [copy.greeting, copy.lead, ...lines],
           footer: `${company ? company.name : branch.name} · K-Workmate`
         })
       });

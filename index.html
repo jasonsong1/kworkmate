@@ -16,6 +16,16 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap"
       rel="stylesheet"
     />
+    <script>
+      // Paint in the saved look straight away so the screen never flashes white first.
+      (function () {
+        try {
+          if (localStorage.getItem('kw_theme') === 'dark') {
+            document.documentElement.classList.add('dark');
+          }
+        } catch (e) {}
+      })();
+    </script>
     <title>K-Workmate — Multi-site Hiring, Onboarding & Attendance</title>
   </head>
   <body>

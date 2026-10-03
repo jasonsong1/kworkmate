@@ -1,5 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.52';
-import { sendEmail, cleanOrigin } from '../../shared/email.ts';
+import { sendApplicantEmail, cleanOrigin } from '../../shared/email.ts';
 import { renderStageEmail } from '../../shared/emailStages.ts';
 
 export default async function (req: Request) {
@@ -43,7 +43,12 @@ export default async function (req: Request) {
         ctaUrl: link
       }
     );
-    const sent = await sendEmail(base44, { to: applicant.email, subject: mail.subject, html: mail.html });
+    const result = await sendApplicantEmail(base44, applicant, {
+      type: 'video',
+      subject: mail.subject,
+      html: mail.html
+    });
+    const sent = result.ok;
 
     await base44.asServiceRole.entities.Applicant.update(applicant.id, {
       video_interview_token: token,

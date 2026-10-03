@@ -191,6 +191,15 @@ export function defaultRequiredQuestions() {
   ];
 }
 
+// A question the employer no longer asks. Older job ads still carry it in their saved
+// settings, so it is filtered out wherever the question list is shown, saved or answered.
+export const RETIRED_QUESTION_KEYS = ['pre_interview_url'];
+
+export function visibleRequiredQuestions(list) {
+  const source = Array.isArray(list) && list.length > 0 ? list : defaultRequiredQuestions();
+  return source.filter((q) => q && !RETIRED_QUESTION_KEYS.includes(q.key));
+}
+
 export function visaLabel(value) {
   const found = VISA_TYPES.find((v) => v.value === value);
   return found ? found.label : value || '—';

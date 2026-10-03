@@ -22,16 +22,38 @@ export function brandedEmail({ heading, lines, ctaText, ctaUrl, brandColor, foot
 </div>`;
 }
 
-export async function sendEmail(base44, { to, subject, html, attachments }) {
+// Returns the outcome instead of only a true/false, so the caller can record why a
+// message did not arrive.
+export async function sendEmailDetailed(base44, { to, subject, html, attachments }) {
   try {
     const payload = { to, subject, html };
     if (Array.isArray(attachments) && attachments.length > 0) payload.attachments = attachments;
     await base44.asServiceRole.integrations.Core.SendEmail(payload);
-    return true;
+    return { ok: true, error: '' };
   } catch (error) {
     console.error('SendEmail failed:', error && error.message);
-    return false;
+    return { ok: false, error: (error && error.message) || 'The email service refused the message.' };
   }
+}
+
+export async function sendEmail(base44, mail) {
+  const result = await sendEmailDetailed(base44, mail);
+  return result.ok;
+}
+
+// Applicant emails are written back onto the applicant, so the hiring team can see
+// whether the message actually went out and send it again when it did not.
+export async function sendApplicantEmail(base44, applicant, { type, subject, html }) {
+  const attemptedAt = new Date().toISOString();
+  const result = await sendEmailDetailed(base44, { to: applicant.email, subject, html });
+  await base44.asServiceRole.entities.Applicant.update(applicant.id, {
+    email_status: result.ok ? 'sent' : 'failed',
+    email_type: type,
+    email_sent_at: result.ok ? attemptedAt : '',
+    email_attempted_at: attemptedAt,
+    email_error: result.ok ? '' : result.error
+  }).catch(() => null);
+  return result;
 }
 
 export function cleanOrigin(origin) {
