@@ -189,10 +189,10 @@ export default function EmployeeDialog({ open, onOpenChange, branch, employee, o
               </SelectContent>
             </Select>
           </div>
-          <div className="hidden">
-            <Label className="hidden">{t('common.rate')} (AUD)</Label>
-            <Input type="number" value={form.hourly_rate} onChange={(e) => set('hourly_rate', e.target.value)} className="hidden" />
-          </div>
+          
+
+
+          
           <div>
             <Label>Employment type</Label>
             <Select value={form.employment_type} onValueChange={(v) => set('employment_type', v)}>
