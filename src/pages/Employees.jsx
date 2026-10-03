@@ -37,9 +37,9 @@ export default function Employees() {
     const term = search.trim();
     if (term) {
       query.$or = [
-        { full_name: { $regex: term, $options: 'i' } },
-        { employee_number: { $regex: term, $options: 'i' } }
-      ];
+      { full_name: { $regex: term, $options: 'i' } },
+      { employee_number: { $regex: term, $options: 'i' } }];
+
     }
     const page = await base44.entities.EmployeeProfile.filter(query, { sort: '-created_date', limit: 100 });
     setRows(page.items || []);
@@ -93,11 +93,11 @@ export default function Employees() {
         title={t('employees.title')}
         subtitle={activeBranch ? activeBranch.name : t('employees.subtitle')}
         actions={
-          <Button onClick={openCreate} disabled={!activeBranch}>
+        <Button onClick={openCreate} disabled={!activeBranch}>
             <Plus className="mr-2 h-4 w-4" /> {t('employees.add')}
           </Button>
-        }
-      />
+        } />
+      
 
       <Card>
         <CardContent className="p-4">
@@ -107,64 +107,64 @@ export default function Employees() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder={t('common.search')}
-              className="pl-9"
-            />
+              className="pl-9" />
+            
           </div>
 
-          {loading ? (
-            <p className="py-10 text-center text-sm text-muted-foreground">{t('common.loading')}</p>
-          ) : rows.length === 0 ? (
-            <p className="py-10 text-center text-sm text-muted-foreground">{t('common.none')}</p>
-          ) : (
-            <div className="overflow-x-auto">
+          {loading ?
+          <p className="py-10 text-center text-sm text-muted-foreground">{t('common.loading')}</p> :
+          rows.length === 0 ?
+          <p className="py-10 text-center text-sm text-muted-foreground">{t('common.none')}</p> :
+
+          <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead>{t('common.name')}</TableHead>
                     <TableHead>{t('employees.number')}</TableHead>
                     <TableHead>{t('common.position')}</TableHead>
-                    <TableHead>{t('employees.visa')}</TableHead>
-                    <TableHead>{t('common.rate')}</TableHead>
+                    <TableHead className="hidden">{t('employees.visa')}</TableHead>
+                    <TableHead className="hidden">{t('common.rate')}</TableHead>
                     <TableHead>{t('employees.onboarding')}</TableHead>
                     <TableHead className="text-right">{t('common.actions')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {rows.map((row) => (
-                    <TableRow
-                      key={row.id}
-                      className={
-                        row.status === 'inactive'
-                          ? 'bg-destructive/5 text-destructive hover:bg-destructive/5'
-                          : ''
-                      }
-                    >
+                  {rows.map((row) =>
+                <TableRow
+                  key={row.id}
+                  className={
+                  row.status === 'inactive' ?
+                  'bg-destructive/5 text-destructive hover:bg-destructive/5' :
+                  ''
+                  }>
+                  
                       <TableCell>
                         <div className="flex items-center gap-2">
                           <p className="font-medium">{row.full_name}</p>
-                          {row.status === 'inactive' && (
-                            <Badge variant="secondary">{t('employees.inactive')}</Badge>
-                          )}
+                          {row.status === 'inactive' &&
+                      <Badge variant="secondary">{t('employees.inactive')}</Badge>
+                      }
                         </div>
                         <p className="text-xs text-muted-foreground">{row.user_email}</p>
                       </TableCell>
                       <TableCell className="font-mono text-xs">{row.employee_number || '—'}</TableCell>
                       <TableCell>
                         <span>{row.position || '—'}</span>
-                        {row.secondary_position ? (
-                          <span className="ml-1 text-xs text-muted-foreground">+ {row.secondary_position}</span>
-                        ) : null}
+                        {row.secondary_position ?
+                    <span className="ml-1 text-xs text-muted-foreground">+ {row.secondary_position}</span> :
+                    null}
                       </TableCell>
-                      <TableCell>{visaLabel(row.visa_type)}</TableCell>
-                      <TableCell>{row.hourly_rate ? money(row.hourly_rate) : '—'}</TableCell>
+                      <TableCell className="hidden">{visaLabel(row.visa_type)}</TableCell>
+                      <TableCell className="hidden">{row.hourly_rate ? money(row.hourly_rate) : '—'}</TableCell>
                       <TableCell>
-                        {row.onboarding_status === 'completed' ? (
-                          <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100">
+                        {row.onboarding_status === 'completed' ?
+                    <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100">
                             {t('employees.completed')}
-                          </Badge>
-                        ) : (
-                          <Badge variant="secondary">{t('employees.pending')}</Badge>
-                        )}
+                          </Badge> :
+
+                    <Badge variant="secondary">{t('employees.pending')}</Badge>
+                    }
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-1">
@@ -172,60 +172,60 @@ export default function Employees() {
                             <Pencil className="h-3.5 w-3.5" />
                           </Button>
                           <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => setDocsFor(row)}
-                            title={t('employees.vault')}
-                          >
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setDocsFor(row)}
+                        title={t('employees.vault')}>
+                        
                             <FileText className="h-3.5 w-3.5" />
                             <span className="ml-1 text-xs">{(row.docs || []).length}</span>
                           </Button>
                           <Button
-                            size="sm"
-                            variant="ghost"
-                            title={t('employees.resetEmail')}
-                            onClick={() => sendPasswordEmail(row)}
-                            disabled={resettingId === row.id}
-                          >
+                        size="sm"
+                        variant="ghost"
+                        title={t('employees.resetEmail')}
+                        onClick={() => sendPasswordEmail(row)}
+                        disabled={resettingId === row.id}>
+                        
                             <KeyRound className="h-3.5 w-3.5" />
                           </Button>
-                          {(row.onboarding_status === 'pending' || !row.onboarding_status) && (
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              title={t('employees.sendOnboarding')}
-                              onClick={() => {
-                                setEditing(row);
-                                setDialogOpen(true);
-                              }}
-                            >
+                          {(row.onboarding_status === 'pending' || !row.onboarding_status) &&
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        title={t('employees.sendOnboarding')}
+                        onClick={() => {
+                          setEditing(row);
+                          setDialogOpen(true);
+                        }}>
+                        
                               <Send className="h-3.5 w-3.5" />
                             </Button>
-                          )}
+                      }
                           <Button
-                            size="sm"
-                            variant="ghost"
-                            title={row.status === 'inactive' ? t('employees.activate') : t('employees.deactivate')}
-                            onClick={() => toggleActive(row)}
-                          >
+                        size="sm"
+                        variant="ghost"
+                        title={row.status === 'inactive' ? t('employees.activate') : t('employees.deactivate')}
+                        onClick={() => toggleActive(row)}>
+                        
                             <Power className="h-3.5 w-3.5" />
                           </Button>
                           <Button
-                            size="sm"
-                            variant="ghost"
-                            title={t('employees.delete')}
-                            onClick={() => removeEmployee(row)}
-                          >
+                        size="sm"
+                        variant="ghost"
+                        title={t('employees.delete')}
+                        onClick={() => removeEmployee(row)}>
+                        
                             <Trash2 className="h-3.5 w-3.5 text-destructive" />
                           </Button>
                         </div>
                       </TableCell>
                     </TableRow>
-                  ))}
+                )}
                 </TableBody>
               </Table>
             </div>
-          )}
+          }
         </CardContent>
       </Card>
 
@@ -234,13 +234,13 @@ export default function Employees() {
         onOpenChange={setDialogOpen}
         branch={activeBranch}
         employee={editing}
-        onSaved={load}
-      />
+        onSaved={load} />
+      
       <EmployeeDocumentsDialog
         open={Boolean(docsFor)}
         onOpenChange={(v) => !v && setDocsFor(null)}
-        employee={docsFor}
-      />
-    </div>
-  );
+        employee={docsFor} />
+      
+    </div>);
+
 }
