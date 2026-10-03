@@ -1,8 +1,10 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { CheckCircle2, FileBarChart, Loader2, MapPin, QrCode, XCircle } from 'lucide-react';
+import { CheckCircle2, FileBarChart, Keyboard, Loader2, MapPin, QrCode, XCircle } from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
 import ApprovalActions from '@/components/attendance/ApprovalActions';
 import AttendanceReportDialog from '@/components/attendance/AttendanceReportDialog';
+import KioskQrDialog from '@/components/attendance/KioskQrDialog';
+import { kioskUrl } from '@/lib/kioskLink';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -26,6 +28,7 @@ export default function Attendance() {
   const [stats, setStats] = useState({ count: 0, minutes: 0, pending: 0 });
   const [loading, setLoading] = useState(true);
   const [reportOpen, setReportOpen] = useState(false);
+  const [qrOpen, setQrOpen] = useState(false);
 
   useEffect(() => {
     setEmployeeFilter(ALL);
@@ -90,11 +93,10 @@ export default function Attendance() {
     await load();
   };
 
-  // Opens the store kiosk for this day in a new tab: staff scan it on their phone, and the
-  // same screen takes an employee number from anyone without one.
+  // The number pad screen for the store tablet, opened in its own tab.
   const openKiosk = () => {
     if (!activeBranch) return;
-    window.open(`${window.location.origin}/kiosk/${activeBranch.id}~${date}`, '_blank', 'noopener');
+    window.open(kioskUrl(activeBranch.id, date), '_blank', 'noopener');
   };
 
   const hours = Math.floor(stats.minutes / 60);
@@ -121,8 +123,11 @@ export default function Attendance() {
                 ))}
               </SelectContent>
             </Select>
-            <Button variant="outline" onClick={openKiosk} disabled={!activeBranch}>
+            <Button variant="outline" onClick={() => setQrOpen(true)} disabled={!activeBranch}>
               <QrCode className="mr-2 h-4 w-4" /> {t('attendance.qr')}
+            </Button>
+            <Button variant="outline" onClick={openKiosk} disabled={!activeBranch}>
+              <Keyboard className="mr-2 h-4 w-4" /> {t('attendance.manualEntry')}
             </Button>
             <Button variant="outline" onClick={() => setReportOpen(true)} disabled={!activeBranch}>
               <FileBarChart className="mr-2 h-4 w-4" /> {t('attendance.report')}
@@ -233,6 +238,8 @@ export default function Attendance() {
           )}
         </CardContent>
       </Card>
+
+      <KioskQrDialog open={qrOpen} onOpenChange={setQrOpen} branch={activeBranch} date={date} />
 
       <AttendanceReportDialog
         open={reportOpen}

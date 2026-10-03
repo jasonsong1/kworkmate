@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { LogIn, LogOut, MapPin } from 'lucide-react';
+import { LogIn, LogOut, MapPin, ScanLine } from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
+import QrScannerDialog from '@/components/attendance/QrScannerDialog';
+import { parseKioskLink } from '@/lib/kioskLink';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -19,6 +21,7 @@ export default function Clock() {
   const [entry, setEntry] = useState(null);
   const [shift, setShift] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [scanOpen, setScanOpen] = useState(false);
 
   const load = useCallback(async () => {
     if (!me) return;
@@ -39,31 +42,40 @@ export default function Clock() {
     load();
   }, [load]);
 
-  const locate = () => {
+  const currentPosition = () =>
+    new Promise((resolve, reject) => {
+      if (!navigator.geolocation) {
+        reject(new Error(t('clock.denied')));
+        return;
+      }
+      navigator.geolocation.getCurrentPosition(
+        (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+        () => reject(new Error(t('clock.denied'))),
+        { enableHighAccuracy: true, timeout: 10000 }
+      );
+    });
+
+  const locate = async () => {
     setGeoError('');
-    if (!navigator.geolocation) {
-      setGeoError(t('clock.denied'));
-      return;
+    try {
+      setCoords(await currentPosition());
+    } catch (error) {
+      setGeoError(error.message);
     }
-    navigator.geolocation.getCurrentPosition(
-      (pos) => setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-      () => setGeoError(t('clock.denied')),
-      { enableHighAccuracy: true, timeout: 10000 }
-    );
   };
 
   useEffect(() => {
     locate();
   }, []);
 
-  const punch = async (action) => {
-    if (!activeBranch || !coords) return;
+  const punch = async (action, branchId = activeBranch ? activeBranch.id : '', point = coords) => {
+    if (!branchId || !point) return;
     setBusy(true);
     const response = await base44.functions.invoke('attendancePunch', {
-      branch_id: activeBranch.id,
+      branch_id: branchId,
       action,
-      lat: coords.lat,
-      lng: coords.lng
+      lat: point.lat,
+      lng: point.lng
     });
     setBusy(false);
     const data = response.data || {};
@@ -77,6 +89,28 @@ export default function Clock() {
     }
     toast({ title: action === 'in' ? t('clock.inDone') : t('clock.outDone') });
     await load();
+  };
+
+  // The store screen shows a QR code for the branch and today: scanning it records this signed-in
+  // employee at that store at this moment, so we always know who recorded and when.
+  const recordByScan = async (text) => {
+    const link = parseKioskLink(text);
+    if (!link) {
+      toast({ title: t('clock.scanInvalid'), variant: 'destructive' });
+      return;
+    }
+    if (link.date !== todayIso()) {
+      toast({ title: t('clock.scanExpired'), variant: 'destructive' });
+      return;
+    }
+    const point = await currentPosition().catch(() => coords);
+    if (!point) {
+      toast({ title: t('clock.denied'), variant: 'destructive' });
+      return;
+    }
+    setCoords(point);
+    setScanOpen(false);
+    await punch(entry ? 'out' : 'in', link.branchId, point);
   };
 
   return (
@@ -128,6 +162,10 @@ export default function Clock() {
             </Button>
           </div>
 
+          <Button className="w-full" size="lg" variant="secondary" onClick={() => setScanOpen(true)} disabled={busy}>
+            <ScanLine className="mr-2 h-4 w-4" /> {t('clock.record')}
+          </Button>
+
           <div className="flex gap-2">
             <Button size="sm" variant="ghost" onClick={locate}>
               <MapPin className="mr-2 h-3.5 w-3.5" /> {t('clock.checking')}
@@ -137,6 +175,8 @@ export default function Clock() {
           <p className="text-xs text-muted-foreground">{t('clock.hint')}</p>
         </CardContent>
       </Card>
+
+      <QrScannerDialog open={scanOpen} onOpenChange={setScanOpen} onScan={recordByScan} />
     </div>
   );
 }

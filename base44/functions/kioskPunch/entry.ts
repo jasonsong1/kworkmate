@@ -42,15 +42,18 @@ export default async function (req) {
     const action = body.action === 'out' ? 'out' : 'in';
     const number = String(body.employee_number || '').trim();
     if (!number) return Response.json({ error: 'employee_number_required' });
+    // Numbers mix letters, digits and hyphens and are typed by hand, so match case-insensitively.
+    const pattern = number.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
     const people = rowsOf(
       await base44.asServiceRole.entities.EmployeeProfile.filter(
-        { branch_id: branch.id, employee_number: number },
+        { branch_id: branch.id, employee_number: { $regex: `^${pattern}$`, $options: 'i' } },
         { limit: 1 }
       )
     );
     const person = people[0];
     if (!person) return Response.json({ error: 'employee_not_found' });
+    const canonical = person.employee_number || number;
     if (person.status && person.status !== 'active') {
       return Response.json({ error: 'employee_inactive' });
     }
@@ -79,7 +82,7 @@ export default async function (req) {
         branch_id: branch.id,
         employee_email: person.user_email,
         employee_name: person.full_name || person.user_email,
-        employee_number: number,
+        employee_number: canonical,
         shift_id: shift ? shift.id : '',
         clock_in_at: nowIso,
         scheduled_start: shift ? shift.start_time : '',
@@ -90,7 +93,7 @@ export default async function (req) {
         approval_status: 'pending'
       });
 
-      return Response.json({ ok: true, action: 'in', name: person.full_name, employee_number: number });
+      return Response.json({ ok: true, action: 'in', name: person.full_name, employee_number: canonical });
     }
 
     if (active.length === 0) return Response.json({ error: 'not_clocked_in' });
@@ -107,7 +110,7 @@ export default async function (req) {
       approved_at: ''
     });
 
-    return Response.json({ ok: true, action: 'out', name: person.full_name, employee_number: number });
+    return Response.json({ ok: true, action: 'out', name: person.full_name, employee_number: canonical });
   } catch (error) {
     return Response.json({ error: error.message }, { status: 500 });
   }

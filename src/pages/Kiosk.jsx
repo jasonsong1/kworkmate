@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { AlertCircle, CheckCircle2, Delete, Loader2, MapPin } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Loader2, MapPin } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { base44 } from '@/api/base44Client';
 
-const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'clear', '0', 'back'];
+// Employee numbers mix letters, digits and hyphens (ED-003, BOT-00007).
+const normaliseNumber = (value) => value.toUpperCase().replace(/[^A-Z0-9-]/g, '').slice(0, 12);
 
 const MESSAGES = {
   invalid_link: 'This link is not valid. Please ask your manager for a new QR code.',
@@ -53,13 +55,10 @@ export default function Kiosk() {
     );
   }, []);
 
-  const press = (key) => {
+  const changeNumber = (value) => {
     setResult(null);
     setError('');
-    if (key === 'clear') return setNumber('');
-    if (key === 'back') return setNumber((prev) => prev.slice(0, -1));
-    if (number.length >= 10) return;
-    setNumber((prev) => prev + key);
+    setNumber(normaliseNumber(value));
   };
 
   const punch = async (action) => {
@@ -170,24 +169,17 @@ export default function Kiosk() {
 
         <div className="rounded-2xl border bg-white p-6 shadow-sm">
           <p className="text-sm font-semibold">No phone? Enter your employee number</p>
-          <div className="mt-4 rounded-xl border-2 border-dashed px-4 py-6 text-center">
-            <p className="font-mono text-4xl font-bold tracking-widest tabular-nums">
-              {number || '—'}
-            </p>
-          </div>
-
-          <div className="mt-4 grid grid-cols-3 gap-3">
-            {KEYS.map((key) => (
-              <button
-                key={key}
-                type="button"
-                disabled={busy}
-                onClick={() => press(key)}
-                className="flex h-16 items-center justify-center rounded-xl border text-xl font-semibold transition-colors hover:bg-slate-100 disabled:opacity-50"
-              >
-                {key === 'clear' ? 'C' : key === 'back' ? <Delete className="h-5 w-5" /> : key}
-              </button>
-            ))}
+          <div className="mt-4">
+            <Input
+              value={number}
+              onChange={(event) => changeNumber(event.target.value)}
+              placeholder="ED-003"
+              autoComplete="off"
+              autoCapitalize="characters"
+              spellCheck={false}
+              disabled={busy}
+              className="h-20 text-center font-mono text-3xl font-bold tracking-widest"
+            />
           </div>
 
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
