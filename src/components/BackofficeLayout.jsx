@@ -10,7 +10,7 @@ import { useI18n } from '@/lib/i18n';
 import { WorkspaceProvider, useWorkspace } from '@/lib/WorkspaceContext';
 import { areaForPath, usePermissions } from '@/lib/permissions';
 import { Card, CardContent } from '@/components/ui/card';
-import { applyTheme, readTheme, saveTheme } from '@/lib/theme';
+import { applyTheme, readTheme, resetTheme, saveTheme } from '@/lib/theme';
 import { base44 } from '@/api/base44Client';
 
 function BackofficeShell() {
@@ -27,6 +27,8 @@ function BackofficeShell() {
 
   useEffect(() => {
     applyTheme(theme);
+    // Sign-in and the applicant pages are light, so the dark look is dropped on the way out.
+    return () => resetTheme();
   }, [theme]);
 
   // The look travels with the account, so it comes back on the next sign-in anywhere.
@@ -50,8 +52,8 @@ function BackofficeShell() {
   };
 
   return (
-    <div className="flex min-h-screen bg-muted/40">
-      <aside className="hidden w-64 shrink-0 border-r bg-background lg:block">
+    <div className="flex min-h-screen bg-background">
+      <aside className="hidden w-64 shrink-0 border-r bg-card lg:block">
         <AppSidebar />
       </aside>
 
