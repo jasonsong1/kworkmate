@@ -128,29 +128,29 @@ export default function CompanySettings() {
           </CardContent>
         </Card>
 
-        <Card className="hidden">
-          <CardHeader>
-            <CardTitle className="text-base">{t('settings.super')}</CardTitle>
-          </CardHeader>
-          <CardContent className="grid gap-4 sm:grid-cols-2 hidden">
-            <div className="sm:col-span-2">
-              <Label>{t('settings.fundName')}</Label>
-              <Input value={form.default_super_fund_name} onChange={(e) => set('default_super_fund_name', e.target.value)} />
-            </div>
-            <div>
-              <Label>{t('settings.usi')}</Label>
-              <Input value={form.default_super_fund_usi} onChange={(e) => set('default_super_fund_usi', e.target.value)} />
-            </div>
-            <div>
-              <Label>{t('settings.abn')}</Label>
-              <Input value={form.default_super_fund_abn} onChange={(e) => set('default_super_fund_abn', e.target.value)} />
-            </div>
-            <div className="sm:col-span-2">
-              <Label>{t('common.phone')}</Label>
-              <Input value={form.default_super_fund_phone} onChange={(e) => set('default_super_fund_phone', e.target.value)} />
-            </div>
-          </CardContent>
-        </Card>
+        
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        
 
         <Card className="lg:col-span-2">
           <CardHeader>
