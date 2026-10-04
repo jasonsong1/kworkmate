@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Loader2, MapPin } from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
 import AccessMatrixEditor from '@/components/access/AccessMatrixEditor';
-import { MODULES } from '@/lib/access';
+import { MODULES, levelRank, normalizeCell, scopeRank } from '@/lib/access';
 import TradingHoursEditor, { hasOverlappingTradingHours } from '@/components/TradingHoursEditor';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -114,8 +114,22 @@ export default function PropertySetup() {
   const branchCeilings = Object.fromEntries(
     customRoles.map((role) => {
       const preset = presets.find((item) => item.key === role.preset_key);
-      const companyCeiling = (company && company.role_permissions && company.role_permissions[role.key]) || {};
-      return [role.key, { ...((preset && preset.access) || {}), ...companyCeiling }];
+      const presetAccess = (preset && preset.access) || {};
+      const companyGrant = (company && company.role_permissions && company.role_permissions[role.key]) || {};
+      const merged = {};
+      MODULES.forEach((module) => {
+        const cap = presetAccess[module];
+        if (!cap) return;
+        const saved = companyGrant[module];
+        const cell = normalizeCell(saved);
+        // The company already closed this module for the position: the branch cannot reopen it.
+        if (saved && cell.level === 'none') return;
+        const level = cell.level && levelRank(cell.level) <= levelRank(cap.level) ? cell.level : cap.level;
+        const capScope = cap.scope || 'branch';
+        const scope = !cell.scope || scopeRank(cell.scope) <= scopeRank(capScope) ? cell.scope || capScope : capScope;
+        merged[module] = { level, scope };
+      });
+      return [role.key, merged];
     })
   );
 
