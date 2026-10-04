@@ -18,8 +18,6 @@ import {
 } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 import { useWorkspace } from '@/lib/WorkspaceContext';
-import { usePermissions } from '@/lib/permissions';
-import { moduleAllowed } from '@/lib/packages';
 import { cn } from '@/lib/utils';
 
 const MANAGER_ITEMS = [
@@ -46,18 +44,16 @@ const PLATFORM_ITEMS = [{ to: '/platform', key: 'nav.platform', icon: ShieldChec
 
 export default function AppSidebar({ onNavigate }) {
   const { t } = useI18n();
-  const { isManager, isPlatformAdmin, pkg } = useWorkspace();
-  const { canView, canEdit } = usePermissions();
-  const inPackage = (item) => moduleAllowed(pkg, item.module);
-  // Roster and attendance are visible to every employee, so those two only open the
-  // back office menu when a role actually manages them; the rest follow "can see".
-  const MANAGES = ['roster', 'attendance'];
-  const granted = (area) => (MANAGES.includes(area) ? canEdit(area) : canView(area));
+  const { isManager, isPlatformAdmin, hasModule } = useWorkspace();
+  // The menu is exactly what the server resolved for this person: the package the company
+  // paid for, the preset of their position, and the grant their employer saved. Anything
+  // outside that is not shown at all.
+  const allowed = MANAGER_ITEMS.filter((item) => hasModule(item.module));
   const items = isManager
-    ? MANAGER_ITEMS.filter((item) => inPackage(item) && (!item.area || canView(item.area)))
+    ? allowed
     : [
-        ...STAFF_ITEMS.filter(inPackage),
-        ...MANAGER_ITEMS.filter((item) => item.area && granted(item.area) && inPackage(item))
+        ...STAFF_ITEMS.filter((item) => item.to === '/' || hasModule(item.module)),
+        ...allowed.filter((item) => item.to !== '/')
       ];
   const linkClass = ({ isActive }) =>
     cn(

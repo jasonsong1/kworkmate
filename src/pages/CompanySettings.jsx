@@ -6,7 +6,7 @@ import CompanyAdminsCard from '@/components/CompanyAdminsCard';
 import PackageCard from '@/components/package/PackageCard';
 import OnboardingDocsCard from '@/components/company/OnboardingDocsCard';
 import CompanyRolesManager from '@/components/CompanyRolesManager';
-import PermissionMatrixEditor from '@/components/PermissionMatrixEditor';
+import AccessMatrixEditor from '@/components/access/AccessMatrixEditor';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -17,13 +17,20 @@ import { useToast } from '@/components/ui/use-toast';
 import { useI18n } from '@/lib/i18n';
 import { useWorkspace } from '@/lib/WorkspaceContext';
 import { videoInterviewAllowed } from '@/lib/packages';
+import { MODULES, grantedModules, levelRank, moduleLabelKey, normalizeCell, scopeRank } from '@/lib/access';
 import CompanyPicker from '@/components/platform/CompanyPicker';
 import { base44 } from '@/api/base44Client';
 
 export default function CompanySettings() {
   const { t } = useI18n();
-  const { company, reload, role, isPlatformAdmin, pkg } = useWorkspace();
+  const { company, reload, role, isPlatformAdmin, pkg, presets, feature } = useWorkspace();
   const videoAllowed = videoInterviewAllowed(pkg);
+  const miniAllowed = feature('mini_interview');
+  // Only the modules the company's package actually includes are offered here; the rest are
+  // not part of this company and never appear in the table.
+  const packageModules = MODULES.filter(
+    (module) => !pkg || !pkg.package || (pkg.modules || []).includes(module)
+  );
   const { toast } = useToast();
   const [form, setForm] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -51,17 +58,56 @@ export default function CompanySettings() {
 
   const set = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
 
-  // Removing a role also drops the permissions that were granted to it.
+  // The ceiling a job title may move inside: the preset its created link points at.
+  const ceilingFor = (roleKey) => {
+    const entry = (form.custom_roles || []).find((item) => item.key === roleKey);
+    const preset = presets.find((item) => item.key === (entry && entry.preset_key));
+    return (preset && preset.access) || {};
+  };
+
+  // Anything wider than the linked preset allows is cut back to the ceiling.
+  const clampToCeiling = (access, ceiling) => {
+    const out = {};
+    Object.entries(access || {}).forEach(([module, raw]) => {
+      const cell = normalizeCell(raw);
+      const cap = ceiling[module];
+      if (!cap || !cell.level || cell.level === 'none') return;
+      const level = levelRank(cell.level) <= levelRank(cap.level) ? cell.level : cap.level;
+      const capScope = cap.scope || 'branch';
+      const scope = !cell.scope || scopeRank(cell.scope) <= scopeRank(capScope) ? cell.scope || capScope : capScope;
+      out[module] = { level, scope };
+    });
+    return out;
+  };
+
+  // Removing a role also drops the permissions granted to it. Moving a role onto a narrower
+  // preset pulls its permissions back to the new ceiling and says which ones moved.
   const setCustomRoles = (next) => {
     const kept = new Set((next || []).map((role) => role.key));
     const removed = (form.custom_roles || []).filter((role) => !kept.has(role.key)).map((role) => role.key);
+    const relinked = (next || []).filter((role) => {
+      const before = (form.custom_roles || []).find((item) => item.key === role.key);
+      return before && before.preset_key !== role.preset_key;
+    });
+    const narrowed = [];
     setForm((prev) => {
       const permissions = { ...(prev.role_permissions || {}) };
       removed.forEach((key) => {
         delete permissions[key];
       });
+      relinked.forEach((roleEntry) => {
+        const preset = presets.find((item) => item.key === roleEntry.preset_key);
+        const before = permissions[roleEntry.key] || {};
+        permissions[roleEntry.key] = clampToCeiling(before, (preset && preset.access) || {});
+        grantedModules(before).forEach((module) => {
+          if (!permissions[roleEntry.key][module]) narrowed.push(t(moduleLabelKey(module)));
+        });
+      });
       return { ...prev, custom_roles: next, role_permissions: permissions };
     });
+    if (narrowed.length > 0) {
+      toast({ title: t('role.narrowed').replace('{list}', Array.from(new Set(narrowed)).join(', ')) });
+    }
   };
 
   const save = async () => {
@@ -174,10 +220,11 @@ export default function CompanySettings() {
               <span className="text-sm">{t('settings.autoReject')}</span>
               <Switch checked={form.auto_reject_email} onCheckedChange={(v) => set('auto_reject_email', v)} />
             </div>
+            {miniAllowed && (
             <div className="flex items-center justify-between rounded-lg border px-4 py-3">
               <span className="text-sm">{t('interview.mini')}</span>
               <Switch checked={form.mini_interview_enabled} onCheckedChange={(v) => set('mini_interview_enabled', v)} />
-            </div>
+            </div>)}
             {videoAllowed && (
             <div className="flex items-center justify-between gap-3 rounded-lg border px-4 py-3 sm:col-span-3">
               <div>
@@ -220,6 +267,7 @@ export default function CompanySettings() {
               <CompanyRolesManager
                 value={form.custom_roles}
                 onChange={setCustomRoles}
+                presets={presets}
                 disabled={role !== 'company_admin'} />
               
             </div>
@@ -230,11 +278,13 @@ export default function CompanySettings() {
                   {t('perm.noRoles')}
                 </p> :
 
-              <PermissionMatrixEditor
+              <AccessMatrixEditor
                 value={form.role_permissions}
                 onChange={(next) => set('role_permissions', next)}
                 roles={matrixRoles}
                 roleLabels={roleLabels}
+                ceilings={Object.fromEntries(matrixRoles.map((key) => [key, ceilingFor(key)]))}
+                modules={packageModules}
                 disabled={role !== 'company_admin'} />
 
               }

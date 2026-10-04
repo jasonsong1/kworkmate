@@ -1,7 +1,7 @@
 // Pricing packages: the single table every function reads when it has to judge what a
-// company paid for — which modules it may open, how many job ads it can run at once and
-// how long its access lasts. The back office reads the same numbers from the server, so
-// a screen and the rule behind it can never drift apart.
+// company paid for — which modules it may open, which hiring features it unlocked, how many
+// job ads it can run at once and how long its access lasts. The back office reads the same
+// numbers from the server, so a screen and the rule behind it can never drift apart.
 export const ACCESS_DAYS = 45;
 export const JOB_AD_DAYS = 30;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -20,31 +20,72 @@ export const ALL_MODULES = [
   'settings'
 ];
 
+// Features sit inside a module: the module stays, one part of it is not part of the package.
+export const FEATURE_KEYS = [
+  'mini_interview',
+  'video_interview',
+  'voice_interview',
+  'onboarding',
+  'auto_roster',
+  'multi_branch',
+  'branch_isolation',
+  'unified_dashboard'
+];
+
+const NO_FEATURES = {
+  mini_interview: false,
+  video_interview: false,
+  voice_interview: false,
+  onboarding: false,
+  auto_roster: false,
+  multi_branch: false,
+  branch_isolation: false,
+  unified_dashboard: false
+};
+
+const ALL_FEATURES = {
+  mini_interview: true,
+  video_interview: true,
+  voice_interview: true,
+  onboarding: true,
+  auto_roster: true,
+  multi_branch: true,
+  branch_isolation: true,
+  unified_dashboard: true
+};
+
 // jobLimit null means no limit. postingDays 0 means an ad never expires by itself.
 export const PACKAGES = {
   payg: {
     jobLimit: 1,
-    videoInterview: false,
     postingDays: JOB_AD_DAYS,
-    modules: ['dashboard', 'jobs', 'applicants', 'interviews', 'templates']
+    modules: ['dashboard', 'jobs', 'applicants', 'interviews', 'templates', 'settings'],
+    features: { ...NO_FEATURES }
   },
   starter: {
     jobLimit: 2,
-    videoInterview: false,
     postingDays: 0,
-    modules: ALL_MODULES
+    modules: ALL_MODULES,
+    features: { ...NO_FEATURES, mini_interview: true, onboarding: true, auto_roster: true }
   },
   growth: {
     jobLimit: 6,
-    videoInterview: true,
     postingDays: 0,
-    modules: ALL_MODULES
+    modules: ALL_MODULES,
+    features: {
+      ...NO_FEATURES,
+      mini_interview: true,
+      video_interview: true,
+      voice_interview: true,
+      onboarding: true,
+      auto_roster: true
+    }
   },
   enterprise: {
     jobLimit: null,
-    videoInterview: true,
     postingDays: 0,
-    modules: ALL_MODULES
+    modules: ALL_MODULES,
+    features: { ...ALL_FEATURES }
   }
 };
 
@@ -83,8 +124,8 @@ export function packageState(company, now = Date.now()) {
       key: '',
       assigned: false,
       modules: ALL_MODULES,
+      features: { ...ALL_FEATURES },
       jobLimit: null,
-      videoInterview: true,
       postingDays: 0,
       startDate: '',
       expiresOn: '',
@@ -104,8 +145,8 @@ export function packageState(company, now = Date.now()) {
     key,
     assigned: true,
     modules: meta.modules,
+    features: { ...meta.features },
     jobLimit: meta.jobLimit,
-    videoInterview: meta.videoInterview,
     postingDays: meta.postingDays,
     startDate: dayIso(from),
     expiresOn: dayIso(lastDay),

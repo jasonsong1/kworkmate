@@ -59,8 +59,15 @@ export function moduleAllowed(pkg, module) {
   return (pkg.modules || []).includes(module);
 }
 
+// A feature sits inside a module: the module can be part of the package while one part of it
+// (the video interview, the voice interview, the automated roster) is not.
+export function featureAllowed(pkg, feature) {
+  if (!pkg || !pkg.package) return true;
+  return (pkg.features || {})[feature] !== false;
+}
+
 export function videoInterviewAllowed(pkg) {
-  return !pkg || !pkg.package || pkg.video_interview !== false;
+  return featureAllowed(pkg, 'video_interview');
 }
 
 export function canCreateJob(pkg) {

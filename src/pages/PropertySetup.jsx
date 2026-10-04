@@ -2,7 +2,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Loader2, MapPin } from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
-import PermissionMatrixEditor from '@/components/PermissionMatrixEditor';
+import AccessMatrixEditor from '@/components/access/AccessMatrixEditor';
+import { MODULES } from '@/lib/access';
 import TradingHoursEditor, { hasOverlappingTradingHours } from '@/components/TradingHoursEditor';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -16,7 +17,7 @@ import { base44 } from '@/api/base44Client';
 
 export default function PropertySetup() {
   const { t } = useI18n();
-  const { branches, activeBranch, patchBranch, company } = useWorkspace();
+  const { branches, activeBranch, patchBranch, company, pkg, presets } = useWorkspace();
   const { toast } = useToast();
   const navigate = useNavigate();
   const [params] = useSearchParams();
@@ -105,6 +106,18 @@ export default function PropertySetup() {
   const customRoles = (company && company.custom_roles) || [];
   const branchMatrixRoles = customRoles.map((role) => role.key);
   const branchRoleLabels = Object.fromEntries(customRoles.map((role) => [role.key, role.label]));
+  // This branch can only narrow what the company (and the package, and the position preset)
+  // already allows, so only those modules and ceilings are offered.
+  const branchPackageModules = MODULES.filter(
+    (module) => !pkg || !pkg.package || (pkg.modules || []).includes(module)
+  );
+  const branchCeilings = Object.fromEntries(
+    customRoles.map((role) => {
+      const preset = presets.find((item) => item.key === role.preset_key);
+      const companyCeiling = (company && company.role_permissions && company.role_permissions[role.key]) || {};
+      return [role.key, { ...((preset && preset.access) || {}), ...companyCeiling }];
+    })
+  );
 
   return (
     <div>
@@ -231,12 +244,13 @@ export default function PropertySetup() {
               {t('perm.noRoles')}
             </p>
           ) : (
-            <PermissionMatrixEditor
+            <AccessMatrixEditor
               value={form.role_permissions}
               onChange={(next) => set('role_permissions', next)}
-              base={company && company.role_permissions}
               roles={branchMatrixRoles}
               roleLabels={branchRoleLabels}
+              ceilings={branchCeilings}
+              modules={branchPackageModules}
               allowInherit
             />
           )}

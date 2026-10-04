@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { Languages, LogOut, Menu, Moon, Sun } from 'lucide-react';
+import { Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { Languages, LogOut, Menu, Moon, RefreshCw, Sun } from 'lucide-react';
 import AppSidebar from '@/components/AppSidebar';
 import CompanySwitcher from '@/components/company/CompanySwitcher';
 import { Button } from '@/components/ui/button';
@@ -8,26 +8,34 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { useI18n } from '@/lib/i18n';
 import { WorkspaceProvider, useWorkspace } from '@/lib/WorkspaceContext';
-import { areaForPath, usePermissions } from '@/lib/permissions';
-import { moduleAllowed, moduleForPath } from '@/lib/packages';
+import { moduleForPath } from '@/lib/packages';
 import AccessExpired from '@/components/package/AccessExpired';
-import ModuleLocked from '@/components/package/ModuleLocked';
 import { Card, CardContent } from '@/components/ui/card';
 import { applyTheme, readTheme, resetTheme, saveTheme } from '@/lib/theme';
 import { base44 } from '@/api/base44Client';
 
 function BackofficeShell() {
   const { t, toggle } = useI18n();
-  const { company, branches, activeBranchId, selectBranch, isPlatformAdmin, me, pkg } = useWorkspace();
-  const { canView } = usePermissions();
+  const {
+    company,
+    branches,
+    activeBranchId,
+    selectBranch,
+    isPlatformAdmin,
+    me,
+    pkg,
+    hasModule,
+    accessError,
+    reloadPackage
+  } = useWorkspace();
   const [open, setOpen] = useState(false);
   const [theme, setTheme] = useState(() => readTheme());
   const navigate = useNavigate();
   const { pathname } = useLocation();
-  const requiredArea = areaForPath(pathname);
-  const allowed = !requiredArea || canView(requiredArea);
   const requiredModule = moduleForPath(pathname);
-  const lockedByPackage = !moduleAllowed(pkg, requiredModule);
+  // A module outside the package, the position preset or the employer grant is simply not
+  // there: no lock, no notice, and its address does not open it either.
+  const allowed = !requiredModule || hasModule(requiredModule);
   // A super admin is never locked out — they are the one who reactivates the company.
   const expired = Boolean(pkg && pkg.expired) && !isPlatformAdmin;
   const activeBranchOptions = branches.filter((b) => b.is_active !== false);
@@ -124,19 +132,18 @@ function BackofficeShell() {
         </header>
 
         <main className="min-w-0 flex-1 px-4 py-6 lg:px-8">
-          {expired ? (
-            <AccessExpired />
-          ) : !allowed ? (
-            <Card>
-              <CardContent className="p-10 text-center text-sm text-muted-foreground">
-                {t('perm.noAccess')}
+          {!expired && accessError && (
+            <Card className="mb-4 border-amber-200 bg-amber-50 dark:border-amber-500/30 dark:bg-amber-500/10">
+              <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">
+                <p className="text-sm text-amber-800 dark:text-amber-200">{t('access.failed')}</p>
+                <Button variant="outline" size="sm" onClick={() => reloadPackage()}>
+                  <RefreshCw className="mr-2 h-4 w-4" /> {t('access.retry')}
+                </Button>
               </CardContent>
             </Card>
-          ) : lockedByPackage ? (
-            <ModuleLocked module={requiredModule} />
-          ) : (
-            <Outlet />
           )}
+
+          {expired ? <AccessExpired /> : !allowed ? <Navigate to="/" replace /> : <Outlet />}
         </main>
       </div>
     </div>);

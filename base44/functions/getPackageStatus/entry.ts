@@ -1,5 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.52';
 import { packageState, today } from '../../shared/packages.ts';
+import { mergePresets, presetFor, resolveAccess, resolvePresetKey } from '../../shared/access.ts';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -7,8 +8,9 @@ function rowsOf(result) {
   return Array.isArray(result) ? result : (result && result.items) || [];
 }
 
-// What the signed-in workspace may do under the package its company paid for. The server
-// answers here so no screen has to trust its own clock.
+// What the signed-in person may see and do: the package the company paid for, the position
+// preset they hold and the grant their employer saved — resolved once, here, so no screen
+// has to trust its own copy of the rules or its own clock.
 export default async function (req) {
   try {
     const base44 = createClientFromRequest(req);
@@ -17,9 +19,29 @@ export default async function (req) {
 
     const body = await req.json().catch(() => ({}));
     const isSuperAdmin = me.role === 'admin';
+
+    // The presets in force: the platform defaults with any super admin edit on top of them.
+    const stored = rowsOf(await base44.asServiceRole.entities.PositionPreset.list().catch(() => []));
+    const presets = mergePresets(stored);
+
     const companyId = (isSuperAdmin && body.company_id) || me.company_id || '';
+    const roleKey = isSuperAdmin ? 'company_admin' : me.app_role || 'staff';
     if (!companyId) {
-      return Response.json({ ok: true, package: '', assigned: false, modules: [], expired: false });
+      return Response.json({
+        ok: true,
+        company_id: '',
+        company_name: '',
+        package: '',
+        assigned: false,
+        modules: [],
+        features: {},
+        expired: false,
+        role_key: roleKey,
+        preset_key: isSuperAdmin ? 'manager' : 'floor_staff',
+        access: {},
+        presets,
+        access_error: false
+      });
     }
 
     const company = await base44.asServiceRole.entities.Company.get(companyId).catch(() => null);
@@ -47,6 +69,28 @@ export default async function (req) {
     const openJobs = await base44.asServiceRole.entities.Job.count({ company_id: company.id, status: 'open' });
     const atLimit = state.jobLimit !== null && openJobs >= state.jobLimit;
 
+    // Who is signed in, and which position preset that is.
+    const isCompanyAdmin = isSuperAdmin || roleKey === 'company_admin';
+    const customRoles = Array.isArray(company.custom_roles) ? company.custom_roles : [];
+    const presetKey = resolvePresetKey({ roleKey, customRoles, isCompanyAdmin });
+    const preset = presetFor(presetKey, presets);
+
+    // The branch the workspace is working in narrows the company grant further.
+    const branchId = String(body.branch_id || me.branch_id || '');
+    let branch = null;
+    if (branchId) {
+      const found = await base44.asServiceRole.entities.Branch.get(branchId).catch(() => null);
+      if (found && found.company_id === company.id) branch = found;
+    }
+
+    const access = resolveAccess({
+      packageModules: state.modules,
+      preset,
+      companyGrant: company.role_permissions && company.role_permissions[roleKey],
+      branchGrant: branch && branch.role_permissions && branch.role_permissions[roleKey],
+      isCompanyAdmin
+    });
+
     return Response.json({
       ok: true,
       company_id: company.id,
@@ -54,11 +98,12 @@ export default async function (req) {
       package: state.key,
       assigned: state.assigned,
       modules: state.modules,
+      features: state.features,
       job_limit: state.jobLimit,
       jobs_open: openJobs,
       job_lock: jobLock,
       posting_days: state.postingDays,
-      video_interview: state.videoInterview,
+      video_interview: state.features.video_interview,
       start_date: state.startDate,
       expires_at: state.expiresOn,
       days_left: state.daysLeft,
@@ -66,6 +111,11 @@ export default async function (req) {
       reactivated_at: company.package_reactivated_at || '',
       can_create_job: !state.expired && !jobLock && !atLimit,
       is_super_admin: isSuperAdmin,
+      role_key: roleKey,
+      preset_key: preset ? preset.key : '',
+      access,
+      presets,
+      access_error: false,
       today: today()
     });
   } catch (error) {

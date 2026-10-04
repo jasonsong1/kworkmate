@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useI18n } from '@/lib/i18n';
 import { useWorkspace } from '@/lib/WorkspaceContext';
+import { usePermissions } from '@/lib/permissions';
 import { formatDateTime, todayIso } from '@/lib/bh';
 import { base44 } from '@/api/base44Client';
 
@@ -20,7 +21,11 @@ const ALL = 'all';
 
 export default function Attendance() {
   const { t } = useI18n();
-  const { activeBranch, me } = useWorkspace();
+  const { activeBranch, me, scopeOf } = useWorkspace();
+  const { canEdit } = usePermissions();
+  // "Own records only" is a data-range rule the person's position preset carries: a manager
+  // sees the branch, a floor position sees nothing but itself.
+  const selfOnly = scopeOf('attendance') === 'self';
   const [date, setDate] = useState(todayIso());
   const [employeeFilter, setEmployeeFilter] = useState(ALL);
   const [employees, setEmployees] = useState([]);
@@ -32,7 +37,7 @@ export default function Attendance() {
 
   useEffect(() => {
     setEmployeeFilter(ALL);
-    if (!activeBranch) {
+    if (!activeBranch || selfOnly) {
       setEmployees([]);
       return undefined;
     }
@@ -59,7 +64,8 @@ export default function Attendance() {
     const from = `${date}T00:00:00.000Z`;
     const to = `${date}T23:59:59.999Z`;
     const query = { branch_id: activeBranch.id, clock_in_at: { $gte: from, $lte: to } };
-    if (employeeFilter !== ALL) query.employee_email = employeeFilter;
+    if (selfOnly) query.employee_email = (me && me.email) || '__none__';
+    else if (employeeFilter !== ALL) query.employee_email = employeeFilter;
     const [list, grouped] = await Promise.all([
     base44.entities.TimeEntry.filter(query, { sort: '-clock_in_at', limit: 200 }).then((page) => page.items || []),
     base44.entities.TimeEntry.
@@ -77,7 +83,7 @@ export default function Attendance() {
       pending: (buckets.find((bucket) => bucket.approval_status === 'pending') || {}).count || 0
     });
     setLoading(false);
-  }, [activeBranch, date, employeeFilter]);
+  }, [activeBranch, date, employeeFilter, selfOnly, me]);
 
   useEffect(() => {
     load();
@@ -110,6 +116,7 @@ export default function Attendance() {
         actions={
         <div className="flex flex-wrap items-center gap-2">
             <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-40" />
+            {!selfOnly && (
             <Select value={employeeFilter} onValueChange={setEmployeeFilter}>
               <SelectTrigger className="w-48">
                 <SelectValue />
@@ -123,10 +130,11 @@ export default function Attendance() {
               )}
               </SelectContent>
             </Select>
+            )}
             
 
           
-            <Button variant="outline" onClick={openKiosk} disabled={!activeBranch}>
+            <Button variant="outline" onClick={openKiosk} disabled={!activeBranch || !canEdit('attendance')}>
               <Keyboard className="mr-2 h-4 w-4" /> {t('attendance.manualEntry')}
             </Button>
             <Button variant="outline" onClick={() => setReportOpen(true)} disabled={!activeBranch}>
@@ -228,7 +236,17 @@ export default function Attendance() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <ApprovalActions row={row} onDecide={decide} />
+                        {canEdit('attendance') ? (
+                          <ApprovalActions row={row} onDecide={decide} />
+                        ) : (
+                          <Badge variant="secondary">
+                            {row.approval_status === 'rejected'
+                              ? t('attendance.rejected')
+                              : row.approval_status === 'pending'
+                                ? t('attendance.pending')
+                                : t('attendance.approved')}
+                          </Badge>
+                        )}
                       </TableCell>
                     </TableRow>
                 )}
