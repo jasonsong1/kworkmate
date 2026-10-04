@@ -9,6 +9,7 @@ export function WorkspaceProvider({ children }) {
   const [branches, setBranches] = useState([]);
   const [employeeProfile, setEmployeeProfile] = useState(null);
   const [activeBranchId, setActiveBranchId] = useState('');
+  const [pkg, setPkg] = useState(null);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
@@ -52,6 +53,14 @@ export function WorkspaceProvider({ children }) {
       setActiveBranchId('');
     }
 
+    // The package the company paid for decides which modules this workspace may open.
+    if (user && user.company_id) {
+      const status = await base44.functions.invoke('getPackageStatus', {}).catch(() => null);
+      setPkg(status && status.data && !status.data.error ? status.data : null);
+    } else {
+      setPkg(null);
+    }
+
     // Everyone who is not a manager is an employee: staff and every company-defined position.
     const appRole = user ? (superAdmin ? 'company_admin' : user.app_role || 'staff') : '';
     if (user && appRole !== 'company_admin' && appRole !== 'branch_manager') {
@@ -74,6 +83,11 @@ export function WorkspaceProvider({ children }) {
 
   const patchCompany = useCallback((data) => {
     setCompany((prev) => (prev ? { ...prev, ...data } : prev));
+  }, []);
+
+  const reloadPackage = useCallback(async () => {
+    const status = await base44.functions.invoke('getPackageStatus', {}).catch(() => null);
+    setPkg(status && status.data && !status.data.error ? status.data : null);
   }, []);
 
   // Entering another company changes which branches the user can see, so start from a clean workspace.
@@ -116,7 +130,9 @@ export function WorkspaceProvider({ children }) {
         employeeProfile,
         activeBranch,
         activeBranchId,
+        pkg,
         selectBranch,
+        reloadPackage,
         switchCompany,
         refreshWorkspace,
         loading,
@@ -142,7 +158,9 @@ export function useWorkspace() {
       employeeProfile: null,
       activeBranch: null,
       activeBranchId: '',
+      pkg: null,
       selectBranch: () => {},
+      reloadPackage: async () => {},
       switchCompany: () => {},
       refreshWorkspace: () => {},
       loading: true,

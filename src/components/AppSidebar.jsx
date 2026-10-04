@@ -19,25 +19,26 @@ import {
 import { useI18n } from '@/lib/i18n';
 import { useWorkspace } from '@/lib/WorkspaceContext';
 import { usePermissions } from '@/lib/permissions';
+import { moduleAllowed } from '@/lib/packages';
 import { cn } from '@/lib/utils';
 
 const MANAGER_ITEMS = [
-  { to: '/', key: 'nav.dashboard', icon: LayoutDashboard, end: true },
-  { to: '/branches', key: 'nav.branches', icon: Store, area: 'branch_settings' },
-  { to: '/employees', key: 'nav.employees', icon: Users, area: 'employees' },
-  { to: '/jobs', key: 'nav.jobs', icon: Briefcase, area: 'jobs' },
-  { to: '/applicants', key: 'nav.applicants', icon: UserSearch, area: 'jobs' },
-  { to: '/interviews', key: 'nav.interviews', icon: CalendarClock, area: 'jobs' },
-  { to: '/roster', key: 'nav.roster', icon: CalendarDays, area: 'roster' },
-  { to: '/attendance', key: 'nav.attendance', icon: Timer, area: 'attendance' },
-  { to: '/interview-settings', key: 'nav.interview', icon: Mic, area: 'templates' },
-  { to: '/template-design', key: 'nav.templateDesign', icon: Palette, area: 'templates' },
-  { to: '/settings', key: 'nav.settings', icon: Settings, area: 'company_settings' }
+  { to: '/', key: 'nav.dashboard', icon: LayoutDashboard, end: true, module: 'dashboard' },
+  { to: '/branches', key: 'nav.branches', icon: Store, area: 'branch_settings', module: 'branches' },
+  { to: '/employees', key: 'nav.employees', icon: Users, area: 'employees', module: 'employees' },
+  { to: '/jobs', key: 'nav.jobs', icon: Briefcase, area: 'jobs', module: 'jobs' },
+  { to: '/applicants', key: 'nav.applicants', icon: UserSearch, area: 'jobs', module: 'applicants' },
+  { to: '/interviews', key: 'nav.interviews', icon: CalendarClock, area: 'jobs', module: 'interviews' },
+  { to: '/roster', key: 'nav.roster', icon: CalendarDays, area: 'roster', module: 'roster' },
+  { to: '/attendance', key: 'nav.attendance', icon: Timer, area: 'attendance', module: 'attendance' },
+  { to: '/interview-settings', key: 'nav.interview', icon: Mic, area: 'templates', module: 'interview_settings' },
+  { to: '/template-design', key: 'nav.templateDesign', icon: Palette, area: 'templates', module: 'templates' },
+  { to: '/settings', key: 'nav.settings', icon: Settings, area: 'company_settings', module: 'settings' }
 ];
 
 const STAFF_ITEMS = [
-  { to: '/', key: 'nav.mySpace', icon: UserCircle2, end: true },
-  { to: '/clock', key: 'nav.clock', icon: QrCode, area: 'attendance' }
+  { to: '/', key: 'nav.mySpace', icon: UserCircle2, end: true, module: 'dashboard' },
+  { to: '/clock', key: 'nav.clock', icon: QrCode, area: 'attendance', module: 'attendance' }
 ];
 
 // Only a super admin (platform admin) ever sees this section.
@@ -45,15 +46,19 @@ const PLATFORM_ITEMS = [{ to: '/platform', key: 'nav.platform', icon: ShieldChec
 
 export default function AppSidebar({ onNavigate }) {
   const { t } = useI18n();
-  const { isManager, isPlatformAdmin } = useWorkspace();
+  const { isManager, isPlatformAdmin, pkg } = useWorkspace();
   const { canView, canEdit } = usePermissions();
+  const inPackage = (item) => moduleAllowed(pkg, item.module);
   // Roster and attendance are visible to every employee, so those two only open the
   // back office menu when a role actually manages them; the rest follow "can see".
   const MANAGES = ['roster', 'attendance'];
   const granted = (area) => (MANAGES.includes(area) ? canEdit(area) : canView(area));
   const items = isManager
-    ? MANAGER_ITEMS.filter((item) => !item.area || canView(item.area))
-    : [...STAFF_ITEMS, ...MANAGER_ITEMS.filter((item) => item.area && granted(item.area))];
+    ? MANAGER_ITEMS.filter((item) => inPackage(item) && (!item.area || canView(item.area)))
+    : [
+        ...STAFF_ITEMS.filter(inPackage),
+        ...MANAGER_ITEMS.filter((item) => item.area && granted(item.area) && inPackage(item))
+      ];
   const linkClass = ({ isActive }) =>
     cn(
       'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',

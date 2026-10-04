@@ -1,0 +1,150 @@
+import React, { useEffect, useState } from 'react';
+import { Loader2, RefreshCw } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useToast } from '@/components/ui/use-toast';
+import { useI18n } from '@/lib/i18n';
+import { useWorkspace } from '@/lib/WorkspaceContext';
+import { PACKAGE_KEYS, PACKAGE_NAMES, jobLimitLabel } from '@/lib/packages';
+import { base44 } from '@/api/base44Client';
+
+function Stat({ label, value, hint }) {
+  return (
+    <div className="rounded-lg border px-4 py-3">
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="mt-1 text-sm font-semibold">{value}</p>
+      {hint ? <p className="mt-0.5 text-xs text-muted-foreground">{hint}</p> : null}
+    </div>
+  );
+}
+
+export default function PackageCard() {
+  const { t } = useI18n();
+  const { pkg, isPlatformAdmin, reloadPackage } = useWorkspace();
+  const { toast } = useToast();
+  const [form, setForm] = useState({ package: '', start_date: '' });
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!pkg) return;
+    setForm({ package: pkg.package || '', start_date: pkg.start_date || pkg.today || '' });
+  }, [pkg]);
+
+  if (!pkg) return null;
+
+  const assigned = Boolean(pkg.package);
+  const locked = Boolean(pkg.job_lock);
+  const expired = Boolean(pkg.expired);
+
+  const send = async (action) => {
+    setSaving(true);
+    try {
+      const response = await base44.functions.invoke('managePackage', {
+        action,
+        company_id: pkg.company_id,
+        package: form.package,
+        start_date: form.start_date
+      });
+      if (response.data?.error) throw new Error(response.data.error);
+      await reloadPackage();
+      toast({ title: t('pkg.saved') });
+    } catch (error) {
+      toast({ title: error.message || t('pkg.failed'), variant: 'destructive' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Card className="mb-6">
+      <CardHeader>
+        <CardTitle className="flex flex-wrap items-center gap-2 text-base">
+          {t('pkg.title')}
+          <Badge variant={expired ? 'destructive' : locked ? 'secondary' : 'outline'}>
+            {!assigned
+              ? t('pkg.notAssigned')
+              : expired
+              ? t('pkg.expired')
+              : locked
+              ? t('pkg.jobLock')
+              : t('pkg.active')}
+          </Badge>
+        </CardTitle>
+        <p className="text-xs text-muted-foreground">{t('pkg.subtitle')}</p>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <Stat
+            label={t('pkg.current')}
+            value={assigned ? t(PACKAGE_NAMES[pkg.package]) : t('pkg.notAssigned')}
+          />
+          <Stat label={t('pkg.startDate')} value={pkg.start_date || '—'} />
+          <Stat
+            label={t('pkg.expiresAt')}
+            value={pkg.expires_at || '—'}
+            hint={pkg.days_left === null || pkg.days_left === undefined ? '' : `${t('pkg.daysLeft')} ${pkg.days_left}`}
+          />
+          <Stat
+            label={t('pkg.jobs')}
+            value={`${pkg.jobs_open || 0} / ${jobLimitLabel(pkg.job_limit, t('pkg.unlimited'))}`}
+          />
+        </div>
+
+        {isPlatformAdmin ? (
+          <div className="space-y-3 rounded-lg border px-4 py-4">
+            <p className="text-xs text-muted-foreground">{t('pkg.assign')}</p>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div>
+                <Label>{t('pkg.package')}</Label>
+                <Select value={form.package} onValueChange={(v) => setForm({ ...form, package: v })}>
+                  <SelectTrigger>
+                    <SelectValue placeholder={t('pkg.notAssigned')} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PACKAGE_KEYS.map((key) => (
+                      <SelectItem key={key} value={key}>
+                        {t(PACKAGE_NAMES[key])}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>{t('pkg.startDate')}</Label>
+                <Input
+                  type="date"
+                  value={form.start_date}
+                  onChange={(e) => setForm({ ...form, start_date: e.target.value })}
+                />
+              </div>
+              <div className="flex flex-wrap items-end gap-2">
+                <Button onClick={() => send('set')} disabled={saving || !form.package || !form.start_date}>
+                  {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                  {t('pkg.save')}
+                </Button>
+                {(expired || locked) && (
+                  <Button variant="outline" onClick={() => send('reactivate')} disabled={saving || !form.start_date}>
+                    <RefreshCw className="mr-2 h-4 w-4" /> {t('pkg.reactivate')}
+                  </Button>
+                )}
+              </div>
+            </div>
+            {pkg.reactivated_at ? (
+              <p className="text-xs text-muted-foreground">
+                {t('pkg.reactivatedAt')}: {String(pkg.reactivated_at).slice(0, 10)}
+              </p>
+            ) : null}
+          </div>
+        ) : (
+          <p className="rounded-lg border px-4 py-3 text-xs text-muted-foreground">
+            {assigned ? t('pkg.readOnly') : t('pkg.notAssignedHint')}
+          </p>
+        )}
+      </CardContent>
+    </Card>
+  );
+}

@@ -9,13 +9,16 @@ import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { useI18n } from '@/lib/i18n';
 import { WorkspaceProvider, useWorkspace } from '@/lib/WorkspaceContext';
 import { areaForPath, usePermissions } from '@/lib/permissions';
+import { moduleAllowed, moduleForPath } from '@/lib/packages';
+import AccessExpired from '@/components/package/AccessExpired';
+import ModuleLocked from '@/components/package/ModuleLocked';
 import { Card, CardContent } from '@/components/ui/card';
 import { applyTheme, readTheme, resetTheme, saveTheme } from '@/lib/theme';
 import { base44 } from '@/api/base44Client';
 
 function BackofficeShell() {
   const { t, toggle } = useI18n();
-  const { company, branches, activeBranchId, selectBranch, isPlatformAdmin, me } = useWorkspace();
+  const { company, branches, activeBranchId, selectBranch, isPlatformAdmin, me, pkg } = useWorkspace();
   const { canView } = usePermissions();
   const [open, setOpen] = useState(false);
   const [theme, setTheme] = useState(() => readTheme());
@@ -23,6 +26,10 @@ function BackofficeShell() {
   const { pathname } = useLocation();
   const requiredArea = areaForPath(pathname);
   const allowed = !requiredArea || canView(requiredArea);
+  const requiredModule = moduleForPath(pathname);
+  const lockedByPackage = !moduleAllowed(pkg, requiredModule);
+  // A super admin is never locked out — they are the one who reactivates the company.
+  const expired = Boolean(pkg && pkg.expired) && !isPlatformAdmin;
   const activeBranchOptions = branches.filter((b) => b.is_active !== false);
 
   useEffect(() => {
@@ -53,22 +60,26 @@ function BackofficeShell() {
 
   return (
     <div className="flex min-h-screen bg-background">
-      <aside className="hidden w-64 shrink-0 border-r bg-card lg:block">
-        <AppSidebar />
-      </aside>
+      {!expired && (
+        <aside className="hidden w-64 shrink-0 border-r bg-card lg:block">
+          <AppSidebar />
+        </aside>
+      )}
 
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-30 flex items-center gap-3 border-b bg-background/95 px-4 py-3 backdrop-blur lg:px-6">
-          <Sheet open={open} onOpenChange={setOpen}>
-            <SheetTrigger asChild>
-              <Button variant="outline" size="icon" className="lg:hidden">
-                <Menu className="h-4 w-4" />
-              </Button>
-            </SheetTrigger>
-            <SheetContent side="left" className="w-64 p-0">
-              <AppSidebar onNavigate={() => setOpen(false)} />
-            </SheetContent>
-          </Sheet>
+          {!expired && (
+            <Sheet open={open} onOpenChange={setOpen}>
+              <SheetTrigger asChild>
+                <Button variant="outline" size="icon" className="lg:hidden">
+                  <Menu className="h-4 w-4" />
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="left" className="w-64 p-0">
+                <AppSidebar onNavigate={() => setOpen(false)} />
+              </SheetContent>
+            </Sheet>
+          )}
 
           <div className="min-w-0 flex-1">
             {!isPlatformAdmin && (
@@ -113,14 +124,18 @@ function BackofficeShell() {
         </header>
 
         <main className="min-w-0 flex-1 px-4 py-6 lg:px-8">
-          {allowed ? (
-            <Outlet />
-          ) : (
+          {expired ? (
+            <AccessExpired />
+          ) : !allowed ? (
             <Card>
               <CardContent className="p-10 text-center text-sm text-muted-foreground">
                 {t('perm.noAccess')}
               </CardContent>
             </Card>
+          ) : lockedByPackage ? (
+            <ModuleLocked module={requiredModule} />
+          ) : (
+            <Outlet />
           )}
         </main>
       </div>

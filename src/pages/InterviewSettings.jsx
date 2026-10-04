@@ -8,12 +8,14 @@ import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/components/ui/use-toast';
 import { useI18n } from '@/lib/i18n';
 import { useWorkspace } from '@/lib/WorkspaceContext';
+import { videoInterviewAllowed } from '@/lib/packages';
 import { DEFAULT_INTERVIEW_QUESTIONS } from '@/lib/bh';
 import { base44 } from '@/api/base44Client';
 
 export default function InterviewSettings() {
   const { t } = useI18n();
-  const { company, reload, role } = useWorkspace();
+  const { company, reload, role, pkg } = useWorkspace();
+  const videoAllowed = videoInterviewAllowed(pkg);
   const { toast } = useToast();
   const [questions, setQuestions] = useState([]);
   const [videoQuestions, setVideoQuestions] = useState([]);
@@ -65,7 +67,7 @@ export default function InterviewSettings() {
         }
       />
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className={`grid gap-6 ${videoAllowed ? 'lg:grid-cols-2' : ''}`}>
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
@@ -79,22 +81,24 @@ export default function InterviewSettings() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">{t('interview.video')}</CardTitle>
-            <p className="text-xs text-muted-foreground">{t('interview.videoHint')}</p>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center justify-between rounded-lg border px-4 py-3">
-              <span className="text-sm">{t('settings.videoInterview')}</span>
-              <Switch checked={videoEnabled} onCheckedChange={setVideoEnabled} />
-            </div>
-            <div>
-              <p className="mb-3 text-sm font-semibold">{t('interview.questions')}</p>
-              <InterviewQuestionEditor questions={videoQuestions} onChange={setVideoQuestions} />
-            </div>
-          </CardContent>
-        </Card>
+        {videoAllowed && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">{t('interview.video')}</CardTitle>
+              <p className="text-xs text-muted-foreground">{t('interview.videoHint')}</p>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between rounded-lg border px-4 py-3">
+                <span className="text-sm">{t('settings.videoInterview')}</span>
+                <Switch checked={videoEnabled} onCheckedChange={setVideoEnabled} />
+              </div>
+              <div>
+                <p className="mb-3 text-sm font-semibold">{t('interview.questions')}</p>
+                <InterviewQuestionEditor questions={videoQuestions} onChange={setVideoQuestions} />
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </div>
     </div>
   );

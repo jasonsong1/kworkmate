@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
 import CompanyAdminsCard from '@/components/CompanyAdminsCard';
+import PackageCard from '@/components/package/PackageCard';
 import OnboardingDocsCard from '@/components/company/OnboardingDocsCard';
 import CompanyRolesManager from '@/components/CompanyRolesManager';
 import PermissionMatrixEditor from '@/components/PermissionMatrixEditor';
@@ -15,12 +16,14 @@ import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/components/ui/use-toast';
 import { useI18n } from '@/lib/i18n';
 import { useWorkspace } from '@/lib/WorkspaceContext';
+import { videoInterviewAllowed } from '@/lib/packages';
 import CompanyPicker from '@/components/platform/CompanyPicker';
 import { base44 } from '@/api/base44Client';
 
 export default function CompanySettings() {
   const { t } = useI18n();
-  const { company, reload, role, isPlatformAdmin } = useWorkspace();
+  const { company, reload, role, isPlatformAdmin, pkg } = useWorkspace();
+  const videoAllowed = videoInterviewAllowed(pkg);
   const { toast } = useToast();
   const [form, setForm] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -104,6 +107,8 @@ export default function CompanySettings() {
         } />
       
 
+      <PackageCard />
+
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader>
@@ -173,6 +178,7 @@ export default function CompanySettings() {
               <span className="text-sm">{t('interview.mini')}</span>
               <Switch checked={form.mini_interview_enabled} onCheckedChange={(v) => set('mini_interview_enabled', v)} />
             </div>
+            {videoAllowed && (
             <div className="flex items-center justify-between gap-3 rounded-lg border px-4 py-3 sm:col-span-3">
               <div>
                 <p className="text-sm">{t('settings.videoInterview')}</p>
@@ -182,7 +188,7 @@ export default function CompanySettings() {
                 checked={form.video_interview_enabled}
                 onCheckedChange={(v) => set('video_interview_enabled', v)} />
               
-            </div>
+            </div>)}
             <div className="sm:col-span-3">
               <div className="mb-2 flex items-center justify-between gap-2">
                 <Label>{t('settings.screeningFocus')}</Label>

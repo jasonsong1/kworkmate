@@ -10,13 +10,15 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/components/ui/use-toast';
 import { useI18n } from '@/lib/i18n';
 import { useWorkspace } from '@/lib/WorkspaceContext';
+import { videoInterviewAllowed } from '@/lib/packages';
 import { base44 } from '@/api/base44Client';
 
 const INTERVIEW_STATUSES = ['mini_interview', 'final_interview', 'interview_scheduled', 'hired'];
 
 export default function Applicants() {
   const { t } = useI18n();
-  const { company, activeBranch } = useWorkspace();
+  const { company, activeBranch, pkg } = useWorkspace();
+  const videoAllowed = videoInterviewAllowed(pkg);
   const { toast } = useToast();
 
   const [jobs, setJobs] = useState([]);
@@ -187,7 +189,8 @@ export default function Applicants() {
           <UserPlus className="mr-1.5 h-3.5 w-3.5" /> {t('applicants.miniInterview')}
         </Button>
       )}
-      {job &&
+      {videoAllowed &&
+        job &&
         job.video_interview_enabled !== false &&
         ['top10', 'mini_interview'].includes(applicant.status) &&
         applicant.video_interview_status !== 'completed' && (
