@@ -456,6 +456,11 @@ const dict = {
     'employees.uiLanguage': 'UI language',
     'employees.uiLanguageHint':
       'The language this person sees when they sign in, and the language of the emails sent to them.',
+    'employees.pin': 'Attendance PIN',
+    'employees.pinHint':
+      'Used with the employee number at the store kiosk. Leave blank to keep the current PIN.',
+    'employees.pinSet': 'PIN set — type a new one to change it',
+    'employees.pinNew': '4–6 digits',
     'employees.languageKo': '한국어',
     'employees.languageEn': 'English',
     'employees.visa': 'Visa',
@@ -946,6 +951,10 @@ const dict = {
     'employees.uiLanguage': 'UI 언어',
     'employees.uiLanguageHint':
       '이 직원이 로그인했을 때 보이는 화면 언어이며, 이 직원에게 발송되는 이메일 언어에도 적용됩니다.',
+    'employees.pin': '출퇴근 PIN',
+    'employees.pinHint': '매장 키오스크에서 사번과 함께 사용합니다. 비워 두면 기존 PIN이 유지됩니다.',
+    'employees.pinSet': 'PIN 설정됨 — 변경하려면 새로 입력',
+    'employees.pinNew': '숫자 4~6자리',
     'employees.languageKo': '한국어',
     'employees.languageEn': 'English',
     'employees.visa': '비자',

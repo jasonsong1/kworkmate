@@ -26,6 +26,7 @@ const empty = {
   emergency_contact_name: '',
   emergency_contact_phone: '',
   language: 'ko',
+  pin: '',
   send_invite: true,
   send_onboarding_email: true
 };
@@ -242,6 +243,16 @@ export default function EmployeeDialog({ open, onOpenChange, branch, employee, o
               </SelectContent>
             </Select>
             <p className="mt-1 text-xs text-muted-foreground">{t('employees.uiLanguageHint')}</p>
+          </div>
+          <div>
+            <Label>{t('employees.pin')}</Label>
+            <Input
+              value={form.pin}
+              inputMode="numeric"
+              autoComplete="off"
+              onChange={(e) => set('pin', e.target.value.replace(/\D/g, '').slice(0, 6))}
+              placeholder={employee && employee.pin_hash ? t('employees.pinSet') : t('employees.pinNew')} />
+            <p className="mt-1 text-xs text-muted-foreground">{t('employees.pinHint')}</p>
           </div>
 
           {!employee &&

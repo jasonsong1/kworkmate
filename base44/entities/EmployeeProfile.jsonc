@@ -151,6 +151,12 @@
     },
     "applicant_id": {
       "type": "string"
+    },
+    "pin_salt": {
+      "type": "string"
+    },
+    "pin_hash": {
+      "type": "string"
     }
   },
   "required": [

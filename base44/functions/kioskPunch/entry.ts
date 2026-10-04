@@ -1,5 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.52';
 import { decodeKioskToken, timezoneForBranch, todayIn } from '../../shared/kiosk.ts';
+import { verifyPin } from '../../shared/pin.ts';
 
 function rowsOf(result) {
   return Array.isArray(result) ? result : (result && result.items) || [];
@@ -57,6 +58,14 @@ export default async function (req) {
     if (person.status && person.status !== 'active') {
       return Response.json({ error: 'employee_inactive' });
     }
+
+    // The number alone is easy to borrow or overhear, so a personal PIN confirms that the
+    // person standing at the kiosk is the one the number belongs to.
+    const pin = String(body.pin || '').trim();
+    if (!pin) return Response.json({ error: 'pin_required' });
+    if (!person.pin_hash || !person.pin_salt) return Response.json({ error: 'pin_not_set' });
+    const pinOk = await verifyPin(pin, person.pin_hash, person.pin_salt);
+    if (!pinOk) return Response.json({ error: 'pin_wrong' });
 
     const active = rowsOf(
       await base44.asServiceRole.entities.TimeEntry.filter(
