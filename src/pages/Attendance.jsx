@@ -37,14 +37,14 @@ export default function Attendance() {
       return undefined;
     }
     let cancelled = false;
-    base44.entities.EmployeeProfile
-      .filter({ branch_id: activeBranch.id }, { sort: 'full_name', limit: 200 })
-      .then((page) => {
-        if (!cancelled) setEmployees((page.items || []).filter((person) => person.user_email));
-      })
-      .catch(() => {
-        if (!cancelled) setEmployees([]);
-      });
+    base44.entities.EmployeeProfile.
+    filter({ branch_id: activeBranch.id }, { sort: 'full_name', limit: 200 }).
+    then((page) => {
+      if (!cancelled) setEmployees((page.items || []).filter((person) => person.user_email));
+    }).
+    catch(() => {
+      if (!cancelled) setEmployees([]);
+    });
     return () => {
       cancelled = true;
     };
@@ -61,19 +61,19 @@ export default function Attendance() {
     const query = { branch_id: activeBranch.id, clock_in_at: { $gte: from, $lte: to } };
     if (employeeFilter !== ALL) query.employee_email = employeeFilter;
     const [list, grouped] = await Promise.all([
-      base44.entities.TimeEntry.filter(query, { sort: '-clock_in_at', limit: 200 }).then((page) => page.items || []),
-      base44.entities.TimeEntry
-        .aggregate({ query, groupBy: 'approval_status', sum: 'minutes' })
-        .catch(() => ({ rows: [] }))
-    ]);
+    base44.entities.TimeEntry.filter(query, { sort: '-clock_in_at', limit: 200 }).then((page) => page.items || []),
+    base44.entities.TimeEntry.
+    aggregate({ query, groupBy: 'approval_status', sum: 'minutes' }).
+    catch(() => ({ rows: [] }))]
+    );
     setRows(list);
     const buckets = grouped.rows || [];
     setStats({
       count: buckets.reduce((sum, bucket) => sum + (bucket.count || 0), 0),
       // Only what a manager has accepted counts as worked time.
-      minutes: buckets
-        .filter((bucket) => bucket.approval_status !== 'pending' && bucket.approval_status !== 'rejected')
-        .reduce((sum, bucket) => sum + (bucket.sum_minutes || 0), 0),
+      minutes: buckets.
+      filter((bucket) => bucket.approval_status !== 'pending' && bucket.approval_status !== 'rejected').
+      reduce((sum, bucket) => sum + (bucket.sum_minutes || 0), 0),
       pending: (buckets.find((bucket) => bucket.approval_status === 'pending') || {}).count || 0
     });
     setLoading(false);
@@ -108,7 +108,7 @@ export default function Attendance() {
         title={t('attendance.title')}
         subtitle={activeBranch ? activeBranch.name : t('attendance.subtitle')}
         actions={
-          <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
             <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-40" />
             <Select value={employeeFilter} onValueChange={setEmployeeFilter}>
               <SelectTrigger className="w-48">
@@ -116,14 +116,14 @@ export default function Attendance() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value={ALL}>{t('common.all')}</SelectItem>
-                {employees.map((person) => (
-                  <SelectItem key={person.id} value={person.user_email}>
+                {employees.map((person) =>
+              <SelectItem key={person.id} value={person.user_email}>
                     {person.full_name}
                   </SelectItem>
-                ))}
+              )}
               </SelectContent>
             </Select>
-            <Button variant="outline" onClick={() => setQrOpen(true)} disabled={!activeBranch}>
+            <Button variant="outline" onClick={() => setQrOpen(true)} disabled={!activeBranch} className="hidden">
               <QrCode className="mr-2 h-4 w-4" /> {t('attendance.qr')}
             </Button>
             <Button variant="outline" onClick={openKiosk} disabled={!activeBranch}>
@@ -133,8 +133,8 @@ export default function Attendance() {
               <FileBarChart className="mr-2 h-4 w-4" /> {t('attendance.report')}
             </Button>
           </div>
-        }
-      />
+        } />
+      
 
       <div className="mb-6 grid gap-4 sm:grid-cols-3">
         <Card>
@@ -159,21 +159,21 @@ export default function Attendance() {
         </Card>
       </div>
 
-      {stats.pending > 0 ? (
-        <p className="mb-4 text-xs text-muted-foreground">{t('attendance.pendingHint')}</p>
-      ) : null}
+      {stats.pending > 0 ?
+      <p className="mb-4 text-xs text-muted-foreground">{t('attendance.pendingHint')}</p> :
+      null}
 
       <Card>
         <CardContent className="p-4">
-          {loading ? (
-            <p className="py-10 text-center text-sm text-muted-foreground">
+          {loading ?
+          <p className="py-10 text-center text-sm text-muted-foreground">
               <Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin" />
               {t('common.loading')}
-            </p>
-          ) : rows.length === 0 ? (
-            <p className="py-10 text-center text-sm text-muted-foreground">{t('common.none')}</p>
-          ) : (
-            <div className="overflow-x-auto">
+            </p> :
+          rows.length === 0 ?
+          <p className="py-10 text-center text-sm text-muted-foreground">{t('common.none')}</p> :
+
+          <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -187,8 +187,8 @@ export default function Attendance() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {rows.map((row) => (
-                    <TableRow key={row.id}>
+                  {rows.map((row) =>
+                <TableRow key={row.id}>
                       <TableCell>
                         <p className="font-medium">{row.employee_name}</p>
                         <p className="text-xs text-muted-foreground">
@@ -210,32 +210,32 @@ export default function Attendance() {
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
-                          {row.geo_verified ? (
-                            <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100">
+                          {row.geo_verified ?
+                      <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100">
                               <CheckCircle2 className="mr-1 h-3 w-3" /> {t('attendance.verified')}
-                            </Badge>
-                          ) : (
-                            <Badge variant="secondary">
+                            </Badge> :
+
+                      <Badge variant="secondary">
                               <XCircle className="mr-1 h-3 w-3" /> {t('attendance.outside')}
                             </Badge>
-                          )}
-                          {typeof row.clock_in_distance_m === 'number' && (
-                            <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                      }
+                          {typeof row.clock_in_distance_m === 'number' &&
+                      <span className="flex items-center gap-1 text-xs text-muted-foreground">
                               <MapPin className="h-3 w-3" />
                               {row.clock_in_distance_m}m
                             </span>
-                          )}
+                      }
                         </div>
                       </TableCell>
                       <TableCell>
                         <ApprovalActions row={row} onDecide={decide} />
                       </TableCell>
                     </TableRow>
-                  ))}
+                )}
                 </TableBody>
               </Table>
             </div>
-          )}
+          }
         </CardContent>
       </Card>
 
@@ -244,8 +244,8 @@ export default function Attendance() {
       <AttendanceReportDialog
         open={reportOpen}
         onOpenChange={setReportOpen}
-        branch={activeBranch}
-      />
-    </div>
-  );
+        branch={activeBranch} />
+      
+    </div>);
+
 }
