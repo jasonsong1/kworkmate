@@ -123,9 +123,9 @@ export default function Attendance() {
               )}
               </SelectContent>
             </Select>
-            <Button variant="outline" onClick={() => setQrOpen(true)} disabled={!activeBranch} className="hidden">
-              <QrCode className="mr-2 h-4 w-4" /> {t('attendance.qr')}
-            </Button>
+            
+
+          
             <Button variant="outline" onClick={openKiosk} disabled={!activeBranch}>
               <Keyboard className="mr-2 h-4 w-4" /> {t('attendance.manualEntry')}
             </Button>
