@@ -4,7 +4,7 @@ import { Image } from '@/components/ui/image';
 import { Button } from '@/components/ui/button';
 import { useI18n } from '@/lib/i18n';
 
-export default function LogoField({ value, onChange, uploaded, onUploadedChange }) {
+export default function LogoField({ value, onChange, uploaded, onUploadedChange, label, hint }) {
   const { t } = useI18n();
   const [uploading, setUploading] = React.useState(false);
 
@@ -20,8 +20,8 @@ export default function LogoField({ value, onChange, uploaded, onUploadedChange 
 
   return (
     <div>
-      <p className="text-sm font-medium">{t('jobdesign.logo')}</p>
-      <p className="mb-3 text-xs text-muted-foreground">{t('jobdesign.logoHint')}</p>
+      <p className="text-sm font-medium">{label || t('jobdesign.logo')}</p>
+      <p className="mb-3 text-xs text-muted-foreground">{hint || t('jobdesign.logoHint')}</p>
       <div className="flex items-center gap-4">
         <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-xl border bg-muted/40">
           {value ? (

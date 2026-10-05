@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import QrCard from '@/components/attendance/QrCard';
+import { Image } from '@/components/ui/image';
 import { AlertCircle, CheckCircle2, Keyboard, Loader2, MapPin, QrCode } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -133,6 +134,7 @@ export default function Kiosk() {
   };
 
   const brand = (info && info.brand_color) || '#4338ca';
+  const logoUrl = (info && info.qr_design && info.qr_design.logo_url) || '';
 
   if (state === 'loading') {
     return (
@@ -158,6 +160,11 @@ export default function Kiosk() {
     <div className="min-h-screen bg-slate-50 pb-16">
       <header className="px-6 py-8 text-white" style={{ backgroundColor: brand }}>
         <div className="mx-auto max-w-xl text-center">
+          {logoUrl ? (
+            <div className="mx-auto mb-4 h-16 w-40 overflow-hidden rounded-xl bg-white/95 p-3">
+              <Image src={logoUrl} alt={info.company_name || ''} fittingType="fit" className="h-full w-full" />
+            </div>
+          ) : null}
           <p className="text-xs uppercase tracking-[0.2em] opacity-80">{info.company_name || ''}</p>
           <h1 className="mt-2 text-3xl font-bold">{info.branch_name}</h1>
           <p className="mt-1 text-sm opacity-90">Attendance kiosk · {info.date}</p>

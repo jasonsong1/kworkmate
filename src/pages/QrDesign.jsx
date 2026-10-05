@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
 import ColorField from '@/components/design/ColorField';
+import LogoField from '@/components/design/LogoField';
 import QrCard from '@/components/attendance/QrCard';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -20,7 +21,7 @@ export default function QrDesign() {
   const { t } = useI18n();
   const { toast } = useToast();
   const { company, role, reload } = useWorkspace();
-  const [design, setDesign] = useState({ title: '', note: '', brand_color: '', size: DEFAULT_SIZE });
+  const [design, setDesign] = useState({ title: '', note: '', brand_color: '', size: DEFAULT_SIZE, logo_url: '' });
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -30,9 +31,15 @@ export default function QrDesign() {
       title: saved.title || '',
       note: saved.note || '',
       brand_color: saved.brand_color || company.brand_color || '#111111',
-      size: Number(saved.size) || DEFAULT_SIZE
+      size: Number(saved.size) || DEFAULT_SIZE,
+      logo_url: saved.logo_url || ''
     });
   }, [company]);
+
+  const uploadLogo = async ({ file }) => {
+    const { file_url } = await base44.integrations.Core.UploadPublicFile({ file });
+    return { file_url };
+  };
 
   const save = async () => {
     if (!company) return;
@@ -65,6 +72,14 @@ export default function QrDesign() {
             <CardTitle className="text-base">{t('qrdesign.title')}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
+            <LogoField
+              value={design.logo_url}
+              onChange={(url) => setDesign((prev) => ({ ...prev, logo_url: url }))}
+              uploaded={uploadLogo}
+              onUploadedChange={(url) => setDesign((prev) => ({ ...prev, logo_url: url }))}
+              label={t('qrdesign.logo')}
+              hint={t('qrdesign.logoHint')} />
+
             <div>
               <Label>{t('qrdesign.heading')}</Label>
               <Input
