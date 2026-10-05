@@ -11,6 +11,7 @@ export const MODULES = [
   'interviews',
   'interview_settings',
   'roster',
+  'leave',
   'attendance',
   'templates',
   'settings'
@@ -27,6 +28,7 @@ export const SCOPED_MODULES = [
   'applicants',
   'interviews',
   'roster',
+  'leave',
   'attendance'
 ];
 
@@ -39,6 +41,7 @@ export const NO_DELETE_MODULES = [
   'interviews',
   'interview_settings',
   'roster',
+  'leave',
   'attendance',
   'templates',
   'settings'

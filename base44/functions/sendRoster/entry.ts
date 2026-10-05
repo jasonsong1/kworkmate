@@ -67,6 +67,7 @@ export default async function (req: Request) {
 
     const range = `${dayLabel(weekStart)} – ${dayLabel(weekEnd)}`;
     let sent = 0;
+    const notices: any[] = [];
     for (const [email, list] of byEmployee) {
       const sorted = list.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
       const name = sorted[0].employee_name || email;
@@ -90,6 +91,21 @@ export default async function (req: Request) {
         })
       });
       if (ok) sent += 1;
+      notices.push({
+        company_id: branch.company_id,
+        branch_id: branchId,
+        user_email: email,
+        type: 'shift_created',
+        title: copy.subject,
+        body: lines.map((line: string) => line.replace(/<[^>]+>/g, '')).join(' · '),
+        link: '/roster',
+        read: false
+      });
+    }
+
+    // The same news in the app's bell, so a person sees it without opening their inbox.
+    if (notices.length > 0) {
+      await base44.asServiceRole.entities.Notification.bulkCreate(notices).catch(() => null);
     }
 
     await base44.asServiceRole.entities.Shift.updateMany(
@@ -97,7 +113,7 @@ export default async function (req: Request) {
       { $set: { status: 'published' } }
     );
 
-    return Response.json({ ok: true, sent, shifts: shifts.length });
+    return Response.json({ ok: true, sent, shifts: shifts.length, notified: notices.length });
   } catch (error: any) {
     return Response.json({ error: error.message }, { status: 500 });
   }

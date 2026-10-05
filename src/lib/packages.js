@@ -18,6 +18,7 @@ export const MODULE_LABELS = {
   interviews: 'nav.interviews',
   interview_settings: 'nav.interview',
   roster: 'nav.roster',
+  leave: 'nav.leave',
   attendance: 'nav.attendance',
   templates: 'nav.templateDesign',
   settings: 'nav.settings'
@@ -35,6 +36,7 @@ const MODULE_BY_PREFIX = [
   ['/template-design', 'templates'],
   ['/job-design', 'templates'],
   ['/roster', 'roster'],
+  ['/leave', 'leave'],
   ['/attendance', 'attendance'],
   ['/clock', 'attendance'],
   ['/settings', 'settings']

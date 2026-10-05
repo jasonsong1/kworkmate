@@ -3,6 +3,7 @@ import { Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { Languages, LogOut, Menu, Moon, RefreshCw, Sun } from 'lucide-react';
 import AppSidebar from '@/components/AppSidebar';
 import CompanySwitcher from '@/components/company/CompanySwitcher';
+import NotificationBell from '@/components/NotificationBell';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
@@ -111,6 +112,8 @@ function BackofficeShell() {
               </SelectContent>
             </Select>
           }
+
+          <NotificationBell />
 
           <Button
             variant="ghost"

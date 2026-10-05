@@ -4,6 +4,7 @@ import PageHeader from '@/components/PageHeader';
 import ShiftDialog from '@/components/ShiftDialog';
 import RosterSettingsDialog from '@/components/RosterSettingsDialog';
 import AvailabilityBoard from '@/components/AvailabilityBoard';
+import CalendarSubscribeCard from '@/components/CalendarSubscribeCard';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { useToast } from '@/components/ui/use-toast';
@@ -25,6 +26,7 @@ export default function Roster() {
   const [employees, setEmployees] = useState([]);
   const [shifts, setShifts] = useState([]);
   const [submissions, setSubmissions] = useState([]);
+  const [approvedLeave, setApprovedLeave] = useState([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogDate, setDialogDate] = useState('');
@@ -38,13 +40,22 @@ export default function Roster() {
   const weekEnd = addDaysIso(weekStart, 6);
   const days = weekDates(weekStart);
 
+  // A day with approved leave is out of bounds: it shows as On leave and takes no shift.
+  const onLeaveFor = (email, date) =>
+    approvedLeave.some(
+      (row) =>
+        row.employee_email === email &&
+        date >= String(row.start_date || '').slice(0, 10) &&
+        String(row.end_date || row.start_date || '').slice(0, 10) >= date
+    );
+
   const load = useCallback(async () => {
     if (!activeBranch) {
       setLoading(false);
       return;
     }
     setLoading(true);
-    const [staff, list, subs] = await Promise.all([
+    const [staff, list, subs, leaveRows] = await Promise.all([
       base44.entities.EmployeeProfile
         .filter({ branch_id: activeBranch.id, status: 'active' }, { limit: 200 })
         .then((page) => page.items || []),
@@ -53,11 +64,25 @@ export default function Roster() {
         .then((page) => page.items || []),
       base44.entities.AvailabilitySubmission
         .filter({ branch_id: activeBranch.id }, { sort: '-created_date', limit: 500 })
+        .then((page) => page.items || []),
+      // Approved leave blocks the day: it is shown as On leave and no shift can sit on it.
+      base44.entities.LeaveRequest
+        .filter(
+          {
+            branch_id: activeBranch.id,
+            status: 'approved',
+            start_date: { $lte: weekEnd },
+            end_date: { $gte: weekStart }
+          },
+          { limit: 200 }
+        )
         .then((page) => page.items || [])
+        .catch(() => [])
     ]);
     setEmployees(staff);
     setShifts(list);
     setSubmissions(subs);
+    setApprovedLeave(leaveRows);
     setLoading(false);
   }, [activeBranch, weekStart, weekEnd]);
 
@@ -122,12 +147,28 @@ export default function Roster() {
     const shift = shifts.find((s) => s.id === dragId);
     setDragId('');
     if (!shift || (shift.employee_email === email && shift.date === date)) return;
+    if (onLeaveFor(email, date)) {
+      toast({ title: t('roster.onLeaveBlocked'), variant: 'destructive' });
+      return;
+    }
     const target = employees.find((employee) => employee.user_email === email);
     await base44.entities.Shift.update(shift.id, {
       employee_email: email,
       employee_name: target ? target.full_name : email,
       date
     });
+    // The person on the shift hears about it, and their subscribed calendar picks it up.
+    await base44.functions
+      .invoke('notifyShiftChange', {
+        branch_id: activeBranch.id,
+        employee_email: email,
+        change: 'updated',
+        date,
+        start_time: shift.start_time,
+        end_time: shift.end_time,
+        position: shift.position
+      })
+      .catch(() => null);
     await load();
   };
 
@@ -248,6 +289,11 @@ export default function Roster() {
                             onDrop={() => canManageRoster && moveShift(employee.user_email, day.date)}
                           >
                             <div className="space-y-1">
+                              {onLeaveFor(employee.user_email, day.date) ? (
+                                <div className="rounded-lg border border-amber-200 bg-amber-50 px-2 py-1.5 text-[11px] font-medium text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
+                                  {t('roster.onLeave')}
+                                </div>
+                              ) : null}
                               {shiftsFor(employee.user_email, day.date).map((shift) => (
                                 <div
                                   key={shift.id}
@@ -272,7 +318,7 @@ export default function Roster() {
                                   ) : null}
                                 </div>
                               ))}
-                              {canManageRoster && (
+                              {canManageRoster && !onLeaveFor(employee.user_email, day.date) && (
                               <button
                                 onClick={() => {
                                   setDialogDate(day.date);
@@ -322,6 +368,12 @@ export default function Roster() {
         branch={activeBranch}
         onSaved={load}
       />
+
+      {!canManageRoster ? (
+        <div className="mt-6">
+          <CalendarSubscribeCard />
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -15,6 +15,7 @@ export const ALL_MODULES = [
   'interviews',
   'interview_settings',
   'roster',
+  'leave',
   'attendance',
   'templates',
   'settings'

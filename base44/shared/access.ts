@@ -13,6 +13,7 @@ export const MODULES = [
   'interviews',
   'interview_settings',
   'roster',
+  'leave',
   'attendance',
   'templates',
   'settings'
@@ -43,8 +44,9 @@ export const PRESET_DEFAULTS = [
     order: 1,
     access: {
       // The team schedule is readable by everyone on shift; a person still only edits
-      // their own submitted availability.
+      // their own submitted availability. Leave is their own: they see and ask for it.
       roster: { level: 'read', scope: 'branch' },
+      leave: { level: 'read', scope: 'self' },
       attendance: { level: 'read', scope: 'self' }
     }
   },
@@ -58,6 +60,7 @@ export const PRESET_DEFAULTS = [
       employees: { level: 'read', scope: 'branch' },
       jobs: { level: 'read', scope: 'branch' },
       roster: { level: 'read', scope: 'branch' },
+      leave: { level: 'read', scope: 'self' },
       attendance: { level: 'read', scope: 'self' }
     }
   },
@@ -75,6 +78,7 @@ export const PRESET_DEFAULTS = [
       interviews: { level: 'read', scope: 'branch' },
       interview_settings: { level: 'read', scope: 'branch' },
       roster: { level: 'update', scope: 'branch' },
+      leave: { level: 'update', scope: 'branch' },
       attendance: { level: 'read', scope: 'branch' },
       templates: { level: 'read', scope: 'branch' }
     }
