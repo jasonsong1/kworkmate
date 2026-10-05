@@ -4,9 +4,9 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import PresetPicker from '@/components/PresetPicker';
 import { useI18n } from '@/lib/i18n';
-import { grantedModules, levelLabelKey, moduleLabelKey } from '@/lib/access';
+import { clampCell, grantedModules, isConfigurable, levelLabelKey, moduleLabelKey } from '@/lib/access';
 
 const FIXED_ROLES = ['company_admin', 'branch_manager'];
 
@@ -46,6 +46,10 @@ export default function CompanyRolesManager({ value, onChange, presets = [], dis
 
   const active = roles.find((role) => role.key === selected) || null;
   const activePreset = active ? presets.find((preset) => preset.key === active.preset_key) : null;
+  // The dashboard is every position's read-only home and the areas a store keeps as its record
+  // never offer create and delete, so neither is shown on a link.
+  const granted = activePreset ? grantedModules(activePreset.access).filter(isConfigurable) : [];
+  const presetKeys = presets.map((preset) => preset.key);
 
   return (
     <div className="space-y-4">
@@ -84,27 +88,21 @@ export default function CompanyRolesManager({ value, onChange, presets = [], dis
             {!disabled && (
               <div className="w-full sm:w-56">
                 <Label className="mb-1 block text-xs">{t('role.changePreset')}</Label>
-                <Select value={active.preset_key || ''} onValueChange={(next) => linkPreset(active.key, next)}>
-                  <SelectTrigger className="h-9 text-sm">
-                    <SelectValue placeholder={t('role.pickPreset')} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {presets.map((preset) => (
-                      <SelectItem key={preset.key} value={preset.key}>
-                        {presetName(preset.key)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <PresetPicker
+                  value={active.preset_key || ''}
+                  onChange={(next) => linkPreset(active.key, next)}
+                  options={presetKeys}
+                  nameOf={presetName}
+                  placeholder={t('role.pickPreset')} />
               </div>
             )}
           </div>
 
           <div className="mt-3 flex flex-wrap gap-1.5">
-            {activePreset && grantedModules(activePreset.access).length > 0 ? (
-              grantedModules(activePreset.access).map((module) => (
+            {granted.length > 0 ? (
+              granted.map((module) => (
                 <Badge key={module} variant="secondary" className="font-normal">
-                  {t(moduleLabelKey(module))} · {t(levelLabelKey(activePreset.access[module].level))}
+                  {t(moduleLabelKey(module))} · {t(levelLabelKey(clampCell(module, activePreset.access[module]).level))}
                 </Badge>
               ))
             ) : (
@@ -134,18 +132,13 @@ export default function CompanyRolesManager({ value, onChange, presets = [], dis
           </div>
           <div>
             <Label className="mb-1 block text-xs">{t('role.preset')}</Label>
-            <Select value={presetKey} onValueChange={setPresetKey}>
-              <SelectTrigger className="h-9 w-52 text-sm">
-                <SelectValue placeholder={t('role.pickPreset')} />
-              </SelectTrigger>
-              <SelectContent>
-                {presets.map((preset) => (
-                  <SelectItem key={preset.key} value={preset.key}>
-                    {presetName(preset.key)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <PresetPicker
+              value={presetKey}
+              onChange={setPresetKey}
+              options={presetKeys}
+              nameOf={presetName}
+              placeholder={t('role.pickPreset')}
+              className="w-52" />
           </div>
           <Button type="button" variant="outline" onClick={addRole} disabled={!label.trim() || !presetKey}>
             <Plus className="mr-2 h-4 w-4" /> {t('role.add')}
