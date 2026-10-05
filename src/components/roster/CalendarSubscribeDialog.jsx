@@ -81,7 +81,7 @@ export default function CalendarSubscribeDialog({ open, onOpenChange }) {
             {t('leave.rotateLink')}
           </Button>
           <Button onClick={save} disabled={!url}>
-            {t('common.save')}
+            {t('common.copy')}
           </Button>
         </DialogFooter>
       </DialogContent>
