@@ -1,0 +1,150 @@
+{
+  "name": "LeaveType",
+  "type": "object",
+  "properties": {
+    "company_id": {
+      "type": "string"
+    },
+    "key": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string"
+    },
+    "name_ko": {
+      "type": "string"
+    },
+    "emoji": {
+      "type": "string"
+    },
+    "paid": {
+      "type": "boolean",
+      "default": true
+    },
+    "accrual_method": {
+      "type": "string",
+      "enum": [
+        "ordinary_hours",
+        "none"
+      ],
+      "default": "none"
+    },
+    "accrual_rate": {
+      "type": "number",
+      "default": 0
+    },
+    "employment_types": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "grant_enabled": {
+      "type": "boolean",
+      "default": false
+    },
+    "grant_hours": {
+      "type": "number",
+      "default": 0
+    },
+    "grant_period": {
+      "type": "string",
+      "enum": [
+        "yearly",
+        "monthly"
+      ],
+      "default": "yearly"
+    },
+    "grant_anchor": {
+      "type": "string",
+      "enum": [
+        "calendar_year",
+        "anniversary"
+      ],
+      "default": "calendar_year"
+    },
+    "grant_employment_types": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "expiry_enabled": {
+      "type": "boolean",
+      "default": false
+    },
+    "expiry_months": {
+      "type": "number",
+      "default": 12
+    },
+    "requires_certificate": {
+      "type": "boolean",
+      "default": false
+    },
+    "custom": {
+      "type": "boolean",
+      "default": false
+    },
+    "active": {
+      "type": "boolean",
+      "default": true
+    },
+    "order": {
+      "type": "number",
+      "default": 10
+    }
+  },
+  "required": [
+    "key"
+  ],
+  "rls": {
+    "read": {
+      "$or": [
+        {
+          "data.company_id": "{{user.data.company_id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "create": {
+      "$or": [
+        {
+          "data.company_id": "{{user.data.company_id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "$or": [
+        {
+          "data.company_id": "{{user.data.company_id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "delete": {
+      "$or": [
+        {
+          "data.company_id": "{{user.data.company_id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    }
+  }
+}
