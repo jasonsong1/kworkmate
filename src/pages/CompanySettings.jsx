@@ -6,6 +6,7 @@ import CompanyAdminsCard from '@/components/CompanyAdminsCard';
 import PackageCard from '@/components/package/PackageCard';
 import OnboardingDocsCard from '@/components/company/OnboardingDocsCard';
 import PayMultipliersCard, { payMultipliers } from '@/components/company/PayMultipliersCard';
+import PublicHolidayCard from '@/components/company/PublicHolidayCard';
 import CompanyRolesManager from '@/components/CompanyRolesManager';
 import AccessMatrixEditor from '@/components/access/AccessMatrixEditor';
 import { Button } from '@/components/ui/button';
@@ -299,10 +300,13 @@ export default function CompanySettings() {
         </TabsContent>
 
         <TabsContent value="pay">
-          <PayMultipliersCard
-            value={form.pay_multipliers}
-            onChange={(next) => set('pay_multipliers', next)}
-            disabled={role !== 'company_admin'} />
+          <div className="space-y-4">
+            <PayMultipliersCard
+              value={form.pay_multipliers}
+              onChange={(next) => set('pay_multipliers', next)}
+              disabled={role !== 'company_admin'} />
+            <PublicHolidayCard multiplier={payMultipliers(form.pay_multipliers).public_holiday} />
+          </div>
         </TabsContent>
       </Tabs>
     </div>);

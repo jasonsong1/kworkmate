@@ -1,5 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.52';
-import { ALL_FEATURES, ALL_MODULES, packageState, today } from '../../shared/packages.ts';
+import { ALL_FEATURES, ALL_MODULES, packageState, resolveLimit, today } from '../../shared/packages.ts';
 import { mergePresets, presetFor, resolveAccess, resolvePresetKey } from '../../shared/access.ts';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -51,6 +51,9 @@ export default async function (req) {
     }
 
     const state = packageState(company);
+    // The package sets the ceilings; a super admin can pin this company's own numbers instead.
+    const jobLimit = resolveLimit(company.job_limit_override, state.jobLimit);
+    const employeeLimit = resolveLimit(company.employee_limit_override, state.employeeLimit);
     let jobLock = company.package_job_lock === true;
 
     // A "pay as you go" ad stops after 30 days: it closes itself and the company cannot open
@@ -67,7 +70,12 @@ export default async function (req) {
     }
 
     const openJobs = await base44.asServiceRole.entities.Job.count({ company_id: company.id, status: 'open' });
-    const atLimit = state.jobLimit !== null && openJobs >= state.jobLimit;
+    const atLimit = jobLimit !== null && openJobs >= jobLimit;
+    // Employees still on the books count against the company's ceiling.
+    const employeesTotal = await base44.asServiceRole.entities.EmployeeProfile.count({
+      company_id: company.id,
+      status: { $ne: 'inactive' }
+    }).catch(() => 0);
 
     // Who is signed in, and which position preset that is.
     const isCompanyAdmin = isSuperAdmin || roleKey === 'company_admin';
@@ -102,8 +110,14 @@ export default async function (req) {
       assigned: state.assigned,
       modules: state.modules,
       features: isSuperAdmin ? { ...ALL_FEATURES } : state.features,
-      job_limit: state.jobLimit,
+      job_limit: jobLimit,
+      package_job_limit: state.jobLimit,
+      job_limit_override: company.job_limit_override ?? '',
       jobs_open: openJobs,
+      employee_limit: employeeLimit,
+      package_employee_limit: state.employeeLimit,
+      employee_limit_override: company.employee_limit_override ?? '',
+      employees_total: employeesTotal,
       job_lock: jobLock,
       posting_days: state.postingDays,
       video_interview: state.features.video_interview,

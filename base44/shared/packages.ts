@@ -1,7 +1,8 @@
 // Pricing packages: the single table every function reads when it has to judge what a
 // company paid for — which modules it may open, which hiring features it unlocked, how many
-// job ads it can run at once and how long its access lasts. The back office reads the same
-// numbers from the server, so a screen and the rule behind it can never drift apart.
+// job ads it can run at once, how many employees it covers and how long its access lasts.
+// The back office reads the same numbers from the server, so a screen and the rule behind
+// it can never drift apart.
 export const ACCESS_DAYS = 45;
 export const JOB_AD_DAYS = 30;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -55,22 +56,25 @@ export const ALL_FEATURES = {
   unified_dashboard: true
 };
 
-// jobLimit null means no limit. postingDays 0 means an ad never expires by itself.
+// jobLimit / employeeLimit null means no limit. postingDays 0 means an ad never expires by itself.
 export const PACKAGES = {
   payg: {
     jobLimit: 1,
+    employeeLimit: 2,
     postingDays: JOB_AD_DAYS,
     modules: ['dashboard', 'jobs', 'applicants', 'interviews', 'templates', 'settings'],
     features: { ...NO_FEATURES }
   },
   starter: {
     jobLimit: 2,
+    employeeLimit: 5,
     postingDays: 0,
     modules: ALL_MODULES,
     features: { ...NO_FEATURES, mini_interview: true, onboarding: true, auto_roster: true }
   },
   growth: {
     jobLimit: 6,
+    employeeLimit: 15,
     postingDays: 0,
     modules: ALL_MODULES,
     features: {
@@ -84,6 +88,7 @@ export const PACKAGES = {
   },
   enterprise: {
     jobLimit: null,
+    employeeLimit: null,
     postingDays: 0,
     modules: ALL_MODULES,
     features: { ...ALL_FEATURES }
@@ -95,6 +100,15 @@ export const PACKAGE_KEYS = Object.keys(PACKAGES);
 export function normalizePackage(value) {
   const key = String(value || '').trim().toLowerCase();
   return PACKAGE_KEYS.includes(key) ? key : '';
+}
+
+// A super admin can pin a company's own ceiling instead of the package default: an empty
+// value keeps the package default, 0 lifts the ceiling altogether, anything higher is the cap.
+export function resolveLimit(override, fallback) {
+  if (override === null || override === undefined || override === '') return fallback;
+  const value = Number(override);
+  if (!Number.isFinite(value)) return fallback;
+  return value <= 0 ? null : value;
 }
 
 // A date the platform stores as YYYY-MM-DD, or '' when the value is not one.
@@ -127,6 +141,7 @@ export function packageState(company, now = Date.now()) {
       modules: ALL_MODULES,
       features: { ...ALL_FEATURES },
       jobLimit: null,
+      employeeLimit: null,
       postingDays: 0,
       startDate: '',
       expiresOn: '',
@@ -148,6 +163,7 @@ export function packageState(company, now = Date.now()) {
     modules: meta.modules,
     features: { ...meta.features },
     jobLimit: meta.jobLimit,
+    employeeLimit: meta.employeeLimit,
     postingDays: meta.postingDays,
     startDate: dayIso(from),
     expiresOn: dayIso(lastDay),

@@ -110,6 +110,12 @@
       "type": "boolean",
       "default": false
     },
+    "job_limit_override": {
+      "type": "number"
+    },
+    "employee_limit_override": {
+      "type": "number"
+    },
     "pay_multipliers": {
       "type": "object"
     },

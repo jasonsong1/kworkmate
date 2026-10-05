@@ -86,13 +86,17 @@ export default async function (req: Request) {
     const stored = rowsOf(
       await base44.asServiceRole.entities.LeaveType.filter({ company_id: companyId }, { limit: 100 })
     );
-    const types = activeTypes((stored.length > 0 ? stored : DEFAULT_LEAVE_TYPES).map(normaliseType));
+    // Every leave the company has set up, and the ones it is offering right now. A leave
+    // switched off keeps its settings and its balances, so it can be switched back on.
+    const allTypes = (stored.length > 0 ? stored : DEFAULT_LEAVE_TYPES).map(normaliseType);
+    const types = activeTypes(allTypes);
 
     if (staff.length === 0) {
       return Response.json({
         ok: true,
         scope: teamView ? 'team' : 'self',
         types,
+        all_types: allTypes,
         balances: [],
         requests: [],
         can_manage: Boolean(manages),
@@ -230,6 +234,7 @@ export default async function (req: Request) {
       can_manage: Boolean(manages),
       can_configure: me.role === 'admin' || me.app_role === 'company_admin',
       types,
+      all_types: allTypes,
       staff: staff.map((person: any) => ({
         email: person.user_email,
         name: person.full_name || person.user_email,

@@ -26,7 +26,7 @@ import { base44 } from '@/api/base44Client';
 
 export default function Branches() {
   const { t } = useI18n();
-  const { company, branches, role, activeBranch, selectBranch, reload } = useWorkspace();
+  const { company, branches, role, activeBranch, selectBranch, reload, feature } = useWorkspace();
   const { toast } = useToast();
   const [addOpen, setAddOpen] = useState(false);
   const [stats, setStats] = useState({});
@@ -126,6 +126,8 @@ export default function Branches() {
   })();
 
   const isAdmin = role === 'company_admin';
+  // A second store is part of the top package only, so the button is never offered without it.
+  const canAddBranch = isAdmin && feature('multi_branch');
   // Staff and managers never see a deactivated branch, so this only ever hides anything for
   // the company admin who can bring it back.
   const visibleBranches = showInactive ? branches : branches.filter((branch) => branch.is_active !== false);
@@ -145,7 +147,7 @@ export default function Branches() {
         title={t('branches.title')}
         subtitle={t('branches.subtitle')}
         actions={
-          isAdmin && (
+          canAddBranch && (
             <Button onClick={() => setAddOpen(true)}>
               <Plus className="mr-2 h-4 w-4" /> {t('branches.add')}
             </Button>

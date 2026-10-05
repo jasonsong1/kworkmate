@@ -64,7 +64,8 @@ export default function PayMultipliersCard({ value, onChange, disabled }) {
             </div>
           ))}
         </div>
-        <p className="mt-4 text-xs text-muted-foreground">{t('settings.payExample')}</p>
+        <p className="mt-4 text-xs text-muted-foreground">{t('settings.payDayHint')}</p>
+        <p className="mt-1 text-xs text-muted-foreground">{t('settings.payExample')}</p>
       </CardContent>
     </Card>
   );
