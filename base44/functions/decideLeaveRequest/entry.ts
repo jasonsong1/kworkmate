@@ -108,6 +108,7 @@ export default async function (req: Request) {
               : `Leave cancelled · ${request.leave_type_name}`,
         body: `${range} · ${hours}h${reason ? ` · ${reason}` : ''}`,
         link: '/leave',
+        push: true,
         mail: (lang: string) =>
           leaveDecidedMail(lang, {
             typeName: request.leave_type_name,

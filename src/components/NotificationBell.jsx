@@ -73,6 +73,9 @@ export default function NotificationBell() {
             ))
           )}
         </div>
+        <p className="border-t bg-muted/40 px-3 py-2 text-[11px] leading-snug text-muted-foreground">
+          {t('leave.pushNote')}
+        </p>
       </PopoverContent>
     </Popover>
   );

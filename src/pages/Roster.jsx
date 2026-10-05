@@ -164,6 +164,7 @@ export default function Roster() {
         branch_id: activeBranch.id,
         employee_email: email,
         change: 'updated',
+        published: shift.status === 'published',
         date,
         start_time: shift.start_time,
         end_time: shift.end_time,

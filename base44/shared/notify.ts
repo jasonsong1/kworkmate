@@ -38,7 +38,8 @@ export async function notifyStaff(
     title,
     body,
     link,
-    mail
+    mail,
+    push
   }: {
     company?: any;
     branch?: any;
@@ -48,10 +49,11 @@ export async function notifyStaff(
     body: string;
     link?: string;
     mail?: (lang: string, recipient: any) => any;
+    push?: boolean;
   }
 ) {
   const list = (recipients || []).filter((person) => person && person.email);
-  if (list.length === 0) return { notified: 0, emailed: 0 };
+  if (list.length === 0) return { notified: 0, emailed: 0, pushed: 0 };
 
   const rows = list.map((person) => ({
     company_id: (company && company.id) || '',
@@ -82,7 +84,64 @@ export async function notifyStaff(
     });
     if (ok) emailed += 1;
   }
-  return { notified: rows.length, emailed };
+  // The same news on the phone, for whoever is using the installed app with notifications allowed.
+  const pushed = push ? await pushStaff(base44, { recipients: list, title, body, link }) : 0;
+
+  return { notified: rows.length, emailed, pushed };
+}
+
+// Native mobile push: one message each, to the people who allowed notifications on a phone.
+// Delivery needs a native build with push credentials, so a failure here is expected on the web
+// app and must never break the leave or roster action that triggered it.
+export async function pushStaff(
+  base44: any,
+  {
+    recipients,
+    title,
+    body,
+    link
+  }: {
+    recipients: any[];
+    title?: string;
+    body?: string;
+    link?: string;
+  }
+) {
+  const list = (recipients || []).filter((person) => person && person.email);
+  if (list.length === 0) return 0;
+
+  let users: any[] = [];
+  try {
+    users = rowsOf(await base44.asServiceRole.entities.User.list());
+  } catch (error: any) {
+    console.warn('push skipped: app users could not be read', error && error.message);
+    return 0;
+  }
+  const idByEmail = new Map<string, string>();
+  users.forEach((user: any) => {
+    if (user && user.email) idByEmail.set(String(user.email).toLowerCase(), user.id);
+  });
+
+  let pushed = 0;
+  for (const person of list) {
+    const userId = idByEmail.get(String(person.email).toLowerCase());
+    if (!userId) continue;
+    try {
+      await base44.asServiceRole.integrations.Core.SendPushNotification({
+        user_id: userId,
+        title: String(person.title || title || '').slice(0, 100),
+        content: String(person.body || body || '').slice(0, 500),
+        action_label: 'Open',
+        action_url: link || '/'
+      });
+      pushed += 1;
+    } catch (error: any) {
+      // No phone to reach: the app is not installed, credentials are not set, or the person
+      // has not allowed notifications. The bell and the email still carry the news.
+      console.warn('push not delivered', error && error.message);
+    }
+  }
+  return pushed;
 }
 
 // The language each person on a branch reads their email in.

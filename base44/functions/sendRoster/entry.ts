@@ -1,6 +1,7 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.52';
 import { sendEmail, brandedEmail } from '../../shared/email.ts';
 import { employeeLanguage, rosterMail } from '../../shared/employeeMail.ts';
+import { pushStaff } from '../../shared/notify.ts';
 
 function addDays(iso: string, days: number) {
   const d = new Date(`${iso}T00:00:00Z`);
@@ -68,6 +69,7 @@ export default async function (req: Request) {
     const range = `${dayLabel(weekStart)} – ${dayLabel(weekEnd)}`;
     let sent = 0;
     const notices: any[] = [];
+    const pushRecipients: any[] = [];
     for (const [email, list] of byEmployee) {
       const sorted = list.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
       const name = sorted[0].employee_name || email;
@@ -101,19 +103,27 @@ export default async function (req: Request) {
         link: '/roster',
         read: false
       });
+      // Confirming the week is the moment a person needs to hear about on their phone.
+      pushRecipients.push({
+        email,
+        title: copy.subject,
+        body: lines.map((line: string) => line.replace(/<[^>]+>/g, '')).join(' · ')
+      });
     }
 
     // The same news in the app's bell, so a person sees it without opening their inbox.
     if (notices.length > 0) {
       await base44.asServiceRole.entities.Notification.bulkCreate(notices).catch(() => null);
     }
+    // The confirmed week also reaches the phone, for anyone using the installed app.
+    const pushed = await pushStaff(base44, { recipients: pushRecipients, link: '/roster' });
 
     await base44.asServiceRole.entities.Shift.updateMany(
       { branch_id: branchId, date: { $gte: weekStart, $lte: weekEnd } },
       { $set: { status: 'published' } }
     );
 
-    return Response.json({ ok: true, sent, shifts: shifts.length, notified: notices.length });
+    return Response.json({ ok: true, sent, shifts: shifts.length, notified: notices.length, pushed });
   } catch (error: any) {
     return Response.json({ error: error.message }, { status: 500 });
   }

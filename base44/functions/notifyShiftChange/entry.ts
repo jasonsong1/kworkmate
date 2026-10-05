@@ -12,6 +12,8 @@ export default async function (req: Request) {
 
     const body = await req.json().catch(() => ({}));
     const change = ['created', 'updated', 'cancelled'].includes(body.change) ? body.change : '';
+    // Only a shift already out to staff is worth a phone alert: draft edits stay quiet.
+    const published = body.published === true;
     const email = String(body.employee_email || '');
     const branchId = String(body.branch_id || '');
     if (!change || !email || !branchId) {
@@ -49,6 +51,7 @@ export default async function (req: Request) {
       title: `${title} · ${branch.name}`,
       body: `${when}${body.position ? ` · ${body.position}` : ''}`,
       link: '/roster',
+      push: published,
       mail: (lang: string) =>
         shiftChangedMail(lang, {
           name: recipients[0].name,
