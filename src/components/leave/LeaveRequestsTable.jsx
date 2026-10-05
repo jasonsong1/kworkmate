@@ -124,6 +124,17 @@ export default function LeaveRequestsTable({ requests, canManage, showEmployee, 
                         {t('leave.cancel')}
                       </Button>
                     ) : null}
+                    {/* The person who asked can take the request back before it is decided. */}
+                    {!canManage && !showEmployee && ['pending', 'approved'].includes(request.status) ? (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => decide(request, 'cancel', t('leave.cancelledByEmployee'))}
+                        disabled={busy}
+                      >
+                        {t('leave.cancel')}
+                      </Button>
+                    ) : null}
                   </div>
                 </TableCell>
               </TableRow>
