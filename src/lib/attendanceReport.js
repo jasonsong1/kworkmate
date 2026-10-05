@@ -1,5 +1,5 @@
 import { jsPDF } from 'jspdf';
-import { dayTypeFor, holidayLabel, localDate, stateLabel } from '@/lib/holidays';
+import { dayTypeFor, localDate, stateLabel } from '@/lib/holidays';
 
 const APPROVAL_LABEL = { pending: 'Pending', approved: 'Approved', rejected: 'Rejected' };
 const DAY_TYPE_LABEL = { weekday: 'Weekday', saturday: 'Saturday', sunday: 'Sunday' };
@@ -35,7 +35,7 @@ function multiplierFor(key, multipliers) {
 // so every punch carries the penalty rate it actually earned.
 function payRow(row, options) {
   const date = dayPart(row.clock_in_at, options.state);
-  const type = dayTypeFor(date, options.state);
+  const type = dayTypeFor(date, options.state, options.regional);
   const multiplier = multiplierFor(type.key, options.multipliers);
   const rate = options.rates[String(row.employee_email || '').toLowerCase()];
   const pay = row.minutes && rate ? (row.minutes / 60) * Number(rate) * multiplier : null;
@@ -43,7 +43,7 @@ function payRow(row, options) {
     date,
     dayType:
       type.key === 'public_holiday'
-        ? `Public holiday · ${holidayLabel(type.holidayKey, 'en')}`
+        ? `Public holiday · ${(type.holiday && type.holiday.en) || ''}`
         : DAY_TYPE_LABEL[type.key] || DAY_TYPE_LABEL.weekday,
     rateText: `×${multiplier}`,
     pay
@@ -51,7 +51,7 @@ function payRow(row, options) {
 }
 
 export function reportRows(entries, options = {}) {
-  const opts = { state: '', multipliers: null, rates: {}, ...options };
+  const opts = { state: '', multipliers: null, rates: {}, regional: {}, ...options };
   return entries.map((row) => {
     const pay = payRow(row, opts);
     return [
@@ -73,7 +73,7 @@ export function reportRows(entries, options = {}) {
 
 // Rejected punches are not paid, so they stay out of the estimate.
 export function estimatedPay(entries, options = {}) {
-  const opts = { state: '', multipliers: null, rates: {}, ...options };
+  const opts = { state: '', multipliers: null, rates: {}, regional: {}, ...options };
   return entries.reduce((total, row) => {
     if ((row.approval_status || 'approved') === 'rejected') return total;
     const pay = payRow(row, opts).pay;

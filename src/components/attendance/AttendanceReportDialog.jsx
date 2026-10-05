@@ -14,7 +14,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { useI18n } from '@/lib/i18n';
 import { addDaysIso, todayIso } from '@/lib/bh';
 import { downloadCsv, downloadPdf, estimatedPay, reportRows, REPORT_HEADERS } from '@/lib/attendanceReport';
-import { stateFromBranch, stateLabel } from '@/lib/holidays';
+import { regionalMap, stateFromBranch, stateLabel } from '@/lib/holidays';
 import { payMultipliers } from '@/components/company/PayMultipliersCard';
 import { useWorkspace } from '@/lib/WorkspaceContext';
 import { base44 } from '@/api/base44Client';
@@ -54,6 +54,16 @@ async function fetchRates(branchId) {
   return rates;
 }
 
+// The dates imported from the official state schedule count as holidays once applied.
+async function fetchRegional(companyId, state) {
+  if (!companyId || !state) return [];
+  const page = await base44.entities.RegionalHoliday.filter(
+    { company_id: companyId, state, status: 'applied' },
+    { limit: 300 }
+  );
+  return page.items || [];
+}
+
 export default function AttendanceReportDialog({ open, onOpenChange, branch }) {
   const { t, lang } = useI18n();
   const { company } = useWorkspace();
@@ -61,6 +71,7 @@ export default function AttendanceReportDialog({ open, onOpenChange, branch }) {
   const [to, setTo] = useState(todayIso());
   const [rows, setRows] = useState([]);
   const [rates, setRates] = useState({});
+  const [regional, setRegional] = useState({});
   const [loading, setLoading] = useState(false);
   const [ready, setReady] = useState(false);
 
@@ -68,17 +79,20 @@ export default function AttendanceReportDialog({ open, onOpenChange, branch }) {
   const options = {
     state,
     multipliers: payMultipliers(company ? company.pay_multipliers : null),
-    rates
+    rates,
+    regional
   };
 
   const run = async () => {
     if (!branch || !from || !to) return;
     setLoading(true);
-    const [entries, employeeRates] = await Promise.all([
+    const [entries, employeeRates, imported] = await Promise.all([
       fetchRange(branch.id, from, to),
-      fetchRates(branch.id)
+      fetchRates(branch.id),
+      fetchRegional(company ? company.id : '', state)
     ]);
     setRates(employeeRates);
+    setRegional(regionalMap(imported));
     setRows(entries);
     setReady(true);
     setLoading(false);

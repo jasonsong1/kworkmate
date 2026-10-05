@@ -1,0 +1,118 @@
+{
+  "name": "RegionalHoliday",
+  "type": "object",
+  "properties": {
+    "company_id": {
+      "type": "string"
+    },
+    "state": {
+      "type": "string"
+    },
+    "year": {
+      "type": "number"
+    },
+    "date": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string"
+    },
+    "name_ko": {
+      "type": "string"
+    },
+    "region": {
+      "type": "string"
+    },
+    "scope": {
+      "type": "string",
+      "enum": [
+        "statewide",
+        "regional",
+        "one_off"
+      ],
+      "default": "regional"
+    },
+    "source_label": {
+      "type": "string"
+    },
+    "source_url": {
+      "type": "string"
+    },
+    "note": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "draft",
+        "applied"
+      ],
+      "default": "draft"
+    },
+    "imported_by_email": {
+      "type": "string"
+    },
+    "imported_at": {
+      "type": "string"
+    },
+    "applied_at": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "company_id",
+    "state",
+    "date",
+    "name"
+  ],
+  "rls": {
+    "read": {
+      "$or": [
+        {
+          "data.company_id": "{{user.data.company_id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "create": {
+      "$or": [
+        {
+          "data.company_id": "{{user.data.company_id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "$or": [
+        {
+          "data.company_id": "{{user.data.company_id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "delete": {
+      "$or": [
+        {
+          "data.company_id": "{{user.data.company_id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    }
+  }
+}

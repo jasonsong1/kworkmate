@@ -261,33 +261,71 @@ export function holidayKeyFor(dateIso, state) {
   return year[day] || '';
 }
 
-export function holidayLabel(key, lang) {
-  const name = NAME[key];
-  if (!name) return '';
-  return lang === 'ko' ? name.ko : name.en;
+// The holiday names in the shape the screens read them in.
+function standardHoliday(dateIso, state) {
+  const key = holidayKeyFor(dateIso, state);
+  if (!key) return null;
+  return { key, holiday: NAME[key] || { en: key, ko: key } };
 }
 
-// Which penalty rate a date earns: the weekday comes from the date, the holiday from
-// the branch's state calendar.
-export function dayTypeFor(dateIso, state) {
-  const holidayKey = holidayKeyFor(dateIso, state);
-  if (holidayKey) return { key: 'public_holiday', holidayKey };
+function regionalHoliday(dateIso, state, regional) {
+  const record = regional ? regional[`${normalizeState(state)}:${String(dateIso).slice(0, 10)}`] : null;
+  if (!record) return null;
+  return { record, holiday: { en: record.name || '', ko: record.name_ko || record.name || '' } };
+}
+
+// Holidays imported from the official state schedule, indexed by state and date. Only the
+// ones the employer applied earn the holiday rate.
+export function regionalMap(records) {
+  const map = {};
+  (records || []).forEach((record) => {
+    if (!record || !record.date || (record.status && record.status !== 'applied')) return;
+    const day = String(record.date).slice(0, 10);
+    map[`${normalizeState(record.state)}:${day}`] = record;
+  });
+  return map;
+}
+
+// Which penalty rate a date earns: the weekday comes from the date, the holiday from the
+// branch's state calendar and anything imported from the official schedule.
+export function dayTypeFor(dateIso, state, regional) {
   const day = dateIso ? String(dateIso).slice(0, 10) : '';
+  const registered = day ? regionalHoliday(day, state, regional) : null;
+  if (registered) {
+    return {
+      key: 'public_holiday',
+      holidayKey: '',
+      holiday: registered.holiday,
+      sourceUrl: registered.record.source_url || ''
+    };
+  }
+  const standard = day ? standardHoliday(day, state) : null;
+  if (standard) return { key: 'public_holiday', holidayKey: standard.key, holiday: standard.holiday, sourceUrl: '' };
   const weekday = day ? weekdayOf(day) : 1;
-  if (weekday === 6) return { key: 'saturday', holidayKey: '' };
-  if (weekday === 0) return { key: 'sunday', holidayKey: '' };
-  return { key: 'weekday', holidayKey: '' };
+  if (weekday === 6) return { key: 'saturday', holidayKey: '', holiday: null, sourceUrl: '' };
+  if (weekday === 0) return { key: 'sunday', holidayKey: '', holiday: null, sourceUrl: '' };
+  return { key: 'weekday', holidayKey: '', holiday: null, sourceUrl: '' };
 }
 
-export function upcomingHolidays(state, fromIso, count = 4) {
+export function upcomingHolidays(state, fromIso, count = 4, regional) {
   const code = normalizeState(state);
   if (!code || !fromIso) return [];
   const year = Number(String(fromIso).slice(0, 4));
-  const all = [
+  const standard = [
     ...Object.entries(holidaysForYear(code, year)),
     ...Object.entries(holidaysForYear(code, year + 1))
-  ]
-    .map(([date, key]) => ({ date, key }))
-    .sort((a, b) => a.date.localeCompare(b.date));
-  return all.filter((holiday) => holiday.date >= fromIso).slice(0, count);
+  ].map(([date, key]) => ({
+    date,
+    holiday: NAME[key] || { en: key, ko: key },
+    sourceUrl: ''
+  }));
+  const registered = Object.entries(regional || {})
+    .filter(([key]) => key.startsWith(`${code}:`))
+    .map(([key, record]) => ({
+      date: key.slice(code.length + 1),
+      holiday: { en: record.name || '', ko: record.name_ko || record.name || '' },
+      sourceUrl: record.source_url || ''
+    }));
+  const merged = [...standard, ...registered].sort((a, b) => a.date.localeCompare(b.date));
+  return merged.filter((holiday) => holiday.date >= fromIso).slice(0, count);
 }
