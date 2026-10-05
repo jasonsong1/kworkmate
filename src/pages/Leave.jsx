@@ -162,9 +162,11 @@ export default function Leave() {
                   <LeaveRequestsTable requests={requests} canManage={false} showEmployee={false} onDecided={load} />
                 </CardContent>
               </Card>
-              <CalendarSubscribeCard />
             </div>
           )}
+
+          {/* Everyone gets their own calendar feed, managers included. */}
+          <CalendarSubscribeCard />
         </div>
       )}
 
