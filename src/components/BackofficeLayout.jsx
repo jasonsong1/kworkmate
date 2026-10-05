@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { Languages, LogOut, Menu, Moon, RefreshCw, Sun } from 'lucide-react';
+import { Languages, Loader2, LogOut, Menu, Moon, RefreshCw, Sun } from 'lucide-react';
+import AccessDenied from '@/components/AccessDenied';
 import AppSidebar from '@/components/AppSidebar';
 import CompanySwitcher from '@/components/company/CompanySwitcher';
 import NotificationBell from '@/components/NotificationBell';
@@ -24,6 +25,7 @@ function BackofficeShell() {
     selectBranch,
     isPlatformAdmin,
     me,
+    loading,
     pkg,
     hasModule,
     accessError,
@@ -66,6 +68,17 @@ function BackofficeShell() {
     await base44.auth.logout();
     navigate('/login', { replace: true });
   };
+
+  // Nothing is decided until the workspace has answered, and then only an account the platform
+  // has on file for a company gets in. The platform admin is staff, so they always pass.
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>);
+  }
+  if (!me) return <Navigate to="/login" replace />;
+  if (!company && !isPlatformAdmin) return <AccessDenied />;
 
   return (
     <div className="flex min-h-screen bg-background">

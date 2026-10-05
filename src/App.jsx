@@ -15,7 +15,6 @@ import Register from '@/pages/Register';
 import ForgotPassword from '@/pages/ForgotPassword';
 import ResetPassword from '@/pages/ResetPassword';
 import Home from '@/pages/Home';
-import Setup from '@/pages/Setup';
 import Branches from '@/pages/Branches';
 import PropertySetup from '@/pages/PropertySetup';
 import Employees from '@/pages/Employees';
@@ -83,11 +82,6 @@ const AuthenticatedApp = () => {
       <Route path="/register" element={<Register />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/reset-password" element={<ResetPassword />} />
-
-      {/* First-time company setup */}
-      <Route element={<ProtectedRoute unauthenticatedElement={<Navigate to="/login" replace />} />}>
-        <Route path="/setup" element={<Setup />} />
-      </Route>
 
       {/* Back office */}
       <Route element={<ProtectedRoute unauthenticatedElement={<Navigate to="/login" replace />} />}>

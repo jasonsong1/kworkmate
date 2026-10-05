@@ -18,10 +18,9 @@ export default function Home() {
   }
 
   if (!me) return <Navigate to="/login" replace />;
-  // A super admin is not tied to a company, so they pick one instead of being sent to setup.
-  if (!company) {
-    return isPlatformAdmin ? <CompanyPicker /> : <Navigate to="/setup" replace />;
-  }
+  // Only a platform admin gets here without a company: the back-office layout stops anyone
+  // else before this screen renders.
+  if (!company) return <CompanyPicker />;
   if (!isManager) return <StaffHome />;
   return <Dashboard />;
 }

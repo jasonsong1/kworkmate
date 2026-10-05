@@ -765,7 +765,10 @@ const dict = {
     'roster.onLeave': 'On leave',
     'roster.onLeaveBlocked': 'This person is on approved leave that day.',
     'access.failed': 'Your access settings could not be loaded. Nothing is restricted until they arrive.',
-    'access.retry': 'Try again'
+    'access.retry': 'Try again',
+    'access.deniedTitle': 'No access yet',
+    'access.deniedBody': 'This account is not linked to a company on the platform. Accounts and branches are opened by the employer, so please ask them to add you.',
+    'access.signOut': 'Sign out'
   },
   ko: {
     'app.name': 'K-Workmate',
@@ -1528,7 +1531,10 @@ const dict = {
     'roster.onLeave': '휴가 중',
     'roster.onLeaveBlocked': '해당 직원은 그날 승인된 휴가입니다.',
     'access.failed': '권한 정보를 불러오지 못했습니다. 정보가 도착할 때까지는 아무것도 제한하지 않습니다.',
-    'access.retry': '다시 시도'
+    'access.retry': '다시 시도',
+    'access.deniedTitle': '아직 접근 권한이 없습니다',
+    'access.deniedBody': '이 계정은 플랫폼의 회사에 연결되어 있지 않습니다. 계정과 지점은 회사에서 만들어 드리므로 담당자에게 등록을 요청해 주세요.',
+    'access.signOut': '로그아웃'
   }
 };
 

@@ -39,7 +39,7 @@ export default function Login() {
   return (
     <AuthLayout
       icon={LogIn}
-      title="Welcome back"
+      title="Welcome to K-workmate"
       subtitle="Log in with your work account"
       footer="Accounts are created by your employer. Ask your manager if you need access."
     >
