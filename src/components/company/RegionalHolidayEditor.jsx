@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
-import { Check, Download, ExternalLink, Loader2, Trash2 } from 'lucide-react';
+import { Check, Loader2, Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useI18n } from '@/lib/i18n';
-import { holidayKeyFor } from '@/lib/holidays';
 import { useWorkspace } from '@/lib/WorkspaceContext';
 import { base44 } from '@/api/base44Client';
+
+const EMPTY = { date: '', name: '', region: '', note: '', scope: 'regional' };
 
 function formatDay(dateIso, lang) {
   return new Date(`${dateIso}T00:00:00Z`).toLocaleDateString(lang === 'ko' ? 'ko-KR' : 'en-AU', {
@@ -17,70 +19,44 @@ function formatDay(dateIso, lang) {
   });
 }
 
-// The dates a state publishes on its own each year are read from the official schedule and
-// kept as drafts: they only earn the holiday rate once the employer applies them.
-export default function RegionalHolidayImport({ state, companyId, suburbs, records, onChanged }) {
+// The dates a state publishes on its own each year are entered by hand and kept as drafts:
+// they only earn the holiday rate once the employer applies them.
+export default function RegionalHolidayEditor({ state, companyId, defaultRegion, records, onChanged }) {
   const { t, lang } = useI18n();
   const { me } = useWorkspace();
-  const thisYear = new Date().getFullYear();
-  const years = [thisYear - 1, thisYear, thisYear + 1];
-  const [year, setYear] = useState(String(thisYear));
+  const [form, setForm] = useState(EMPTY);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
-  const [unavailable, setUnavailable] = useState([]);
 
   const drafts = (records || []).filter((record) => record.status !== 'applied');
   const applied = (records || []).filter((record) => record.status === 'applied');
+  const rows = [...drafts, ...applied].sort((a, b) => String(a.date).localeCompare(String(b.date)));
   const nameOf = (record) => (lang === 'ko' ? record.name_ko || record.name : record.name);
+  const set = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
 
-  // The official dates arrive ready to review and are saved as drafts, so a re-import only
-  // adds what is not on the list yet.
-  const run = async () => {
+  const add = async () => {
+    if (!form.date || !form.name.trim()) {
+      setMessage(t('settings.holidayAddMissing'));
+      return;
+    }
     setBusy(true);
-    setMessage('');
-    setUnavailable([]);
     try {
-      const response = await base44.functions.invoke('importRegionalHolidays', {
+      await base44.entities.RegionalHoliday.create({
         company_id: companyId,
         state,
-        year: Number(year),
-        region: (suburbs || []).filter(Boolean).slice(0, 3).join(', ')
+        year: Number(form.date.slice(0, 4)),
+        date: form.date,
+        name: form.name.trim(),
+        region: form.region.trim() || defaultRegion || '',
+        note: form.note.trim(),
+        scope: form.scope,
+        status: 'draft',
+        imported_by_email: me ? me.email || '' : '',
+        imported_at: new Date().toISOString()
       });
-      const data = response.data || {};
-      const known = new Set((records || []).map((record) => String(record.date).slice(0, 10)));
-      // Dates the state calendar already works out itself are left out, so only the extra
-      // official dates end up on the list.
-      const fresh = (data.holidays || []).filter((item) => {
-        const day = String(item.date).slice(0, 10);
-        return !known.has(day) && !holidayKeyFor(day, state);
-      });
-
-      if (fresh.length > 0) {
-        const stamp = new Date().toISOString();
-        await base44.entities.RegionalHoliday.bulkCreate(
-          fresh.map((item) => ({
-            ...item,
-            company_id: companyId,
-            state,
-            year: Number(data.year) || Number(year),
-            status: 'draft',
-            imported_by_email: me ? me.email || '' : '',
-            imported_at: stamp
-          }))
-        );
-      }
-
-      setUnavailable(data.unavailable || []);
-      setMessage(
-        fresh.length > 0
-          ? t('settings.holidayImported').replace('{count}', String(fresh.length))
-          : (data.holidays || []).length > 0
-            ? t('settings.holidayUpToDate')
-            : t('settings.holidayNoDates')
-      );
+      setForm(EMPTY);
+      setMessage(t('settings.holidayAdded'));
       await onChanged();
-    } catch (error) {
-      setMessage(t('settings.holidayImportFailed'));
     } finally {
       setBusy(false);
     }
@@ -113,45 +89,70 @@ export default function RegionalHolidayImport({ state, companyId, suburbs, recor
     setBusy(false);
   };
 
-  const rows = [...drafts, ...applied];
-
   return (
     <div className="mt-3 space-y-2 border-t pt-3">
-      <p className="text-xs text-muted-foreground">{t('settings.holidayImportHint')}</p>
+      <p className="text-xs text-muted-foreground">{t('settings.holidayAddHint')}</p>
+
       <div className="flex flex-wrap items-end gap-2">
         <div>
-          <Label className="text-xs">{t('settings.holidayYear')}</Label>
-          <Select value={year} onValueChange={setYear}>
-            <SelectTrigger className="mt-1 h-8 w-24">
+          <Label className="text-xs">{t('settings.holidayDate')}</Label>
+          <Input
+            type="date"
+            className="mt-1 h-8 w-40"
+            value={form.date}
+            onChange={(event) => set('date', event.target.value)}
+          />
+        </div>
+        <div>
+          <Label className="text-xs">{t('settings.holidayName')}</Label>
+          <Input
+            className="mt-1 h-8 w-56"
+            value={form.name}
+            onChange={(event) => set('name', event.target.value)}
+          />
+        </div>
+        <div>
+          <Label className="text-xs">{t('settings.holidayRegion')}</Label>
+          <Input
+            className="mt-1 h-8 w-40"
+            placeholder={defaultRegion || ''}
+            value={form.region}
+            onChange={(event) => set('region', event.target.value)}
+          />
+        </div>
+        <div>
+          <Label className="text-xs">{t('settings.holidayScope')}</Label>
+          <Select value={form.scope} onValueChange={(value) => set('scope', value)}>
+            <SelectTrigger className="mt-1 h-8 w-36">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {years.map((item) => (
-                <SelectItem key={item} value={String(item)}>
-                  {item}
-                </SelectItem>
-              ))}
+              <SelectItem value="statewide">{t('settings.holidayScopeStatewide')}</SelectItem>
+              <SelectItem value="regional">{t('settings.holidayScopeRegional')}</SelectItem>
+              <SelectItem value="one_off">{t('settings.holidayScopeOneOff')}</SelectItem>
             </SelectContent>
           </Select>
         </div>
-        <Button variant="outline" size="sm" onClick={run} disabled={busy || !companyId}>
-          {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
-          {busy ? t('settings.holidayImporting') : t('settings.holidayImport')}
+        <div>
+          <Label className="text-xs">{t('settings.holidayNote')}</Label>
+          <Input
+            className="mt-1 h-8 w-56"
+            value={form.note}
+            onChange={(event) => set('note', event.target.value)}
+          />
+        </div>
+        <Button size="sm" onClick={add} disabled={busy || !companyId}>
+          {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
+          {t('settings.holidayAdd')}
         </Button>
         {drafts.length > 1 ? (
-          <Button size="sm" onClick={applyAll} disabled={busy}>
+          <Button size="sm" variant="secondary" onClick={applyAll} disabled={busy}>
             <Check className="mr-2 h-4 w-4" /> {t('settings.holidayApplyAll')}
           </Button>
         ) : null}
       </div>
 
       {message ? <p className="text-xs text-primary">{message}</p> : null}
-      {unavailable.length > 0 ? (
-        <p className="text-xs text-muted-foreground">
-          {t('settings.holidayUnavailable')}{' '}
-          {unavailable.map((item) => (item.region ? `${item.region}: ${item.reason}` : item.reason)).join(' · ')}
-        </p>
-      ) : null}
 
       {rows.length > 0 ? (
         <div className="space-y-1">
@@ -165,17 +166,6 @@ export default function RegionalHolidayImport({ state, companyId, suburbs, recor
               {record.note ? <span className="text-xs text-muted-foreground">{record.note}</span> : null}
               {record.region && record.region !== 'statewide' ? (
                 <span className="text-xs text-muted-foreground">{record.region}</span>
-              ) : null}
-              {record.source_url ? (
-                <a
-                  href={record.source_url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
-                >
-                  <ExternalLink className="h-3 w-3" />
-                  {t('settings.holidaySource')}
-                </a>
               ) : null}
               <span className="ml-auto flex items-center gap-1">
                 {record.status === 'applied' ? (

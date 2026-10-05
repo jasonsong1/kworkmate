@@ -6,7 +6,7 @@ import { useWorkspace } from '@/lib/WorkspaceContext';
 import { normalizeState, regionalMap, stateFromBranch, stateLabel, upcomingHolidays } from '@/lib/holidays';
 import { todayIso } from '@/lib/bh';
 import { base44 } from '@/api/base44Client';
-import RegionalHolidayImport from '@/components/company/RegionalHolidayImport';
+import RegionalHolidayEditor from '@/components/company/RegionalHolidayEditor';
 
 function formatDay(dateIso, lang) {
   return new Date(`${dateIso}T00:00:00Z`).toLocaleDateString(lang === 'ko' ? 'ko-KR' : 'en-AU', {
@@ -82,10 +82,10 @@ export default function PublicHolidayCard({ multiplier }) {
               ))}
             </div>
 
-            <RegionalHolidayImport
+            <RegionalHolidayEditor
               state={group.state}
               companyId={companyId}
-              suburbs={group.branches.map((branch) => branch.suburb)}
+              defaultRegion={group.branches.map((branch) => branch.suburb).filter(Boolean)[0] || ''}
               records={records.filter((record) => normalizeState(record.state) === group.state)}
               onChanged={load}
             />
