@@ -5,7 +5,6 @@ import LeaveBalanceCard from '@/components/leave/LeaveBalanceCard';
 import LeaveRequestDialog from '@/components/leave/LeaveRequestDialog';
 import LeaveRequestsTable from '@/components/leave/LeaveRequestsTable';
 import LeaveTypeSettingsDialog from '@/components/leave/LeaveTypeSettingsDialog';
-import CalendarSubscribeCard from '@/components/CalendarSubscribeCard';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -164,9 +163,6 @@ export default function Leave() {
               </Card>
             </div>
           )}
-
-          {/* Everyone gets their own calendar feed, managers included. */}
-          <CalendarSubscribeCard />
         </div>
       )}
 

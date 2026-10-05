@@ -1,10 +1,10 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { ChevronLeft, ChevronRight, Loader2, Plus, Send, Settings2, Sparkles } from 'lucide-react';
+import { CalendarPlus, ChevronLeft, ChevronRight, Loader2, Plus, Send, Settings2, Sparkles } from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
 import ShiftDialog from '@/components/ShiftDialog';
 import RosterSettingsDialog from '@/components/RosterSettingsDialog';
 import AvailabilityBoard from '@/components/AvailabilityBoard';
-import CalendarSubscribeCard from '@/components/CalendarSubscribeCard';
+import CalendarSubscribeDialog from '@/components/roster/CalendarSubscribeDialog';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { useToast } from '@/components/ui/use-toast';
@@ -32,6 +32,7 @@ export default function Roster() {
   const [dialogDate, setDialogDate] = useState('');
   const [dialogEmployee, setDialogEmployee] = useState(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [calendarOpen, setCalendarOpen] = useState(false);
   const [sending, setSending] = useState(false);
   const [generating, setGenerating] = useState(false);
   // The shift being dragged, so a manager can nudge a couple of placements by hand.
@@ -219,6 +220,10 @@ export default function Roster() {
               )}
               {generating ? t('roster.building') : t('roster.autoBuild')}
             </Button>
+            {/* Anyone can keep their own shifts and approved leave in their phone calendar. */}
+            <Button variant="outline" onClick={() => setCalendarOpen(true)} disabled={!activeBranch}>
+              <CalendarPlus className="mr-2 h-4 w-4" /> {t('leave.calendar')}
+            </Button>
             <Button
               variant="outline"
               onClick={() => {
@@ -369,11 +374,7 @@ export default function Roster() {
         onSaved={load}
       />
 
-      {!canManageRoster ? (
-        <div className="mt-6">
-          <CalendarSubscribeCard />
-        </div>
-      ) : null}
+      <CalendarSubscribeDialog open={calendarOpen} onOpenChange={setCalendarOpen} />
     </div>
   );
 }
