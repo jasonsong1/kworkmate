@@ -1,6 +1,11 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.52';
 import { sendWebPush, vapidKeys } from '../../shared/webpush.ts';
 
+// Everything behind turning phone alerts on: the app's public push key, this phone's
+// subscription, the list of phones, and a test alert the person can send to themselves.
+// One bounded action per request, and every action reads or writes only rows carrying the
+// caller's own email, so a person can never touch someone else's subscription.
+
 function itemsOf(page: any) {
   return (page && page.items) || [];
 }
@@ -23,16 +28,15 @@ function devicesOf(rows: any[]) {
   }));
 }
 
-// Everything behind turning phone alerts on: the app's public push key, this phone's
-// subscription, the list of phones, and a test alert the person can send to themselves.
 export default async function (req: Request) {
   try {
     const base44 = createClientFromRequest(req);
     const me = await base44.auth.me();
-    if (!me) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!me || !me.email) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
     const body = await req.json().catch(() => ({}));
     const action = String(body.action || '');
+    const mine = base44.asServiceRole.entities.PushSubscription;
 
     if (action === 'key') {
       const keys = await vapidKeys(base44, safeOrigin(body.origin));
@@ -47,9 +51,9 @@ export default async function (req: Request) {
         return Response.json({ error: 'missing_fields' }, { status: 400 });
       }
 
-      // Same phone, same subscription: refresh it rather than adding a duplicate row.
+      // Same browser asked twice: refresh that row instead of adding a duplicate.
       const existing = itemsOf(
-        await base44.entities.PushSubscription.filter({ endpoint }, { limit: 1 })
+        await mine.filter({ user_email: me.email, endpoint }, { limit: 1 })
       )[0];
 
       const record: any = {
@@ -68,34 +72,31 @@ export default async function (req: Request) {
         branch_id: String((me.branch_ids || [])[0] || '')
       };
 
-      if (existing) await base44.entities.PushSubscription.update(existing.id, record);
-      else await base44.entities.PushSubscription.create(record);
+      if (existing) await mine.update(existing.id, record);
+      else await mine.create(record);
 
       return Response.json({ ok: true });
     }
 
     if (action === 'unsubscribe') {
       const endpoint = String(body.endpoint || '').slice(0, 800);
-      await base44.entities.PushSubscription.deleteMany(
-        endpoint ? { user_email: me.email, endpoint } : { user_email: me.email }
-      );
-      return Response.json({ ok: true });
+      await mine.deleteMany(endpoint ? { user_email: me.email, endpoint } : { user_email: me.email });
+      return Response.json({ ok: true, devices: devicesOf(itemsOf(await mine.filter({ user_email: me.email }, { limit: 20 }))) });
     }
 
     if (action === 'remove') {
       const id = String(body.id || '');
       if (!id) return Response.json({ error: 'missing_id' }, { status: 400 });
-      await base44.entities.PushSubscription.delete(id);
+      const row = await mine.get(id).catch(() => null);
+      if (!row || row.user_email !== me.email) {
+        return Response.json({ error: 'not_yours' }, { status: 403 });
+      }
+      await mine.delete(id);
       return Response.json({ ok: true });
     }
 
     if (action === 'status') {
-      const rows = itemsOf(
-        await base44.entities.PushSubscription.filter(
-          { user_email: me.email },
-          { sort: '-created_date', limit: 20 }
-        )
-      );
+      const rows = itemsOf(await mine.filter({ user_email: me.email }, { sort: '-created_date', limit: 20 }));
       return Response.json({ devices: devicesOf(rows) });
     }
 
