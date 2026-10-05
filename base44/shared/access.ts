@@ -132,6 +132,7 @@ export function normalizeAccess(raw) {
 export function normalizePreset(record) {
   return {
     key: String((record && record.key) || '').trim(),
+    label: (record && record.label) || '',
     label_en: (record && record.label_en) || '',
     label_ko: (record && record.label_ko) || '',
     order: Number((record && record.order) || 10),
@@ -148,10 +149,14 @@ export function mergePresets(stored) {
     const preset = normalizePreset(record);
     if (!preset.key) return;
     const base = byKey.get(preset.key);
+    // One access name replaces the old English/Korean pair; both are kept in step so any
+    // screen still reading the old fields shows the same thing.
+    const label = preset.label || preset.label_en || (base ? base.label_en : '') || preset.key;
     byKey.set(preset.key, {
       key: preset.key,
-      label_en: preset.label_en || (base ? base.label_en : preset.key),
-      label_ko: preset.label_ko || (base ? base.label_ko : preset.key),
+      label,
+      label_en: label,
+      label_ko: label,
       order: base ? base.order : preset.order,
       access: preset.access
     });
@@ -218,6 +223,9 @@ export function resolveAccess({ packageModules, preset, companyGrant, branchGran
     if (!cell.level || cell.level === 'none') return;
     access[module] = cell;
   });
+  // The dashboard is a read-only home for everyone, whatever package or position they hold,
+  // so it never appears in the permission tables and cannot be widened or narrowed.
+  if (modules.includes('dashboard')) access.dashboard = { level: 'read', scope: 'company' };
   return access;
 }
 

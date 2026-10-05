@@ -8,15 +8,15 @@ import { useI18n } from '@/lib/i18n';
 import { useWorkspace } from '@/lib/WorkspaceContext';
 import { grantedModules } from '@/lib/access';
 
-const BLANK = { key: '', label_en: '', label_ko: '', order: 10, access: {} };
+const BLANK = { key: '', label: '', order: 10, access: {} };
 
 // Super admin only: the platform's own position presets — the second layer every company's
 // roles are linked to.
 export default function PresetManager() {
-  const { t, lang } = useI18n();
+  const { t } = useI18n();
   const { presets, reloadPackage } = useWorkspace();
   const [editing, setEditing] = useState(null);
-  const nameOf = (preset) => (lang === 'ko' ? preset.label_ko || preset.label_en : preset.label_en || preset.label_ko);
+  const nameOf = (preset) => preset.label || preset.label_en || preset.label_ko || preset.key;
 
   return (
     <Card>

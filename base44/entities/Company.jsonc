@@ -109,6 +109,12 @@
     "package_job_lock": {
       "type": "boolean",
       "default": false
+    },
+    "pay_multipliers": {
+      "type": "object"
+    },
+    "qr_design": {
+      "type": "object"
     }
   },
   "required": [

@@ -3,10 +3,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useI18n } from '@/lib/i18n';
 import {
   MODULES,
+  isConfigurable,
   isScoped,
   levelLabelKey,
-  levelOptions,
   moduleLabelKey,
+  moduleLevelOptions,
   normalizeCell,
   scopeLabelKey,
   scopeOptions
@@ -37,9 +38,12 @@ export default function AccessMatrixEditor({
 
   return (
     <div className="space-y-4">
+      <p className="text-xs text-muted-foreground">{t('perm.dashboardNote')}</p>
       {roles.map((role) => {
         const ceiling = ceilings[role] || {};
-        const rows = modules.filter((module) => ceiling[module] && ceiling[module].level !== 'none');
+        const rows = modules.filter(
+          (module) => isConfigurable(module) && ceiling[module] && ceiling[module].level !== 'none'
+        );
         return (
           <div key={role} className="overflow-hidden rounded-xl border">
             <div className="flex flex-wrap items-center justify-between gap-2 border-b bg-muted/40 px-4 py-2">
@@ -76,7 +80,7 @@ export default function AccessMatrixEditor({
                         </SelectTrigger>
                         <SelectContent>
                           {allowInherit && <SelectItem value="inherit">{t('perm.inherit')}</SelectItem>}
-                          {levelOptions(cap.level).map((option) => (
+                          {moduleLevelOptions(module, cap.level).map((option) => (
                             <SelectItem key={option} value={option}>
                               {t(levelLabelKey(option))}
                             </SelectItem>

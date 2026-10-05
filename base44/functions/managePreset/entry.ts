@@ -42,12 +42,14 @@ export default async function (req) {
       .replace(/^_+|_+$/g, '');
     if (!key) return Response.json({ error: 'A preset needs a key' }, { status: 400 });
 
-    const label_en = String(body.label_en || '').trim() || key;
-    const label_ko = String(body.label_ko || '').trim() || label_en;
+    // One access name per preset: it is written to the new field and mirrored onto the two old
+    // name fields, so anything still reading those shows the same name.
+    const label = String(body.label || body.label_en || '').trim() || key;
     const payload = {
       key,
-      label_en,
-      label_ko,
+      label,
+      label_en: label,
+      label_ko: label,
       order: Number(body.order) || 10,
       access: normalizeAccess(body.access || {})
     };

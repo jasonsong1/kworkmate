@@ -36,6 +36,9 @@ export default async function (req) {
         branch_name: branch.name,
         company_name: company ? company.name : '',
         brand_color: branch.brand_color || (company && company.brand_color) || '#4338ca',
+        // The company's own clock-in QR design, so the store screen shows the same card the
+        // manager saved in Template design.
+        qr_design: (company && company.qr_design) || {},
         date: today
       });
     }

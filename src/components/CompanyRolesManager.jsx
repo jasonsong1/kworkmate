@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, X } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,7 +14,7 @@ const FIXED_ROLES = ['company_admin', 'branch_manager'];
 // link is the ceiling its permissions are later narrowed inside — and the link can be looked
 // at and changed at any time.
 export default function CompanyRolesManager({ value, onChange, presets = [], disabled }) {
-  const { t, lang } = useI18n();
+  const { t } = useI18n();
   const [label, setLabel] = useState('');
   const [presetKey, setPresetKey] = useState('');
   const [selected, setSelected] = useState('');
@@ -23,7 +23,7 @@ export default function CompanyRolesManager({ value, onChange, presets = [], dis
   const presetName = (key) => {
     const preset = presets.find((item) => item.key === key);
     if (!preset) return key;
-    return (lang === 'ko' ? preset.label_ko || preset.label_en : preset.label_en || preset.label_ko) || key;
+    return preset.label || preset.label_en || preset.label_ko || key;
   };
 
   const addRole = () => {
@@ -65,20 +65,6 @@ export default function CompanyRolesManager({ value, onChange, presets = [], dis
             <span className="text-[10px] font-normal text-muted-foreground">
               · {presetName(role.preset_key) || t('role.noPreset')}
             </span>
-            {!disabled && (
-              <span
-                role="button"
-                tabIndex={0}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onChange(roles.filter((item) => item.key !== role.key));
-                }}
-                onKeyDown={() => {}}
-                className="ml-0.5 text-muted-foreground transition-colors hover:text-destructive"
-              >
-                <X className="h-3 w-3" />
-              </span>
-            )}
           </button>
         ))}
         {roles.length === 0 && (

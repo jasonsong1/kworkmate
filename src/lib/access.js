@@ -30,6 +30,24 @@ export const SCOPED_MODULES = [
   'attendance'
 ];
 
+// The dashboard is every position's read-only home, so no screen offers it as a configurable
+// area. And in the areas a store keeps as its record, create and delete is not offered at all.
+export const CONFIGURABLE_MODULES = MODULES.filter((module) => module !== 'dashboard');
+
+export const NO_DELETE_MODULES = [
+  'branches',
+  'interviews',
+  'interview_settings',
+  'roster',
+  'attendance',
+  'templates',
+  'settings'
+];
+
+export function isConfigurable(module) {
+  return module !== 'dashboard';
+}
+
 const LEVEL_RANK = { none: 0, read: 1, update: 2, write: 3 };
 const SCOPE_RANK = { self: 0, branch: 1, company: 2 };
 
@@ -88,6 +106,31 @@ export function scopeLabelKey(scope) {
 // Nothing wider than the ceiling a higher layer allows is offered.
 export function levelOptions(ceiling) {
   return LEVELS.filter((level) => level === 'none' || levelRank(level) <= levelRank(ceiling));
+}
+
+// "Full (create and delete)" is not offered in the areas that are a store's own record.
+export function moduleLevelOptions(module, ceiling) {
+  return levelOptions(ceiling).filter(
+    (level) => !(level === 'write' && NO_DELETE_MODULES.includes(module))
+  );
+}
+
+// A cell that was saved before a rule changed is brought back inside it, so a screen never
+// shows a level it no longer offers.
+export function clampCell(module, cell) {
+  const next = normalizeCell(cell);
+  if (!next.level || next.level === 'none') return next;
+  if (NO_DELETE_MODULES.includes(module) && next.level === 'write') return { ...next, level: 'update' };
+  return next;
+}
+
+export function clampAccess(access) {
+  const out = {};
+  Object.entries(access || {}).forEach(([module, raw]) => {
+    const cell = clampCell(module, raw);
+    if (cell.level && cell.level !== 'none') out[module] = { level: cell.level, scope: cell.scope };
+  });
+  return out;
 }
 
 export function scopeOptions(ceiling) {

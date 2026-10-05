@@ -9,11 +9,12 @@ import { useToast } from '@/components/ui/use-toast';
 import { useI18n } from '@/lib/i18n';
 import { base44 } from '@/api/base44Client';
 import {
-  MODULES,
+  CONFIGURABLE_MODULES,
+  clampAccess,
   isScoped,
   levelLabelKey,
-  levelOptions,
   moduleLabelKey,
+  moduleLevelOptions,
   normalizeAccess,
   normalizeCell,
   scopeLabelKey,
@@ -26,7 +27,7 @@ import {
 export default function PresetEditorDialog({ open, preset, onClose, onSaved }) {
   const { t } = useI18n();
   const { toast } = useToast();
-  const [form, setForm] = useState({ key: '', label_en: '', label_ko: '', order: 10 });
+  const [form, setForm] = useState({ key: '', label: '', order: 10 });
   const [access, setAccess] = useState({});
   const [impact, setImpact] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -35,11 +36,10 @@ export default function PresetEditorDialog({ open, preset, onClose, onSaved }) {
     if (!open || !preset) return;
     setForm({
       key: preset.key || '',
-      label_en: preset.label_en || '',
-      label_ko: preset.label_ko || '',
+      label: preset.label || preset.label_en || preset.label_ko || '',
       order: preset.order || 10
     });
-    setAccess(normalizeAccess(preset.access || {}));
+    setAccess(clampAccess(normalizeAccess(preset.access || {})));
     setImpact(null);
     if (!preset.key) return;
     base44.functions
@@ -79,19 +79,12 @@ export default function PresetEditorDialog({ open, preset, onClose, onSaved }) {
           <DialogTitle>{preset.key ? t('preset.edit') : t('preset.new')}</DialogTitle>
         </DialogHeader>
 
-        <div className="grid gap-4 sm:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2">
           <div>
-            <Label>{t('preset.labelEn')}</Label>
+            <Label>{t('preset.accessName')}</Label>
             <Input
-              value={form.label_en}
-              onChange={(e) => setForm((prev) => ({ ...prev, label_en: e.target.value }))}
-            />
-          </div>
-          <div>
-            <Label>{t('preset.labelKo')}</Label>
-            <Input
-              value={form.label_ko}
-              onChange={(e) => setForm((prev) => ({ ...prev, label_ko: e.target.value }))}
+              value={form.label}
+              onChange={(e) => setForm((prev) => ({ ...prev, label: e.target.value }))}
             />
           </div>
           <div>
@@ -112,9 +105,11 @@ export default function PresetEditorDialog({ open, preset, onClose, onSaved }) {
           </p>
         )}
 
+        <p className="text-xs text-muted-foreground">{t('perm.dashboardNote')}</p>
+
         <div className="max-h-[50vh] overflow-y-auto rounded-xl border">
           <div className="divide-y">
-            {MODULES.map((module) => {
+            {CONFIGURABLE_MODULES.map((module) => {
               const cell = normalizeCell(access[module]);
               const level = cell.level;
               const scope = cell.scope || 'branch';
@@ -131,7 +126,7 @@ export default function PresetEditorDialog({ open, preset, onClose, onSaved }) {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {levelOptions('write').map((option) => (
+                      {moduleLevelOptions(module, 'write').map((option) => (
                         <SelectItem key={option} value={option}>
                           {t(levelLabelKey(option))}
                         </SelectItem>
@@ -163,7 +158,7 @@ export default function PresetEditorDialog({ open, preset, onClose, onSaved }) {
           <Button variant="outline" onClick={onClose}>
             {t('common.cancel')}
           </Button>
-          <Button onClick={save} disabled={saving || !form.key.trim()}>
+          <Button onClick={save} disabled={saving || !form.key.trim() || !form.label.trim()}>
             {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             {t('common.save')}
           </Button>

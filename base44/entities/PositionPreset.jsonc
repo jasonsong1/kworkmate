@@ -5,6 +5,9 @@
     "key": {
       "type": "string"
     },
+    "label": {
+      "type": "string"
+    },
     "label_en": {
       "type": "string"
     },
