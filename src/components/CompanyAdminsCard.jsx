@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Loader2, Plus, ShieldCheck, X } from 'lucide-react';
+import { Loader2, Plus, ShieldCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -21,7 +21,6 @@ export default function CompanyAdminsCard() {
   if (!company || role !== 'company_admin') return null;
 
   const admins = company.member_emails || [];
-  const canEdit = admins.length > 1;
 
   const run = async (action, value) => {
     setBusy(true);
@@ -71,16 +70,6 @@ export default function CompanyAdminsCard() {
             >
               <ShieldCheck className="h-3.5 w-3.5 text-primary" />
               {item}
-              {canEdit && (
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => run('remove', item)}
-                  className="text-muted-foreground transition-colors hover:text-destructive"
-                >
-                  <X className="h-3 w-3" />
-                </button>
-              )}
             </span>
           ))}
         </div>

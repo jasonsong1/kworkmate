@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { QRCodeSVG } from 'qrcode.react';
+import QrCard from '@/components/attendance/QrCard';
 import { AlertCircle, CheckCircle2, Keyboard, Loader2, MapPin, QrCode } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -28,9 +28,10 @@ export default function Kiosk() {
   const { token } = useParams();
   const [info, setInfo] = useState(null);
   const [state, setState] = useState('loading');
-  // The tablet shows the store QR for staff to scan with their own phone, and the keypad
-  // for anyone without a phone. Both live in this one screen, which needs no sign in.
-  const [mode, setMode] = useState('number');
+  // The tablet shows the store QR for staff to scan with their own phone first, and the keypad
+  // for anyone without a phone as the second option. Both live in this one screen, which needs
+  // no sign in.
+  const [mode, setMode] = useState('qr');
   const [number, setNumber] = useState('');
   const [pin, setPin] = useState('');
   const [busy, setBusy] = useState(false);
@@ -191,18 +192,18 @@ export default function Kiosk() {
 
         <div className="grid grid-cols-2 gap-2 rounded-2xl border bg-white p-1.5 shadow-sm">
           <Button
-            variant={mode === 'number' ? 'default' : 'ghost'}
-            className="h-12 text-base"
-            onClick={() => setMode('number')}
-          >
-            <Keyboard className="mr-2 h-4 w-4" /> My number
-          </Button>
-          <Button
             variant={mode === 'qr' ? 'default' : 'ghost'}
             className="h-12 text-base"
             onClick={() => setMode('qr')}
           >
             <QrCode className="mr-2 h-4 w-4" /> Store QR
+          </Button>
+          <Button
+            variant={mode === 'number' ? 'default' : 'ghost'}
+            className="h-12 text-base"
+            onClick={() => setMode('number')}
+          >
+            <Keyboard className="mr-2 h-4 w-4" /> My number
           </Button>
         </div>
 
@@ -255,14 +256,12 @@ export default function Kiosk() {
           </div>
         ) : (
           <div className="rounded-2xl border bg-white p-6 text-center shadow-sm">
-            <p className="text-sm font-semibold">Scan to clock in</p>
-            <div className="mt-4 flex justify-center rounded-2xl border p-3">
-              <QRCodeSVG value={kioskUrl(info.branch_id, info.date)} size={240} level="M" marginSize={4} />
-            </div>
-            <p className="mt-4 text-xs text-slate-500">
-              Point a phone camera at this code to open today’s clock for {info.branch_name}, then enter your
-              employee number and PIN.
-            </p>
+            <QrCard
+              url={kioskUrl(info.branch_id, info.date)}
+              design={info.qr_design}
+              fallbackTitle="Scan to clock in"
+              fallbackNote={`Point a phone camera at this code to open today’s clock for ${info.branch_name}, then enter your employee number and PIN.`}
+            />
           </div>
         )}
 

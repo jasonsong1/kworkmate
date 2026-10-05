@@ -1,10 +1,9 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { CheckCircle2, FileBarChart, Keyboard, Loader2, MapPin, QrCode, XCircle } from 'lucide-react';
+import { CheckCircle2, FileBarChart, Loader2, MapPin, QrCode, XCircle } from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
 import ApprovalActions from '@/components/attendance/ApprovalActions';
 import AttendanceReportDialog from '@/components/attendance/AttendanceReportDialog';
-import KioskQrDialog from '@/components/attendance/KioskQrDialog';
-import { kioskUrl } from '@/lib/kioskLink';
+import ClockQrDialog from '@/components/attendance/ClockQrDialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -99,12 +98,6 @@ export default function Attendance() {
     await load();
   };
 
-  // The number pad screen for the store tablet, opened in its own tab.
-  const openKiosk = () => {
-    if (!activeBranch) return;
-    window.open(kioskUrl(activeBranch.id, date), '_blank', 'noopener');
-  };
-
   const hours = Math.floor(stats.minutes / 60);
   const minutes = stats.minutes % 60;
 
@@ -134,8 +127,8 @@ export default function Attendance() {
             
 
           
-            <Button variant="outline" onClick={openKiosk} disabled={!activeBranch || !canEdit('attendance')}>
-              <Keyboard className="mr-2 h-4 w-4" /> {t('attendance.manualEntry')}
+            <Button variant="outline" onClick={() => setQrOpen(true)} disabled={!activeBranch || !canEdit('attendance')}>
+              <QrCode className="mr-2 h-4 w-4" /> {t('attendance.qrButton')}
             </Button>
             <Button variant="outline" onClick={() => setReportOpen(true)} disabled={!activeBranch}>
               <FileBarChart className="mr-2 h-4 w-4" /> {t('attendance.report')}
@@ -257,7 +250,7 @@ export default function Attendance() {
         </CardContent>
       </Card>
 
-      <KioskQrDialog open={qrOpen} onOpenChange={setQrOpen} branch={activeBranch} date={date} />
+      <ClockQrDialog open={qrOpen} onOpenChange={setQrOpen} branch={activeBranch} />
 
       <AttendanceReportDialog
         open={reportOpen}

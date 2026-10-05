@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Loader2, MapPin } from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
 import AccessMatrixEditor from '@/components/access/AccessMatrixEditor';
-import { MODULES, levelRank, normalizeCell, scopeRank } from '@/lib/access';
+import { MODULES, clampAccess, levelRank, normalizeCell, scopeRank } from '@/lib/access';
 import TradingHoursEditor, { hasOverlappingTradingHours } from '@/components/TradingHoursEditor';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -45,7 +45,9 @@ export default function PropertySetup() {
       gps_lat: branch.gps_lat ?? '',
       gps_lng: branch.gps_lng ?? '',
       gps_radius_m: branch.gps_radius_m || 100,
-      role_permissions: branch.role_permissions || {}
+      // A grant saved before an area stopped offering create-and-delete is pulled back to what
+      // the table now offers.
+      role_permissions: clampAccess(branch.role_permissions || {})
     });
   }, [branch]);
 

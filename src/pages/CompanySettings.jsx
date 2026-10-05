@@ -5,6 +5,7 @@ import PageHeader from '@/components/PageHeader';
 import CompanyAdminsCard from '@/components/CompanyAdminsCard';
 import PackageCard from '@/components/package/PackageCard';
 import OnboardingDocsCard from '@/components/company/OnboardingDocsCard';
+import PayMultipliersCard, { payMultipliers } from '@/components/company/PayMultipliersCard';
 import CompanyRolesManager from '@/components/CompanyRolesManager';
 import AccessMatrixEditor from '@/components/access/AccessMatrixEditor';
 import { Button } from '@/components/ui/button';
@@ -12,12 +13,13 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/components/ui/use-toast';
 import { useI18n } from '@/lib/i18n';
 import { useWorkspace } from '@/lib/WorkspaceContext';
 import { videoInterviewAllowed } from '@/lib/packages';
-import { MODULES, grantedModules, levelRank, moduleLabelKey, normalizeCell, scopeRank } from '@/lib/access';
+import { MODULES, clampAccess, grantedModules, levelRank, moduleLabelKey, normalizeCell, scopeRank } from '@/lib/access';
 import CompanyPicker from '@/components/platform/CompanyPicker';
 import { base44 } from '@/api/base44Client';
 
@@ -32,6 +34,7 @@ export default function CompanySettings() {
     (module) => !pkg || !pkg.package || (pkg.modules || []).includes(module)
   );
   const { toast } = useToast();
+  const [tab, setTab] = useState('company');
   const [form, setForm] = useState(null);
   const [saving, setSaving] = useState(false);
 
@@ -51,7 +54,10 @@ export default function CompanySettings() {
       mini_interview_enabled: company.mini_interview_enabled !== false,
       video_interview_enabled: company.video_interview_enabled === true,
       screening_criteria: company.screening_criteria || '',
-      role_permissions: company.role_permissions || {},
+      pay_multipliers: payMultipliers(company.pay_multipliers),
+      // A grant saved before an area stopped offering create-and-delete is pulled back to
+      // what the table now offers, so the screen never shows a level it cannot explain.
+      role_permissions: clampAccess(company.role_permissions || {}),
       custom_roles: company.custom_roles || []
     });
   }, [company]);
@@ -80,11 +86,9 @@ export default function CompanySettings() {
     return out;
   };
 
-  // Removing a role also drops the permissions granted to it. Moving a role onto a narrower
-  // preset pulls its permissions back to the new ceiling and says which ones moved.
+  // Moving a role onto a narrower preset pulls its permissions back to the new ceiling and
+  // says which ones moved.
   const setCustomRoles = (next) => {
-    const kept = new Set((next || []).map((role) => role.key));
-    const removed = (form.custom_roles || []).filter((role) => !kept.has(role.key)).map((role) => role.key);
     const relinked = (next || []).filter((role) => {
       const before = (form.custom_roles || []).find((item) => item.key === role.key);
       return before && before.preset_key !== role.preset_key;
@@ -92,9 +96,6 @@ export default function CompanySettings() {
     const narrowed = [];
     setForm((prev) => {
       const permissions = { ...(prev.role_permissions || {}) };
-      removed.forEach((key) => {
-        delete permissions[key];
-      });
       relinked.forEach((roleEntry) => {
         const preset = presets.find((item) => item.key === roleEntry.preset_key);
         const before = permissions[roleEntry.key] || {};
@@ -115,7 +116,10 @@ export default function CompanySettings() {
     setSaving(true);
     await base44.entities.Company.update(company.id, {
       ...form,
-      ai_top_n: Number(form.ai_top_n) || 10
+      ai_top_n: Number(form.ai_top_n) || 10,
+      pay_multipliers: Object.fromEntries(
+        Object.entries(payMultipliers(form.pay_multipliers)).map(([key, value]) => [key, Number(value) || 1])
+      )
     });
     await reload();
     setSaving(false);
@@ -140,6 +144,15 @@ export default function CompanySettings() {
   const matrixRoles = customRoles.map((role) => role.key);
   const roleLabels = Object.fromEntries(customRoles.map((role) => [role.key, role.label]));
 
+  const CATEGORIES = [
+    { key: 'company', label: t('settings.cat.company') },
+    { key: 'docs', label: t('settings.cat.docs') },
+    { key: 'screening', label: t('settings.cat.screening') },
+    { key: 'admins', label: t('settings.cat.admins') },
+    { key: 'permissions', label: t('settings.cat.permissions') },
+    { key: 'pay', label: t('settings.cat.pay') }
+  ];
+
   return (
     <div>
       <PageHeader
@@ -151,148 +164,147 @@ export default function CompanySettings() {
             {t('common.save')}
           </Button>
         } />
-      
 
-      <PackageCard />
+      <Tabs value={tab} onValueChange={setTab}>
+        <TabsList className="mb-6 flex-wrap">
+          {CATEGORIES.map((category) =>
+          <TabsTrigger key={category.key} value={category.key}>
+              {category.label}
+            </TabsTrigger>
+          )}
+        </TabsList>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">{t('common.company')}</CardTitle>
-          </CardHeader>
-          <CardContent className="grid gap-4 sm:grid-cols-2">
-            <div className="sm:col-span-2">
-              <Label>{t('common.name')}</Label>
-              <Input value={form.name} onChange={(e) => set('name', e.target.value)} />
-            </div>
-            <div>
-              <Label>{t('settings.abn')}</Label>
-              <Input value={form.abn} onChange={(e) => set('abn', e.target.value)} />
-            </div>
-            <div>
-              <Label>{t('common.phone')}</Label>
-              <Input value={form.contact_phone} onChange={(e) => set('contact_phone', e.target.value)} />
-            </div>
-            <div className="sm:col-span-2">
-              <Label>{t('common.email')}</Label>
-              <Input value={form.contact_email} onChange={(e) => set('contact_email', e.target.value)} />
-            </div>
-          </CardContent>
-        </Card>
+        <TabsContent value="company" className="space-y-6">
+          <PackageCard />
 
-        <OnboardingDocsCard />
-...
-
-        
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-        
-
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle className="text-base">{t('settings.screening')}</CardTitle>
-          </CardHeader>
-          <CardContent className="grid gap-6 sm:grid-cols-3">
-            <div>
-              <Label>{t('settings.topN')}</Label>
-              <Input type="number" value={form.ai_top_n} onChange={(e) => set('ai_top_n', e.target.value)} />
-            </div>
-            <div className="flex items-center justify-between rounded-lg border px-4 py-3">
-              <span className="text-sm">{t('settings.autoReject')}</span>
-              <Switch checked={form.auto_reject_email} onCheckedChange={(v) => set('auto_reject_email', v)} />
-            </div>
-            {miniAllowed && (
-            <div className="flex items-center justify-between rounded-lg border px-4 py-3">
-              <span className="text-sm">{t('interview.mini')}</span>
-              <Switch checked={form.mini_interview_enabled} onCheckedChange={(v) => set('mini_interview_enabled', v)} />
-            </div>)}
-            {videoAllowed && (
-            <div className="flex items-center justify-between gap-3 rounded-lg border px-4 py-3 sm:col-span-3">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">{t('common.company')}</CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-4 sm:grid-cols-2">
+              <div className="sm:col-span-2">
+                <Label>{t('common.name')}</Label>
+                <Input value={form.name} onChange={(e) => set('name', e.target.value)} />
+              </div>
               <div>
-                <p className="text-sm">{t('settings.videoInterview')}</p>
-                <p className="text-xs text-muted-foreground">{t('settings.videoInterviewHint')}</p>
+                <Label>{t('settings.abn')}</Label>
+                <Input value={form.abn} onChange={(e) => set('abn', e.target.value)} />
               </div>
-              <Switch
-                checked={form.video_interview_enabled}
-                onCheckedChange={(v) => set('video_interview_enabled', v)} />
-              
-            </div>)}
-            <div className="sm:col-span-3">
-              <div className="mb-2 flex items-center justify-between gap-2">
-                <Label>{t('settings.screeningFocus')}</Label>
-                <Button variant="outline" size="sm" asChild>
-                  <Link to="/interview-settings">{t('settings.interviewSetup')}</Link>
-                </Button>
+              <div>
+                <Label>{t('common.phone')}</Label>
+                <Input value={form.contact_phone} onChange={(e) => set('contact_phone', e.target.value)} />
               </div>
-              <Textarea
-                rows={4}
-                value={form.screening_criteria}
-                onChange={(e) => set('screening_criteria', e.target.value)}
-                placeholder="예: 바리스타 경력 2년 이상, 주말 야간 근무 가능, 장기 근무 의향" />
-              
-              <p className="mt-1 text-xs text-muted-foreground">{t('settings.screeningFocusHint')}</p>
-            </div>
-          </CardContent>
-        </Card>
+              <div className="sm:col-span-2">
+                <Label>{t('common.email')}</Label>
+                <Input value={form.contact_email} onChange={(e) => set('contact_email', e.target.value)} />
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
 
-        <CompanyAdminsCard />
+        <TabsContent value="docs">
+          <OnboardingDocsCard />
+        </TabsContent>
 
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle className="text-base">{t('perm.companyTitle')}</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <div>
-              <Label className="mb-1 block">{t('role.title')}</Label>
-              <p className="mb-3 text-xs text-muted-foreground">{t('role.hint')}</p>
-              <CompanyRolesManager
-                value={form.custom_roles}
-                onChange={setCustomRoles}
-                presets={presets}
-                disabled={role !== 'company_admin'} />
-              
-            </div>
-            <div>
-              <p className="mb-3 text-xs text-muted-foreground">{t('perm.companyHint')}</p>
-              {matrixRoles.length === 0 ?
-              <p className="rounded-lg border border-dashed px-4 py-6 text-center text-sm text-muted-foreground">
-                  {t('perm.noRoles')}
-                </p> :
+        <TabsContent value="screening">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">{t('settings.screening')}</CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-6 sm:grid-cols-3">
+              <div>
+                <Label>{t('settings.topN')}</Label>
+                <Input type="number" value={form.ai_top_n} onChange={(e) => set('ai_top_n', e.target.value)} />
+              </div>
+              <div className="flex items-center justify-between rounded-lg border px-4 py-3">
+                <span className="text-sm">{t('settings.autoReject')}</span>
+                <Switch checked={form.auto_reject_email} onCheckedChange={(v) => set('auto_reject_email', v)} />
+              </div>
+              {miniAllowed && (
+              <div className="flex items-center justify-between rounded-lg border px-4 py-3">
+                <span className="text-sm">{t('interview.mini')}</span>
+                <Switch checked={form.mini_interview_enabled} onCheckedChange={(v) => set('mini_interview_enabled', v)} />
+              </div>)}
+              {videoAllowed && (
+              <div className="flex items-center justify-between gap-3 rounded-lg border px-4 py-3 sm:col-span-3">
+                <div>
+                  <p className="text-sm">{t('settings.videoInterview')}</p>
+                  <p className="text-xs text-muted-foreground">{t('settings.videoInterviewHint')}</p>
+                </div>
+                <Switch
+                  checked={form.video_interview_enabled}
+                  onCheckedChange={(v) => set('video_interview_enabled', v)} />
+                
+              </div>)}
+              <div className="sm:col-span-3">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <Label>{t('settings.screeningFocus')}</Label>
+                  <Button variant="outline" size="sm" asChild>
+                    <Link to="/interview-settings">{t('settings.interviewSetup')}</Link>
+                  </Button>
+                </div>
+                <Textarea
+                  rows={4}
+                  value={form.screening_criteria}
+                  onChange={(e) => set('screening_criteria', e.target.value)}
+                  placeholder="예: 바리스타 경력 2년 이상, 주말 야간 근무 가능, 장기 근무 의향" />
+                
+                <p className="mt-1 text-xs text-muted-foreground">{t('settings.screeningFocusHint')}</p>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
 
-              <AccessMatrixEditor
-                value={form.role_permissions}
-                onChange={(next) => set('role_permissions', next)}
-                roles={matrixRoles}
-                roleLabels={roleLabels}
-                ceilings={Object.fromEntries(matrixRoles.map((key) => [key, ceilingFor(key)]))}
-                modules={packageModules}
-                disabled={role !== 'company_admin'} />
+        <TabsContent value="admins">
+          <CompanyAdminsCard />
+        </TabsContent>
 
-              }
-              <p className="mt-3 text-xs text-muted-foreground">{t('perm.locked')}</p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+        <TabsContent value="permissions">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">{t('perm.companyTitle')}</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div>
+                <Label className="mb-1 block">{t('role.title')}</Label>
+                <p className="mb-3 text-xs text-muted-foreground">{t('role.hint')}</p>
+                <CompanyRolesManager
+                  value={form.custom_roles}
+                  onChange={setCustomRoles}
+                  presets={presets}
+                  disabled={role !== 'company_admin'} />
+                
+              </div>
+              <div>
+                <p className="mb-3 text-xs text-muted-foreground">{t('perm.companyHint')}</p>
+                {matrixRoles.length === 0 ?
+                <p className="rounded-lg border border-dashed px-4 py-6 text-center text-sm text-muted-foreground">
+                    {t('perm.noRoles')}
+                  </p> :
+
+                <AccessMatrixEditor
+                  value={form.role_permissions}
+                  onChange={(next) => set('role_permissions', next)}
+                  roles={matrixRoles}
+                  roleLabels={roleLabels}
+                  ceilings={Object.fromEntries(matrixRoles.map((key) => [key, ceilingFor(key)]))}
+                  modules={packageModules}
+                  disabled={role !== 'company_admin'} />
+
+                }
+                <p className="mt-3 text-xs text-muted-foreground">{t('perm.locked')}</p>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="pay">
+          <PayMultipliersCard
+            value={form.pay_multipliers}
+            onChange={(next) => set('pay_multipliers', next)}
+            disabled={role !== 'company_admin'} />
+        </TabsContent>
+      </Tabs>
     </div>);
 
 }

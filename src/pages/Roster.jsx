@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { ChevronLeft, ChevronRight, Loader2, Plus, Send, Settings2, Sparkles, Trash2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Loader2, Plus, Send, Settings2, Sparkles } from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
 import ShiftDialog from '@/components/ShiftDialog';
 import RosterSettingsDialog from '@/components/RosterSettingsDialog';
@@ -115,11 +115,6 @@ export default function Roster() {
     }
     const unfilled = (data.unassigned || []).reduce((sum, item) => sum + (item.missing || 0), 0);
     toast({ title: t('roster.built').replace('{assigned}', data.assigned || 0).replace('{unfilled}', unfilled) });
-    await load();
-  };
-
-  const removeShift = async (shift) => {
-    await base44.entities.Shift.delete(shift.id);
     await load();
   };
 
@@ -271,14 +266,6 @@ export default function Roster() {
                                     <span className="font-medium">
                                       {shift.start_time}–{shift.end_time}
                                     </span>
-                                    {canManageRoster && (
-                                    <button
-                                      onClick={() => removeShift(shift)}
-                                      className="opacity-0 transition-opacity group-hover:opacity-100"
-                                    >
-                                      <Trash2 className="h-3 w-3 text-destructive" />
-                                    </button>
-                                    )}
                                   </div>
                                   {shift.position ? (
                                     <p className="truncate text-[11px] text-muted-foreground">{shift.position}</p>
