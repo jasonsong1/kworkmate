@@ -2,8 +2,8 @@
 // device and on the person's account, so signing in again on any device restores the same look.
 export const THEME_KEY = 'kw_theme_v2';
 
-export const LIGHT_CHROME = '#ffffff';
-export const DARK_CHROME = '#111316';
+export const LIGHT_CHROME = '#fafafa';
+export const DARK_CHROME = '#0b1120';
 
 function paintChrome(theme) {
   const meta = document.querySelector('meta[name="theme-color"]');
