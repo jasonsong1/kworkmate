@@ -136,9 +136,7 @@ export default async function (req: Request) {
       });
     }
 
-    return Response.json({ ok: true, request_id: request.id, hours, available_after: earned ? round2(availableHours({
-      pending_hours: hours
-    })) : null });
+    return Response.json({ ok: true, request_id: request.id, hours });
   } catch (error: any) {
     return Response.json({ error: error.message }, { status: 500 });
   }
