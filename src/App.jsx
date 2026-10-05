@@ -24,6 +24,7 @@ import JobDetail from '@/pages/JobDetail';
 import Applicants from '@/pages/Applicants';
 import Interviews from '@/pages/Interviews';
 import Roster from '@/pages/Roster';
+import Leave from '@/pages/Leave';
 import Attendance from '@/pages/Attendance';
 import CompanySettings from '@/pages/CompanySettings';
 import Clock from '@/pages/Clock';
@@ -100,6 +101,7 @@ const AuthenticatedApp = () => {
           <Route path="/applicants" element={<Applicants />} />
           <Route path="/interviews" element={<Interviews />} />
           <Route path="/roster" element={<Roster />} />
+          <Route path="/leave" element={<Leave />} />
           <Route path="/attendance" element={<Attendance />} />
           <Route path="/settings" element={<CompanySettings />} />
           <Route path="/interview-settings" element={<InterviewSettings />} />

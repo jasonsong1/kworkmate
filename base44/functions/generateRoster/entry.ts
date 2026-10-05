@@ -64,6 +64,26 @@ export default async function (req) {
       base44.asServiceRole.entities.AvailabilitySubmission.filter({ branch_id: branch.id }, { sort: '-created_date', limit: 500 })
     ]);
 
+    // Anyone with approved leave in this week is away, so the builder never plans them in.
+    const leavePage = await base44.asServiceRole.entities.LeaveRequest.filter(
+      {
+        branch_id: branch.id,
+        status: 'approved',
+        start_date: { $lte: weekEnd },
+        end_date: { $gte: weekStart }
+      },
+      { limit: 500 }
+    );
+    const leaveRanges = rowsOf(leavePage)
+      .filter((row) => row && row.employee_email)
+      .map((row) => ({
+        email: row.employee_email,
+        start: String(row.start_date || '').slice(0, 10),
+        end: String(row.end_date || row.start_date || '').slice(0, 10)
+      }));
+    const onLeave = (email, date) =>
+      leaveRanges.some((range) => range.email === email && date >= range.start && date <= range.end);
+
     const setting = rowsOf(settingPage)[0] || null;
     const staff = rowsOf(staffPage);
     const shifts = (setting && Array.isArray(setting.shifts) ? setting.shifts : []).filter(
@@ -91,6 +111,7 @@ export default async function (req) {
     const intervals = {};
     const draft = [];
     const unassigned = [];
+    let leaveSkips = 0;
 
     const ordered = [...requirements].sort((a, b) => {
       if (Number(a.day) !== Number(b.day)) return Number(a.day) - Number(b.day);
@@ -118,6 +139,11 @@ export default async function (req) {
         if (!email) continue;
         const positions = [person.position, person.secondary_position].filter(Boolean);
         if (!positions.includes(req.position)) continue;
+
+        if (onLeave(email, date)) {
+          leaveSkips += 1;
+          continue;
+        }
 
         const window = availableWindow(availByEmail[email], dayKey);
         if (!window || window.from > start || window.to < end) continue;
@@ -187,7 +213,13 @@ export default async function (req) {
       await base44.asServiceRole.entities.Shift.bulkCreate(draft);
     }
 
-    return Response.json({ ok: true, week_start: weekStart, assigned: draft.length, unassigned });
+    return Response.json({
+      ok: true,
+      week_start: weekStart,
+      assigned: draft.length,
+      unassigned,
+      on_leave: leaveSkips
+    });
   } catch (error) {
     return Response.json({ error: error.message }, { status: 500 });
   }

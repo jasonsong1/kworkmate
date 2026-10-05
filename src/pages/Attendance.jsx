@@ -3,7 +3,6 @@ import { CheckCircle2, FileBarChart, Loader2, MapPin, QrCode, XCircle } from 'lu
 import PageHeader from '@/components/PageHeader';
 import ApprovalActions from '@/components/attendance/ApprovalActions';
 import AttendanceReportDialog from '@/components/attendance/AttendanceReportDialog';
-import ClockQrDialog from '@/components/attendance/ClockQrDialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -14,6 +13,7 @@ import { useI18n } from '@/lib/i18n';
 import { useWorkspace } from '@/lib/WorkspaceContext';
 import { usePermissions } from '@/lib/permissions';
 import { formatDateTime, todayIso } from '@/lib/bh';
+import { kioskUrl } from '@/lib/kioskLink';
 import { base44 } from '@/api/base44Client';
 
 const ALL = 'all';
@@ -32,7 +32,6 @@ export default function Attendance() {
   const [stats, setStats] = useState({ count: 0, minutes: 0, pending: 0 });
   const [loading, setLoading] = useState(true);
   const [reportOpen, setReportOpen] = useState(false);
-  const [qrOpen, setQrOpen] = useState(false);
 
   useEffect(() => {
     setEmployeeFilter(ALL);
@@ -127,7 +126,10 @@ export default function Attendance() {
             
 
           
-            <Button variant="outline" onClick={() => setQrOpen(true)} disabled={!activeBranch || !canEdit('attendance')}>
+            <Button
+              variant="outline"
+              onClick={() => window.open(kioskUrl(activeBranch.id, todayIso()), '_blank', 'noopener')}
+              disabled={!activeBranch || !canEdit('attendance')}>
               <QrCode className="mr-2 h-4 w-4" /> {t('attendance.qrButton')}
             </Button>
             <Button variant="outline" onClick={() => setReportOpen(true)} disabled={!activeBranch}>
@@ -249,8 +251,6 @@ export default function Attendance() {
           }
         </CardContent>
       </Card>
-
-      <ClockQrDialog open={qrOpen} onOpenChange={setQrOpen} branch={activeBranch} />
 
       <AttendanceReportDialog
         open={reportOpen}

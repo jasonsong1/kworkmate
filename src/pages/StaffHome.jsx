@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { CalendarDays, Loader2, QrCode, UserCircle2 } from 'lucide-react';
+import { CalendarDays, CalendarPlus, Loader2, QrCode, UserCircle2 } from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
 import AvailabilityMatrix from '@/components/AvailabilityMatrix';
+import CalendarSubscribeCard from '@/components/CalendarSubscribeCard';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -64,11 +65,18 @@ export default function StaffHome() {
         title={t('staff.title')}
         subtitle={activeBranch ? activeBranch.name : me ? me.email : ''}
         actions={
-          <Button asChild>
-            <Link to="/clock">
-              <QrCode className="mr-2 h-4 w-4" /> {t('nav.clock')}
-            </Link>
-          </Button>
+          <>
+            <Button variant="outline" asChild>
+              <Link to="/leave">
+                <CalendarPlus className="mr-2 h-4 w-4" /> {t('leave.title')}
+              </Link>
+            </Button>
+            <Button asChild>
+              <Link to="/clock">
+                <QrCode className="mr-2 h-4 w-4" /> {t('nav.clock')}
+              </Link>
+            </Button>
+          </>
         }
       />
 
@@ -165,6 +173,10 @@ export default function StaffHome() {
             </Button>
           </CardContent>
         </Card>
+
+        <div className="lg:col-span-2">
+          <CalendarSubscribeCard />
+        </div>
       </div>
     </div>
   );

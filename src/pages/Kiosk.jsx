@@ -8,8 +8,9 @@ import { Input } from '@/components/ui/input';
 import { base44 } from '@/api/base44Client';
 import { kioskUrl } from '@/lib/kioskLink';
 
-// Employee numbers mix letters, digits and hyphens (ED-003, BOT-00007).
-const normaliseNumber = (value) => value.toUpperCase().replace(/[^A-Z0-9-]/g, '').slice(0, 12);
+// Employee numbers mix letters, digits, spaces and hyphens (ED-003, BOT-00007), and are typed by
+// hand, so whatever is typed is kept as-is and only trimmed when the punch is sent.
+const normaliseNumber = (value) => value.toUpperCase().slice(0, 20);
 const normalisePin = (value) => value.replace(/\D/g, '').slice(0, 6);
 
 const MESSAGES = {

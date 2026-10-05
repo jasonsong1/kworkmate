@@ -15,6 +15,7 @@ export const ALL_MODULES = [
   'interviews',
   'interview_settings',
   'roster',
+  'leave',
   'attendance',
   'templates',
   'settings'
@@ -43,7 +44,7 @@ const NO_FEATURES = {
   unified_dashboard: false
 };
 
-const ALL_FEATURES = {
+export const ALL_FEATURES = {
   mini_interview: true,
   video_interview: true,
   voice_interview: true,

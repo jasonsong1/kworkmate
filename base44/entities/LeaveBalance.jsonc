@@ -1,0 +1,125 @@
+{
+  "name": "LeaveBalance",
+  "type": "object",
+  "properties": {
+    "company_id": {
+      "type": "string"
+    },
+    "branch_id": {
+      "type": "string"
+    },
+    "employee_email": {
+      "type": "string"
+    },
+    "employee_name": {
+      "type": "string"
+    },
+    "employee_number": {
+      "type": "string"
+    },
+    "leave_type_key": {
+      "type": "string"
+    },
+    "leave_type_name": {
+      "type": "string"
+    },
+    "opening_hours": {
+      "type": "number",
+      "default": 0
+    },
+    "accrued_hours": {
+      "type": "number",
+      "default": 0
+    },
+    "granted_hours": {
+      "type": "number",
+      "default": 0
+    },
+    "adjustment_hours": {
+      "type": "number",
+      "default": 0
+    },
+    "used_hours": {
+      "type": "number",
+      "default": 0
+    },
+    "pending_hours": {
+      "type": "number",
+      "default": 0
+    },
+    "accrual_anchor_at": {
+      "type": "string"
+    },
+    "last_accrued_at": {
+      "type": "string"
+    },
+    "grant_period": {
+      "type": "string"
+    },
+    "granted_expires_at": {
+      "type": "string"
+    },
+    "note": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "employee_email",
+    "leave_type_key"
+  ],
+  "rls": {
+    "read": {
+      "$or": [
+        {
+          "data.employee_email": "{{user.email}}"
+        },
+        {
+          "data.branch_id": {
+            "$in": "{{user.data.branch_ids}}"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "create": {
+      "$or": [
+        {
+          "data.company_id": "{{user.data.company_id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "$or": [
+        {
+          "data.company_id": "{{user.data.company_id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "delete": {
+      "$or": [
+        {
+          "data.company_id": "{{user.data.company_id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    }
+  }
+}

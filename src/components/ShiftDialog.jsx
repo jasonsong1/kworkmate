@@ -64,6 +64,19 @@ export default function ShiftDialog({ open, onOpenChange, branch, employees, def
       toast({ title: 'This staff member already has an overlapping shift', variant: 'destructive' });
       return;
     }
+    // Approved leave takes the day out of the roster, so a shift cannot be placed on it.
+    const approvedLeave = await base44.entities.LeaveRequest
+      .filter({
+        employee_email: form.employee_email,
+        status: 'approved',
+        start_date: { $lte: form.date },
+        end_date: { $gte: form.date }
+      })
+      .catch(() => []);
+    if ((approvedLeave || []).length > 0) {
+      toast({ title: t('roster.onLeaveBlocked'), variant: 'destructive' });
+      return;
+    }
     setSaving(true);
     const employee = employees.find((e) => e.user_email === form.employee_email);
     await base44.entities.Shift.create({

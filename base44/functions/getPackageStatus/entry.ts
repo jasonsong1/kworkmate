@@ -1,5 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.52';
-import { packageState, today } from '../../shared/packages.ts';
+import { ALL_FEATURES, ALL_MODULES, packageState, today } from '../../shared/packages.ts';
 import { mergePresets, presetFor, resolveAccess, resolvePresetKey } from '../../shared/access.ts';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -83,8 +83,11 @@ export default async function (req) {
       if (found && found.company_id === company.id) branch = found;
     }
 
+    // A super admin runs the platform, so the company's package and grants never narrow
+    // their own workspace: they keep every module and every feature. What the company
+    // actually paid for is still reported below, so the package screen stays truthful.
     const access = resolveAccess({
-      packageModules: state.modules,
+      packageModules: isSuperAdmin ? ALL_MODULES : state.modules,
       preset,
       companyGrant: company.role_permissions && company.role_permissions[roleKey],
       branchGrant: branch && branch.role_permissions && branch.role_permissions[roleKey],
@@ -98,7 +101,7 @@ export default async function (req) {
       package: state.key,
       assigned: state.assigned,
       modules: state.modules,
-      features: state.features,
+      features: isSuperAdmin ? { ...ALL_FEATURES } : state.features,
       job_limit: state.jobLimit,
       jobs_open: openJobs,
       job_lock: jobLock,
