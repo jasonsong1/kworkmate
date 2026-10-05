@@ -2,6 +2,7 @@
 // an email written in the language set on their own staff profile.
 import { sendEmail, brandedEmail } from './email.ts';
 import { employeeLanguage } from './employeeMail.ts';
+import { sendWebPush } from './webpush.ts';
 
 function rowsOf(result: any) {
   return Array.isArray(result) ? result : (result && result.items) || [];
@@ -90,9 +91,9 @@ export async function notifyStaff(
   return { notified: rows.length, emailed, pushed };
 }
 
-// Native mobile push: one message each, to the people who allowed notifications on a phone.
-// Delivery needs a native build with push credentials, so a failure here is expected on the web
-// app and must never break the leave or roster action that triggered it.
+// Phone alerts: a message to each person who allowed them, on the installed app where there is
+// one and in the browser (web push) everywhere else. Delivery is best effort, so a failure here
+// must never break the leave or roster action that triggered it.
 export async function pushStaff(
   base44: any,
   {
@@ -114,8 +115,9 @@ export async function pushStaff(
   try {
     users = rowsOf(await base44.asServiceRole.entities.User.list());
   } catch (error: any) {
-    console.warn('push skipped: app users could not be read', error && error.message);
-    return 0;
+    // No app users to look up: the browser subscriptions below are still worth trying.
+    console.warn('app users could not be read', error && error.message);
+    users = [];
   }
   const idByEmail = new Map<string, string>();
   users.forEach((user: any) => {
@@ -141,7 +143,12 @@ export async function pushStaff(
       console.warn('push not delivered', error && error.message);
     }
   }
-  return pushed;
+
+  // The same news reaches a phone with no app installed, for whoever opened the site in a
+  // browser and allowed alerts there.
+  const webPushed = await sendWebPush(base44, { recipients: list, title, body, link }).catch(() => 0);
+
+  return pushed + webPushed;
 }
 
 // The language each person on a branch reads their email in.

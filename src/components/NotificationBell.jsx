@@ -1,12 +1,13 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Bell, CheckCheck } from 'lucide-react';
+import { Bell, BellRing, CheckCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useI18n } from '@/lib/i18n';
 import { useWorkspace } from '@/lib/WorkspaceContext';
 import { formatDateTime } from '@/lib/bh';
 import { base44 } from '@/api/base44Client';
+import NotificationSettingsDialog from '@/components/notifications/NotificationSettingsDialog';
 
 // Everything the app has told this person: leave decisions and roster changes, newest first.
 export default function NotificationBell() {
@@ -14,6 +15,7 @@ export default function NotificationBell() {
   const { me } = useWorkspace();
   const [items, setItems] = useState([]);
   const [open, setOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const load = useCallback(async () => {
     if (!me || !me.email) return;
@@ -37,6 +39,7 @@ export default function NotificationBell() {
   };
 
   return (
+    <>
     <Popover open={open} onOpenChange={(next) => { setOpen(next); if (next) load(); }}>
       <PopoverTrigger asChild>
         <Button variant="ghost" size="icon" className="relative" title={t('leave.notifications')}>
@@ -73,10 +76,17 @@ export default function NotificationBell() {
             ))
           )}
         </div>
-        <p className="border-t bg-muted/40 px-3 py-2 text-[11px] leading-snug text-muted-foreground">
-          {t('leave.pushNote')}
-        </p>
+        <button
+          type="button"
+          onClick={() => { setOpen(false); setSettingsOpen(true); }}
+          className="flex w-full items-center gap-2 border-t bg-muted/40 px-3 py-2 text-left text-[11px] leading-snug text-muted-foreground transition-colors hover:bg-muted"
+        >
+          <BellRing className="h-3.5 w-3.5 shrink-0" />
+          <span>{t('leave.pushNote')}</span>
+        </button>
       </PopoverContent>
     </Popover>
+    <NotificationSettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
+    </>
   );
 }

@@ -1,0 +1,43 @@
+{
+  "name": "PushVapidKey",
+  "type": "object",
+  "properties": {
+    "key_id": {
+      "type": "string"
+    },
+    "public_key": {
+      "type": "string"
+    },
+    "private_key": {
+      "type": "string"
+    },
+    "subject": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "key_id"
+  ],
+  "rls": {
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}
