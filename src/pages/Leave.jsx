@@ -46,7 +46,10 @@ export default function Leave() {
   const balances = joinTypes(data && data.balances, data && data.types);
   const requests = (data && data.requests) || [];
   const pending = requests.filter((item) => item.status === 'pending');
+  // What the company offers right now, and everything it has ever set up: a leave switched
+  // off stays in the settings list so it can simply be switched back on.
   const types = (data && data.types) || [];
+  const allTypes = (data && data.all_types) || types;
 
   const teamRows = Array.from(
     balances.reduce((map, row) => {
@@ -65,7 +68,7 @@ export default function Leave() {
         actions={
           <>
             {data && data.can_configure ? (
-              <Button variant="outline" onClick={() => setSettingsOpen(true)} disabled={types.length === 0}>
+              <Button variant="outline" onClick={() => setSettingsOpen(true)} disabled={allTypes.length === 0}>
                 <Settings2 className="mr-2 h-4 w-4" /> {t('leave.settings')}
               </Button>
             ) : null}
@@ -171,7 +174,7 @@ export default function Leave() {
         open={settingsOpen}
         onOpenChange={setSettingsOpen}
         companyId={data && data.company_id}
-        types={types}
+        types={allTypes}
         onSaved={load}
       />
     </div>

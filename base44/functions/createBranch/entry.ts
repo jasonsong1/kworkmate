@@ -1,4 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.52';
+import { packageState } from '../../shared/packages.ts';
 
 export default async function (req) {
   try {
@@ -7,6 +8,12 @@ export default async function (req) {
     if (!me) return Response.json({ error: 'Unauthorized' }, { status: 401 });
     if (!me.company_id || me.app_role !== 'company_admin') {
       return Response.json({ error: 'Only a company admin can add branches' }, { status: 403 });
+    }
+
+    // Running more than one store is part of the top package only.
+    const company = await base44.asServiceRole.entities.Company.get(me.company_id).catch(() => null);
+    if (me.role !== 'admin' && company && company.package && packageState(company).features.multi_branch !== true) {
+      return Response.json({ error: 'Adding branches is part of the Pro package' }, { status: 403 });
     }
 
     const body = await req.json();

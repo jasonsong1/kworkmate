@@ -4,6 +4,7 @@ import { hashPin, isValidPin, newPinSalt } from '../../shared/pin.ts';
 import { sendEmail, brandedEmail, portalLink } from '../../shared/email.ts';
 import { sendAccountAccessEmail } from '../../shared/account.ts';
 import { employeeLanguage, onboardingMail, onboardingReminderMail } from '../../shared/employeeMail.ts';
+import { packageState, resolveLimit } from '../../shared/packages.ts';
 
 // Applies a role chosen by a company admin to the person's app user record.
 async function applyRole(base44, company, branch, email, roleKey) {
@@ -201,6 +202,22 @@ export default async function (req) {
     const dupe = await base44.asServiceRole.entities.EmployeeProfile.filter({ user_email: email, company_id: me.company_id });
     if (dupe.length > 0) {
       return Response.json({ error: 'This person is already an employee' }, { status: 400 });
+    }
+
+    // How many people the company's package covers.
+    const state = packageState(company);
+    const employeeLimit = resolveLimit(company && company.employee_limit_override, state.employeeLimit);
+    if (employeeLimit !== null) {
+      const total = await base44.asServiceRole.entities.EmployeeProfile.count({
+        company_id: me.company_id,
+        status: { $ne: 'inactive' }
+      });
+      if (total >= employeeLimit) {
+        return Response.json(
+          { error: `This package covers up to ${employeeLimit} employees. Move to a higher package to add more.` },
+          { status: 400 }
+        );
+      }
     }
 
     const nextNumber = Number(branch.employee_next_number) || 1;

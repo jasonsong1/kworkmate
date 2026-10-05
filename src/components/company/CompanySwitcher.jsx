@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Building2, Check, ChevronsUpDown, Loader2, Plus } from 'lucide-react';
-import AddCompanyDialog from '@/components/company/AddCompanyDialog';
+import { Building2, Check, ChevronsUpDown, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Command, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -18,7 +17,6 @@ export default function CompanySwitcher() {
   const navigate = useNavigate();
   const { company, switchCompany } = useWorkspace();
   const [open, setOpen] = useState(false);
-  const [addOpen, setAddOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
   const [searching, setSearching] = useState(false);
@@ -97,22 +95,10 @@ export default function CompanySwitcher() {
                   ))}
                 </CommandGroup>
               )}
-              <CommandGroup className="border-t">
-                <CommandItem
-                  value="new-company"
-                  onSelect={() => {
-                    setOpen(false);
-                    setAddOpen(true);
-                  }}
-                >
-                  <Plus className="mr-2 h-4 w-4" /> {t('company.new')}
-                </CommandItem>
-              </CommandGroup>
             </CommandList>
           </Command>
         </PopoverContent>
       </Popover>
-      <AddCompanyDialog open={addOpen} onOpenChange={setAddOpen} />
     </>
   );
 }

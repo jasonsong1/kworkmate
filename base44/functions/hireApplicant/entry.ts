@@ -3,6 +3,7 @@ import { formatEmployeeNumber, randomToken } from '../../shared/util.ts';
 import { sendApplicantEmail, portalLink } from '../../shared/email.ts';
 import { renderStageEmail } from '../../shared/emailStages.ts';
 import { sendAccountAccessEmail } from '../../shared/account.ts';
+import { packageState, resolveLimit } from '../../shared/packages.ts';
 
 export default async function (req) {
   try {
@@ -26,6 +27,22 @@ export default async function (req) {
     const branch = await base44.asServiceRole.entities.Branch.get(applicant.branch_id).catch(() => null);
     if (!branch) return Response.json({ error: 'Branch not found' }, { status: 404 });
     const company = await base44.asServiceRole.entities.Company.get(branch.company_id).catch(() => null);
+
+    // How many people the company's package covers.
+    const state = packageState(company);
+    const employeeLimit = resolveLimit(company && company.employee_limit_override, state.employeeLimit);
+    if (employeeLimit !== null) {
+      const total = await base44.asServiceRole.entities.EmployeeProfile.count({
+        company_id: branch.company_id,
+        status: { $ne: 'inactive' }
+      });
+      if (total >= employeeLimit) {
+        return Response.json(
+          { error: `This package covers up to ${employeeLimit} employees. Move to a higher package to add more.` },
+          { status: 400 }
+        );
+      }
+    }
 
     const nextNumber = Number(branch.employee_next_number) || 1;
     const employeeNumber = formatEmployeeNumber(branch.employee_prefix, branch.employee_number_padding, nextNumber);
