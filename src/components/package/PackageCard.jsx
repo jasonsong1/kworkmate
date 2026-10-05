@@ -27,11 +27,21 @@ export default function PackageCard() {
   const { pkg, isPlatformAdmin, reloadPackage } = useWorkspace();
   const { toast } = useToast();
   const [form, setForm] = useState({ package: '', start_date: '' });
+  const [limits, setLimits] = useState({ job_limit_override: '', employee_limit_override: '' });
   const [saving, setSaving] = useState(false);
+  const [limitsSaving, setLimitsSaving] = useState(false);
 
   useEffect(() => {
     if (!pkg) return;
     setForm({ package: pkg.package || '', start_date: pkg.start_date || pkg.today || '' });
+    setLimits({
+      job_limit_override:
+        pkg.job_limit_override === null || pkg.job_limit_override === undefined ? '' : String(pkg.job_limit_override),
+      employee_limit_override:
+        pkg.employee_limit_override === null || pkg.employee_limit_override === undefined
+          ? ''
+          : String(pkg.employee_limit_override)
+    });
   }, [pkg]);
 
   if (!pkg) return null;
@@ -56,6 +66,25 @@ export default function PackageCard() {
       toast({ title: error.message || t('pkg.failed'), variant: 'destructive' });
     } finally {
       setSaving(false);
+    }
+  };
+
+  // An empty field hands the company back to the package default, 0 lifts the ceiling.
+  const saveLimits = async () => {
+    setLimitsSaving(true);
+    try {
+      const response = await base44.functions.invoke('manageCompanyLimits', {
+        company_id: pkg.company_id,
+        job_limit_override: limits.job_limit_override,
+        employee_limit_override: limits.employee_limit_override
+      });
+      if (response.data?.error) throw new Error(response.data.error);
+      await reloadPackage();
+      toast({ title: t('pkg.limitsSaved') });
+    } catch (error) {
+      toast({ title: error.message || t('pkg.failed'), variant: 'destructive' });
+    } finally {
+      setLimitsSaving(false);
     }
   };
 
@@ -134,6 +163,46 @@ export default function PackageCard() {
                 {t('pkg.reactivatedAt')}: {String(pkg.reactivated_at).slice(0, 10)}
               </p>
             ) : null}
+
+            <div className="space-y-3 border-t pt-3">
+              <p className="text-xs text-muted-foreground">{t('pkg.limitsHint')}</p>
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div>
+                  <Label>{t('pkg.jobLimit')}</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    value={limits.job_limit_override}
+                    onChange={(e) => setLimits({ ...limits, job_limit_override: e.target.value })}
+                    placeholder={
+                      pkg.package_job_limit === null || pkg.package_job_limit === undefined
+                        ? t('pkg.unlimited')
+                        : String(pkg.package_job_limit)
+                    }
+                  />
+                </div>
+                <div>
+                  <Label>{t('pkg.employeeLimit')}</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    value={limits.employee_limit_override}
+                    onChange={(e) => setLimits({ ...limits, employee_limit_override: e.target.value })}
+                    placeholder={
+                      pkg.package_employee_limit === null || pkg.package_employee_limit === undefined
+                        ? t('pkg.unlimited')
+                        : String(pkg.package_employee_limit)
+                    }
+                  />
+                </div>
+                <div className="flex items-end">
+                  <Button variant="outline" onClick={saveLimits} disabled={limitsSaving}>
+                    {limitsSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                    {t('pkg.saveLimits')}
+                  </Button>
+                </div>
+              </div>
+            </div>
           </div>
         ) : (
           <p className="rounded-lg border px-4 py-3 text-xs text-muted-foreground">
