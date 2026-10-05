@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useI18n } from '@/lib/i18n';
+import { holidayKeyFor } from '@/lib/holidays';
 import { useWorkspace } from '@/lib/WorkspaceContext';
 import { base44 } from '@/api/base44Client';
 
@@ -26,6 +27,7 @@ export default function RegionalHolidayImport({ state, companyId, suburbs, recor
   const [year, setYear] = useState(String(thisYear));
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
+  const [unavailable, setUnavailable] = useState([]);
 
   const drafts = (records || []).filter((record) => record.status !== 'applied');
   const applied = (records || []).filter((record) => record.status === 'applied');
@@ -36,6 +38,7 @@ export default function RegionalHolidayImport({ state, companyId, suburbs, recor
   const run = async () => {
     setBusy(true);
     setMessage('');
+    setUnavailable([]);
     try {
       const response = await base44.functions.invoke('importRegionalHolidays', {
         company_id: companyId,
@@ -45,7 +48,12 @@ export default function RegionalHolidayImport({ state, companyId, suburbs, recor
       });
       const data = response.data || {};
       const known = new Set((records || []).map((record) => String(record.date).slice(0, 10)));
-      const fresh = (data.holidays || []).filter((item) => !known.has(String(item.date).slice(0, 10)));
+      // Dates the state calendar already works out itself are left out, so only the extra
+      // official dates end up on the list.
+      const fresh = (data.holidays || []).filter((item) => {
+        const day = String(item.date).slice(0, 10);
+        return !known.has(day) && !holidayKeyFor(day, state);
+      });
 
       if (fresh.length > 0) {
         const stamp = new Date().toISOString();
@@ -62,6 +70,7 @@ export default function RegionalHolidayImport({ state, companyId, suburbs, recor
         );
       }
 
+      setUnavailable(data.unavailable || []);
       setMessage(
         fresh.length > 0
           ? t('settings.holidayImported').replace('{count}', String(fresh.length))
@@ -137,6 +146,12 @@ export default function RegionalHolidayImport({ state, companyId, suburbs, recor
       </div>
 
       {message ? <p className="text-xs text-primary">{message}</p> : null}
+      {unavailable.length > 0 ? (
+        <p className="text-xs text-muted-foreground">
+          {t('settings.holidayUnavailable')}{' '}
+          {unavailable.map((item) => (item.region ? `${item.region}: ${item.reason}` : item.reason)).join(' · ')}
+        </p>
+      ) : null}
 
       {rows.length > 0 ? (
         <div className="space-y-1">
@@ -147,6 +162,7 @@ export default function RegionalHolidayImport({ state, companyId, suburbs, recor
             <div key={record.id} className="flex flex-wrap items-center gap-2 text-sm">
               <span className="w-28 shrink-0 text-muted-foreground">{formatDay(record.date, lang)}</span>
               <span className="font-medium">{nameOf(record)}</span>
+              {record.note ? <span className="text-xs text-muted-foreground">{record.note}</span> : null}
               {record.region && record.region !== 'statewide' ? (
                 <span className="text-xs text-muted-foreground">{record.region}</span>
               ) : null}
