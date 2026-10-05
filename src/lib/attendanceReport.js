@@ -1,9 +1,12 @@
 import { jsPDF } from 'jspdf';
+import { dayTypeFor, holidayLabel, localDate, stateLabel } from '@/lib/holidays';
 
 const APPROVAL_LABEL = { pending: 'Pending', approved: 'Approved', rejected: 'Rejected' };
+const DAY_TYPE_LABEL = { weekday: 'Weekday', saturday: 'Saturday', sunday: 'Sunday' };
 
-function dayPart(value) {
-  return value ? String(value).slice(0, 10) : '';
+// The day a punch earns its rate for is the local day at the branch.
+function dayPart(value, state) {
+  return localDate(value, state);
 }
 
 function timePart(value) {
@@ -23,18 +26,59 @@ function cell(value) {
   return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 
-export function reportRows(entries) {
-  return entries.map((row) => [
-    dayPart(row.clock_in_at),
-    row.employee_name || '',
-    row.employee_number || '',
-    timePart(row.clock_in_at),
-    timePart(row.clock_out_at),
-    hours(row.minutes),
-    row.source === 'manual' ? 'Manual' : 'App / QR',
-    row.geo_verified ? 'Verified' : '—',
-    APPROVAL_LABEL[row.approval_status || 'approved']
-  ]);
+function multiplierFor(key, multipliers) {
+  const value = multipliers ? multipliers[key] : undefined;
+  return value === undefined || value === '' ? 1 : Number(value) || 1;
+}
+
+// The date worked gives the weekday and the branch state gives the public holidays,
+// so every punch carries the penalty rate it actually earned.
+function payRow(row, options) {
+  const date = dayPart(row.clock_in_at, options.state);
+  const type = dayTypeFor(date, options.state);
+  const multiplier = multiplierFor(type.key, options.multipliers);
+  const rate = options.rates[String(row.employee_email || '').toLowerCase()];
+  const pay = row.minutes && rate ? (row.minutes / 60) * Number(rate) * multiplier : null;
+  return {
+    date,
+    dayType:
+      type.key === 'public_holiday'
+        ? `Public holiday · ${holidayLabel(type.holidayKey, 'en')}`
+        : DAY_TYPE_LABEL[type.key] || DAY_TYPE_LABEL.weekday,
+    rateText: `×${multiplier}`,
+    pay
+  };
+}
+
+export function reportRows(entries, options = {}) {
+  const opts = { state: '', multipliers: null, rates: {}, ...options };
+  return entries.map((row) => {
+    const pay = payRow(row, opts);
+    return [
+      pay.date,
+      row.employee_name || '',
+      row.employee_number || '',
+      timePart(row.clock_in_at),
+      timePart(row.clock_out_at),
+      hours(row.minutes),
+      pay.dayType,
+      pay.rateText,
+      pay.pay === null ? '' : `$${pay.pay.toFixed(2)}`,
+      row.source === 'manual' ? 'Manual' : 'App / QR',
+      row.geo_verified ? 'Verified' : '—',
+      APPROVAL_LABEL[row.approval_status || 'approved']
+    ];
+  });
+}
+
+// Rejected punches are not paid, so they stay out of the estimate.
+export function estimatedPay(entries, options = {}) {
+  const opts = { state: '', multipliers: null, rates: {}, ...options };
+  return entries.reduce((total, row) => {
+    if ((row.approval_status || 'approved') === 'rejected') return total;
+    const pay = payRow(row, opts).pay;
+    return pay === null ? total : total + pay;
+  }, 0);
 }
 
 export const REPORT_HEADERS = [
@@ -44,29 +88,33 @@ export const REPORT_HEADERS = [
   'Clock in',
   'Clock out',
   'Worked',
+  'Day type',
+  'Rate',
+  'Est. pay',
   'Source',
   'GPS',
   'Approval'
 ];
 
-export function downloadCsv(entries, filename) {
+export function downloadCsv(entries, filename, options = {}) {
   const lines = [REPORT_HEADERS.join(',')];
-  reportRows(entries).forEach((row) => lines.push(row.map(cell).join(',')));
+  reportRows(entries, options).forEach((row) => lines.push(row.map(cell).join(',')));
   const blob = new Blob([`\uFEFF${lines.join('\n')}`], { type: 'text/csv;charset=utf-8;' });
   triggerDownload(blob, filename);
 }
 
-export function downloadPdf(entries, { branchName, from, to, filename }) {
+export function downloadPdf(entries, { branchName, from, to, filename, ...options }) {
   const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
   const marginX = 32;
-  const widths = [70, 130, 80, 60, 60, 60, 65, 55, 70];
+  const widths = [58, 104, 56, 52, 52, 52, 122, 42, 60, 56, 42, 52];
 
   const header = () => {
+    const state = stateLabel(options.state, 'en');
     doc.setFontSize(14);
     doc.text('Attendance report', marginX, 40);
     doc.setFontSize(9);
     doc.setTextColor(120);
-    doc.text(`${branchName || ''} · ${from} → ${to}`, marginX, 56);
+    doc.text(`${branchName || ''} · ${from} → ${to}${state ? ` · ${state}` : ''}`, marginX, 56);
     doc.setTextColor(0);
     let x = marginX;
     doc.setFontSize(8);
@@ -79,7 +127,7 @@ export function downloadPdf(entries, { branchName, from, to, filename }) {
 
   let y = header();
   doc.setFontSize(8);
-  reportRows(entries).forEach((row) => {
+  reportRows(entries, options).forEach((row) => {
     if (y > 560) {
       doc.addPage();
       y = header();
@@ -87,7 +135,7 @@ export function downloadPdf(entries, { branchName, from, to, filename }) {
     }
     let x = marginX;
     row.forEach((value, i) => {
-      doc.text(String(value).slice(0, 26), x, y);
+      doc.text(String(value).slice(0, 30), x, y);
       x += widths[i];
     });
     y += 14;

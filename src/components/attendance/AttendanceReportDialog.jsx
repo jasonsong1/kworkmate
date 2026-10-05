@@ -13,7 +13,10 @@ import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useI18n } from '@/lib/i18n';
 import { addDaysIso, todayIso } from '@/lib/bh';
-import { downloadCsv, downloadPdf, reportRows, REPORT_HEADERS } from '@/lib/attendanceReport';
+import { downloadCsv, downloadPdf, estimatedPay, reportRows, REPORT_HEADERS } from '@/lib/attendanceReport';
+import { stateFromBranch, stateLabel } from '@/lib/holidays';
+import { payMultipliers } from '@/components/company/PayMultipliersCard';
+import { useWorkspace } from '@/lib/WorkspaceContext';
 import { base44 } from '@/api/base44Client';
 
 // The report is a list of every punch in the range, so it is read page by page instead of
@@ -38,18 +41,44 @@ async function fetchRange(branchId, from, to) {
   return all;
 }
 
+// The hourly rate each punch is paid at comes from the employee profile.
+async function fetchRates(branchId) {
+  const page = await base44.entities.EmployeeProfile.filter(
+    { branch_id: branchId },
+    { limit: 500, fields: ['user_email', 'hourly_rate'] }
+  );
+  const rates = {};
+  (page.items || []).forEach((profile) => {
+    if (profile.user_email) rates[profile.user_email.toLowerCase()] = profile.hourly_rate;
+  });
+  return rates;
+}
+
 export default function AttendanceReportDialog({ open, onOpenChange, branch }) {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
+  const { company } = useWorkspace();
   const [from, setFrom] = useState(addDaysIso(todayIso(), -6));
   const [to, setTo] = useState(todayIso());
   const [rows, setRows] = useState([]);
+  const [rates, setRates] = useState({});
   const [loading, setLoading] = useState(false);
   const [ready, setReady] = useState(false);
+
+  const state = stateFromBranch(branch);
+  const options = {
+    state,
+    multipliers: payMultipliers(company ? company.pay_multipliers : null),
+    rates
+  };
 
   const run = async () => {
     if (!branch || !from || !to) return;
     setLoading(true);
-    const entries = await fetchRange(branch.id, from, to);
+    const [entries, employeeRates] = await Promise.all([
+      fetchRange(branch.id, from, to),
+      fetchRates(branch.id)
+    ]);
+    setRates(employeeRates);
     setRows(entries);
     setReady(true);
     setLoading(false);
@@ -59,7 +88,7 @@ export default function AttendanceReportDialog({ open, onOpenChange, branch }) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[92vh] max-w-4xl overflow-y-auto">
+      <DialogContent className="max-h-[92vh] max-w-5xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{t('attendance.reportTitle')}</DialogTitle>
           <DialogDescription>{branch ? branch.name : ''}</DialogDescription>
@@ -80,12 +109,24 @@ export default function AttendanceReportDialog({ open, onOpenChange, branch }) {
           </Button>
           {ready ? (
             <>
-              <Button variant="outline" onClick={() => downloadCsv(rows, `${name}.csv`)} disabled={rows.length === 0}>
+              <Button
+                variant="outline"
+                onClick={() => downloadCsv(rows, `${name}.csv`, options)}
+                disabled={rows.length === 0}
+              >
                 <FileSpreadsheet className="mr-2 h-4 w-4" /> {t('attendance.exportCsv')}
               </Button>
               <Button
                 variant="outline"
-                onClick={() => downloadPdf(rows, { branchName: branch.name, from, to, filename: `${name}.pdf` })}
+                onClick={() =>
+                  downloadPdf(rows, {
+                    branchName: branch.name,
+                    from,
+                    to,
+                    filename: `${name}.pdf`,
+                    ...options
+                  })
+                }
                 disabled={rows.length === 0}
               >
                 <Download className="mr-2 h-4 w-4" /> {t('attendance.exportPdf')}
@@ -94,10 +135,17 @@ export default function AttendanceReportDialog({ open, onOpenChange, branch }) {
           ) : null}
         </div>
 
+        <p className="text-xs text-muted-foreground">
+          {state
+            ? t('attendance.reportState').replace('{state}', stateLabel(state, lang))
+            : t('attendance.reportNoState')}
+        </p>
+
         {ready ? (
           <div className="space-y-3">
             <p className="text-sm text-muted-foreground">
-              {t('attendance.reportRows').replace('{count}', String(rows.length))}
+              {t('attendance.reportRows').replace('{count}', String(rows.length))} ·{' '}
+              {t('attendance.reportTotal').replace('{amount}', `$${estimatedPay(rows, options).toFixed(2)}`)}
             </p>
             {rows.length === 0 ? (
               <p className="py-8 text-center text-sm text-muted-foreground">{t('attendance.reportEmpty')}</p>
@@ -114,7 +162,7 @@ export default function AttendanceReportDialog({ open, onOpenChange, branch }) {
                   <TableBody>
                     {rows.slice(0, 100).map((row) => (
                       <TableRow key={row.id}>
-                        {reportRows([row])[0].map((value, index) => (
+                        {reportRows([row], options)[0].map((value, index) => (
                           <TableCell key={index} className="whitespace-nowrap text-sm">
                             {value || '—'}
                           </TableCell>
