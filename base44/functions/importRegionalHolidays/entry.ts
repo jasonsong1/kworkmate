@@ -23,15 +23,12 @@ const OFFICIAL_SOURCE: Record<string, string> = {
   ACT: 'worksafe.act.gov.au'
 };
 
+// The dates come back as drafts, so nothing changes a payslip until the employer applies them.
 const SCOPES = ['statewide', 'regional', 'one_off'];
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 function clean(value: any, max: number) {
   return String(value === null || value === undefined ? '' : value).trim().slice(0, max);
-}
-
-function rowsOf(result: any) {
-  return Array.isArray(result) ? result : (result && result.items) || [];
 }
 
 function buildPrompt(state: string, year: number, region: string) {
@@ -56,7 +53,7 @@ function buildPrompt(state: string, year: number, region: string) {
 }
 
 // The dates a state publishes itself change every year, so they are read from the official
-// schedule and kept as drafts for the employer to review before they earn the holiday rate.
+// schedule: this function only reads it, and the app saves what comes back for review.
 export default async function (req: Request) {
   try {
     const base44 = createClientFromRequest(req);
@@ -123,7 +120,7 @@ export default async function (req: Request) {
     });
 
     const found = Array.isArray(answer && answer.holidays) ? answer.holidays.slice(0, 25) : [];
-    const valid = found
+    const holidays = found
       .map((raw: any) => ({
         date: clean(raw.date, 10),
         name: clean(raw.name, 80),
@@ -136,36 +133,14 @@ export default async function (req: Request) {
       }))
       .filter((item: any) => ISO_DATE.test(item.date) && Number(item.date.slice(0, 4)) === year && item.name);
 
-    const existing = rowsOf(
-      await base44.entities.RegionalHoliday.filter({ company_id: companyId, state, year }, { limit: 200 })
-    );
-    const known = new Set(existing.map((row: any) => String(row.date).slice(0, 10)));
-    const fresh = valid.filter((item: any) => !known.has(item.date));
-
-    if (fresh.length > 0) {
-      const stamp = new Date().toISOString();
-      await base44.entities.RegionalHoliday.bulkCreate(
-        fresh.map((item: any) => ({
-          company_id: companyId,
-          state,
-          year,
-          ...item,
-          status: 'draft',
-          imported_by_email: me.email || '',
-          imported_at: stamp
-        }))
-      );
-    }
-
     const unavailable = Array.isArray(answer && answer.unavailable) ? answer.unavailable.slice(0, 10) : [];
 
     return Response.json({
       ok: true,
       state,
       year,
-      imported: fresh.length,
-      duplicates: valid.length - fresh.length,
-      dropped: found.length - valid.length,
+      holidays,
+      dropped: found.length - holidays.length,
       unavailable: unavailable.map((item: any) => ({
         region: clean(item.region, 60),
         reason: clean(item.reason, 200),

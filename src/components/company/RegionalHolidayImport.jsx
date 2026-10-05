@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useI18n } from '@/lib/i18n';
+import { useWorkspace } from '@/lib/WorkspaceContext';
 import { base44 } from '@/api/base44Client';
 
 function formatDay(dateIso, lang) {
@@ -19,6 +20,7 @@ function formatDay(dateIso, lang) {
 // kept as drafts: they only earn the holiday rate once the employer applies them.
 export default function RegionalHolidayImport({ state, companyId, suburbs, records, onChanged }) {
   const { t, lang } = useI18n();
+  const { me } = useWorkspace();
   const thisYear = new Date().getFullYear();
   const years = [thisYear - 1, thisYear, thisYear + 1];
   const [year, setYear] = useState(String(thisYear));
@@ -29,6 +31,8 @@ export default function RegionalHolidayImport({ state, companyId, suburbs, recor
   const applied = (records || []).filter((record) => record.status === 'applied');
   const nameOf = (record) => (lang === 'ko' ? record.name_ko || record.name : record.name);
 
+  // The official dates arrive ready to review and are saved as drafts, so a re-import only
+  // adds what is not on the list yet.
   const run = async () => {
     setBusy(true);
     setMessage('');
@@ -40,10 +44,28 @@ export default function RegionalHolidayImport({ state, companyId, suburbs, recor
         region: (suburbs || []).filter(Boolean).slice(0, 3).join(', ')
       });
       const data = response.data || {};
+      const known = new Set((records || []).map((record) => String(record.date).slice(0, 10)));
+      const fresh = (data.holidays || []).filter((item) => !known.has(String(item.date).slice(0, 10)));
+
+      if (fresh.length > 0) {
+        const stamp = new Date().toISOString();
+        await base44.entities.RegionalHoliday.bulkCreate(
+          fresh.map((item) => ({
+            ...item,
+            company_id: companyId,
+            state,
+            year: Number(data.year) || Number(year),
+            status: 'draft',
+            imported_by_email: me ? me.email || '' : '',
+            imported_at: stamp
+          }))
+        );
+      }
+
       setMessage(
-        data.imported > 0
-          ? t('settings.holidayImported').replace('{count}', String(data.imported))
-          : data.duplicates > 0
+        fresh.length > 0
+          ? t('settings.holidayImported').replace('{count}', String(fresh.length))
+          : (data.holidays || []).length > 0
             ? t('settings.holidayUpToDate')
             : t('settings.holidayNoDates')
       );
