@@ -3,13 +3,43 @@ import { base44 } from '@/api/base44Client';
 
 const WorkspaceContext = createContext(null);
 
+// Nothing is hidden until the server has said what this person may see.
+const EMPTY_PERMISSIONS = {
+  access: null,
+  presets: [],
+  presetKey: '',
+  roleKey: '',
+  features: {},
+  accessError: false
+};
+
 export function WorkspaceProvider({ children }) {
   const [me, setMe] = useState(null);
   const [company, setCompany] = useState(null);
   const [branches, setBranches] = useState([]);
   const [employeeProfile, setEmployeeProfile] = useState(null);
   const [activeBranchId, setActiveBranchId] = useState('');
+  const [pkg, setPkg] = useState(null);
+  const [permissions, setPermissions] = useState(EMPTY_PERMISSIONS);
   const [loading, setLoading] = useState(true);
+
+  const loadPackageStatus = useCallback(async (branchId) => {
+    const status = await base44.functions.invoke('getPackageStatus', { branch_id: branchId || '' }).catch(() => null);
+    const data = status && status.data && !status.data.error ? status.data : null;
+    setPkg(data);
+    setPermissions(
+      data
+        ? {
+            access: data.access || null,
+            presets: data.presets || [],
+            presetKey: data.preset_key || '',
+            roleKey: data.role_key || '',
+            features: data.features || {},
+            accessError: false
+          }
+        : { ...EMPTY_PERMISSIONS, accessError: true }
+    );
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -45,11 +75,17 @@ export function WorkspaceProvider({ children }) {
         allowed.find((b) => b.id === user.branch_id && b.is_active !== false) ||
         allowed.find((b) => b.is_active !== false) ||
         allowed[0];
-      setActiveBranchId(pick ? pick.id : '');
+      const pickedId = pick ? pick.id : '';
+      setActiveBranchId(pickedId);
+
+      // The package, the position preset and the employer grant, resolved together: which
+      // modules this workspace may open and how far inside them it may go.
+      await loadPackageStatus(pickedId);
     } else {
       setCompany(null);
       setBranches([]);
       setActiveBranchId('');
+      await loadPackageStatus('');
     }
 
     // Everyone who is not a manager is an employee: staff and every company-defined position.
@@ -62,7 +98,7 @@ export function WorkspaceProvider({ children }) {
     }
 
     setLoading(false);
-  }, []);
+  }, [loadPackageStatus]);
 
   useEffect(() => {
     load();
@@ -75,6 +111,14 @@ export function WorkspaceProvider({ children }) {
   const patchCompany = useCallback((data) => {
     setCompany((prev) => (prev ? { ...prev, ...data } : prev));
   }, []);
+
+  const reloadPackage = useCallback(
+    async (branchId) => {
+      const pick = branchId || activeBranchId || '';
+      await loadPackageStatus(pick);
+    },
+    [activeBranchId, loadPackageStatus]
+  );
 
   // Entering another company changes which branches the user can see, so start from a clean workspace.
   const refreshWorkspace = useCallback(async () => {
@@ -94,6 +138,8 @@ export function WorkspaceProvider({ children }) {
   const selectBranch = (id) => {
     setActiveBranchId(id);
     localStorage.setItem('bh_branch', id);
+    // A branch can narrow what the company granted, so the answer is asked again.
+    reloadPackage(id);
   };
 
   const activeBranch = branches.find((b) => b.id === activeBranchId) || null;
@@ -103,6 +149,15 @@ export function WorkspaceProvider({ children }) {
   // app role happens to be stored on their account.
   const role = isPlatformAdmin ? 'company_admin' : (me && me.app_role) || 'staff';
   const isManager = role === 'company_admin' || role === 'branch_manager';
+  const isCompanyAdmin = role === 'company_admin';
+  const access = permissions.access;
+
+  // With no answer from the server nothing is hidden — the back office says so and offers a retry.
+  const hasModule = (module) => (access ? Boolean(access[module]) : true);
+  const levelOf = (module) => (access && access[module] ? access[module].level : 'none');
+  const scopeOf = (module) => (access && access[module] ? access[module].scope : '');
+  const feature = (name) =>
+    !pkg || !pkg.package ? true : (permissions.features || {})[name] !== false;
 
   return (
     <WorkspaceContext.Provider
@@ -113,10 +168,23 @@ export function WorkspaceProvider({ children }) {
         role,
         isManager,
         isPlatformAdmin,
+        isCompanyAdmin,
         employeeProfile,
         activeBranch,
         activeBranchId,
+        pkg,
+        access,
+        presets: permissions.presets,
+        presetKey: permissions.presetKey,
+        roleKey: permissions.roleKey,
+        features: permissions.features,
+        accessError: permissions.accessError,
+        hasModule,
+        levelOf,
+        scopeOf,
+        feature,
         selectBranch,
+        reloadPackage,
         switchCompany,
         refreshWorkspace,
         loading,
@@ -139,10 +207,23 @@ export function useWorkspace() {
       role: 'staff',
       isManager: false,
       isPlatformAdmin: false,
+      isCompanyAdmin: false,
       employeeProfile: null,
       activeBranch: null,
       activeBranchId: '',
+      pkg: null,
+      access: null,
+      presets: [],
+      presetKey: '',
+      roleKey: '',
+      features: {},
+      accessError: false,
+      hasModule: () => true,
+      levelOf: () => 'none',
+      scopeOf: () => '',
+      feature: () => true,
       selectBranch: () => {},
+      reloadPackage: async () => {},
       switchCompany: () => {},
       refreshWorkspace: () => {},
       loading: true,

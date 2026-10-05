@@ -2,7 +2,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Loader2, MapPin } from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
-import PermissionMatrixEditor from '@/components/PermissionMatrixEditor';
+import AccessMatrixEditor from '@/components/access/AccessMatrixEditor';
+import { MODULES, clampAccess, levelRank, normalizeCell, scopeRank } from '@/lib/access';
 import TradingHoursEditor, { hasOverlappingTradingHours } from '@/components/TradingHoursEditor';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -16,7 +17,7 @@ import { base44 } from '@/api/base44Client';
 
 export default function PropertySetup() {
   const { t } = useI18n();
-  const { branches, activeBranch, patchBranch, company } = useWorkspace();
+  const { branches, activeBranch, patchBranch, company, pkg, presets } = useWorkspace();
   const { toast } = useToast();
   const navigate = useNavigate();
   const [params] = useSearchParams();
@@ -44,7 +45,9 @@ export default function PropertySetup() {
       gps_lat: branch.gps_lat ?? '',
       gps_lng: branch.gps_lng ?? '',
       gps_radius_m: branch.gps_radius_m || 100,
-      role_permissions: branch.role_permissions || {}
+      // A grant saved before an area stopped offering create-and-delete is pulled back to what
+      // the table now offers.
+      role_permissions: clampAccess(branch.role_permissions || {})
     });
   }, [branch]);
 
@@ -105,6 +108,32 @@ export default function PropertySetup() {
   const customRoles = (company && company.custom_roles) || [];
   const branchMatrixRoles = customRoles.map((role) => role.key);
   const branchRoleLabels = Object.fromEntries(customRoles.map((role) => [role.key, role.label]));
+  // This branch can only narrow what the company (and the package, and the position preset)
+  // already allows, so only those modules and ceilings are offered.
+  const branchPackageModules = MODULES.filter(
+    (module) => !pkg || !pkg.package || (pkg.modules || []).includes(module)
+  );
+  const branchCeilings = Object.fromEntries(
+    customRoles.map((role) => {
+      const preset = presets.find((item) => item.key === role.preset_key);
+      const presetAccess = (preset && preset.access) || {};
+      const companyGrant = (company && company.role_permissions && company.role_permissions[role.key]) || {};
+      const merged = {};
+      MODULES.forEach((module) => {
+        const cap = presetAccess[module];
+        if (!cap) return;
+        const saved = companyGrant[module];
+        const cell = normalizeCell(saved);
+        // The company already closed this module for the position: the branch cannot reopen it.
+        if (saved && cell.level === 'none') return;
+        const level = cell.level && levelRank(cell.level) <= levelRank(cap.level) ? cell.level : cap.level;
+        const capScope = cap.scope || 'branch';
+        const scope = !cell.scope || scopeRank(cell.scope) <= scopeRank(capScope) ? cell.scope || capScope : capScope;
+        merged[module] = { level, scope };
+      });
+      return [role.key, merged];
+    })
+  );
 
   return (
     <div>
@@ -231,12 +260,13 @@ export default function PropertySetup() {
               {t('perm.noRoles')}
             </p>
           ) : (
-            <PermissionMatrixEditor
+            <AccessMatrixEditor
               value={form.role_permissions}
               onChange={(next) => set('role_permissions', next)}
-              base={company && company.role_permissions}
               roles={branchMatrixRoles}
               roleLabels={branchRoleLabels}
+              ceilings={branchCeilings}
+              modules={branchPackageModules}
               allowInherit
             />
           )}

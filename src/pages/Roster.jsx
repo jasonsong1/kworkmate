@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { ChevronLeft, ChevronRight, Loader2, Plus, Send, Settings2, Sparkles, Trash2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Loader2, Plus, Send, Settings2, Sparkles } from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
 import ShiftDialog from '@/components/ShiftDialog';
 import RosterSettingsDialog from '@/components/RosterSettingsDialog';
@@ -9,12 +9,16 @@ import { Card, CardContent } from '@/components/ui/card';
 import { useToast } from '@/components/ui/use-toast';
 import { useI18n } from '@/lib/i18n';
 import { useWorkspace } from '@/lib/WorkspaceContext';
+import { usePermissions } from '@/lib/permissions';
 import { addDaysIso, startOfWeekIso, todayIso, weekDates } from '@/lib/bh';
 import { base44 } from '@/api/base44Client';
 
 export default function Roster() {
   const { t } = useI18n();
-  const { activeBranch, isManager, me } = useWorkspace();
+  const { activeBranch, isManager, me, feature } = useWorkspace();
+  const { canEdit } = usePermissions();
+  // Building, saving and sending the roster needs update access; reading it does not.
+  const canManageRoster = canEdit('roster');
   const { toast } = useToast();
 
   const [weekStart, setWeekStart] = useState(startOfWeekIso(todayIso()));
@@ -114,11 +118,6 @@ export default function Roster() {
     await load();
   };
 
-  const removeShift = async (shift) => {
-    await base44.entities.Shift.delete(shift.id);
-    await load();
-  };
-
   const moveShift = async (email, date) => {
     const shift = shifts.find((s) => s.id === dragId);
     setDragId('');
@@ -132,9 +131,16 @@ export default function Roster() {
     await load();
   };
 
-  // Managers and the branch's own supervisors can correct what a person submitted.
-  const canEditAvailability =
-    isManager || Boolean(activeBranch && me && (activeBranch.manager_emails || []).includes(me.email));
+  // Managers and the branch's own supervisors can correct what a person submitted. A position
+  // that only reads the roster still sees the team's schedule but only its own availability.
+  const inManagerEmails = Boolean(activeBranch && me && (activeBranch.manager_emails || []).includes(me.email));
+  const canEditAvailability = canManageRoster && (isManager || inManagerEmails);
+  const visibleSubmissions = canManageRoster
+    ? submissions
+    : submissions.filter((item) => item.employee_email === ((me && me.email) || ''));
+  const boardEmployees = canManageRoster
+    ? employees
+    : employees.filter((employee) => employee.user_email === ((me && me.email) || ''));
 
   const shiftsFor = (email, date) => shifts.filter((s) => s.employee_email === email && s.date === date);
   const publishedCount = shifts.filter((s) => s.status === 'published').length;
@@ -157,10 +163,14 @@ export default function Roster() {
                 <ChevronRight className="h-4 w-4" />
               </Button>
             </div>
-            <Button variant="outline" onClick={() => setSettingsOpen(true)} disabled={!activeBranch}>
+            <Button variant="outline" onClick={() => setSettingsOpen(true)} disabled={!activeBranch || !canManageRoster}>
               <Settings2 className="mr-2 h-4 w-4" /> {t('roster.settings')}
             </Button>
-            <Button variant="outline" onClick={autoBuild} disabled={!activeBranch || generating}>
+            <Button
+              variant="outline"
+              onClick={autoBuild}
+              disabled={!activeBranch || generating || !canManageRoster || !feature('auto_roster')}
+            >
               {generating ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               ) : (
@@ -180,10 +190,10 @@ export default function Roster() {
             >
               <Plus className="mr-2 h-4 w-4" /> {t('roster.addShift')}
             </Button>
-            <Button variant="outline" onClick={saveWeek} disabled={!activeBranch || shifts.length === 0}>
+            <Button variant="outline" onClick={saveWeek} disabled={!activeBranch || shifts.length === 0 || !canManageRoster}>
               {t('roster.save')}
             </Button>
-            <Button onClick={sendWeek} disabled={!activeBranch || shifts.length === 0 || sending}>
+            <Button onClick={sendWeek} disabled={!activeBranch || shifts.length === 0 || sending || !canManageRoster}>
               {sending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
               {t('roster.send')}
             </Button>
@@ -235,13 +245,13 @@ export default function Roster() {
                             key={`${employee.id}-${day.date}`}
                             className="border-t p-1"
                             onDragOver={(event) => event.preventDefault()}
-                            onDrop={() => moveShift(employee.user_email, day.date)}
+                            onDrop={() => canManageRoster && moveShift(employee.user_email, day.date)}
                           >
                             <div className="space-y-1">
                               {shiftsFor(employee.user_email, day.date).map((shift) => (
                                 <div
                                   key={shift.id}
-                                  draggable
+                                  draggable={canManageRoster}
                                   onDragStart={() => setDragId(shift.id)}
                                   onDragEnd={() => setDragId('')}
                                   className={`group cursor-grab rounded-lg border px-2 py-1.5 text-xs ${
@@ -256,18 +266,13 @@ export default function Roster() {
                                     <span className="font-medium">
                                       {shift.start_time}–{shift.end_time}
                                     </span>
-                                    <button
-                                      onClick={() => removeShift(shift)}
-                                      className="opacity-0 transition-opacity group-hover:opacity-100"
-                                    >
-                                      <Trash2 className="h-3 w-3 text-destructive" />
-                                    </button>
                                   </div>
                                   {shift.position ? (
                                     <p className="truncate text-[11px] text-muted-foreground">{shift.position}</p>
                                   ) : null}
                                 </div>
                               ))}
+                              {canManageRoster && (
                               <button
                                 onClick={() => {
                                   setDialogDate(day.date);
@@ -278,6 +283,7 @@ export default function Roster() {
                               >
                                 +
                               </button>
+                              )}
                             </div>
                           </td>
                         ))}
@@ -292,8 +298,8 @@ export default function Roster() {
       </Card>
 
       <AvailabilityBoard
-        employees={employees}
-        submissions={submissions}
+        employees={boardEmployees}
+        submissions={visibleSubmissions}
         days={days}
         branch={activeBranch}
         weekStart={weekStart}

@@ -1,5 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.52';
 import { decodeKioskToken, timezoneForBranch, todayIn } from '../../shared/kiosk.ts';
+import { verifyPin } from '../../shared/pin.ts';
 
 function rowsOf(result) {
   return Array.isArray(result) ? result : (result && result.items) || [];
@@ -35,6 +36,9 @@ export default async function (req) {
         branch_name: branch.name,
         company_name: company ? company.name : '',
         brand_color: branch.brand_color || (company && company.brand_color) || '#4338ca',
+        // The company's own clock-in QR design, so the store screen shows the same card the
+        // manager saved in Template design.
+        qr_design: (company && company.qr_design) || {},
         date: today
       });
     }
@@ -57,6 +61,14 @@ export default async function (req) {
     if (person.status && person.status !== 'active') {
       return Response.json({ error: 'employee_inactive' });
     }
+
+    // The number alone is easy to borrow or overhear, so a personal PIN confirms that the
+    // person standing at the kiosk is the one the number belongs to.
+    const pin = String(body.pin || '').trim();
+    if (!pin) return Response.json({ error: 'pin_required' });
+    if (!person.pin_hash || !person.pin_salt) return Response.json({ error: 'pin_not_set' });
+    const pinOk = await verifyPin(pin, person.pin_hash, person.pin_salt);
+    if (!pinOk) return Response.json({ error: 'pin_wrong' });
 
     const active = rowsOf(
       await base44.asServiceRole.entities.TimeEntry.filter(

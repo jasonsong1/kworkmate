@@ -13,6 +13,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { useI18n } from '@/lib/i18n';
 import { useWorkspace } from '@/lib/WorkspaceContext';
 import { EMPLOYMENT_TYPES, defaultRequiredQuestions, money } from '@/lib/bh';
+import { canCreateJob } from '@/lib/packages';
 import { base44 } from '@/api/base44Client';
 
 const statusTone = {
@@ -23,7 +24,8 @@ const statusTone = {
 
 export default function Jobs() {
   const { t } = useI18n();
-  const { company, activeBranch } = useWorkspace();
+  const { company, activeBranch, pkg, reloadPackage } = useWorkspace();
+  const canCreate = canCreateJob(pkg);
   const { toast } = useToast();
   const navigate = useNavigate();
   const roleOptions = (company && company.custom_roles) || [];
@@ -53,6 +55,8 @@ export default function Jobs() {
       map[row.job_id] = row.count;
     });
     setCounts(map);
+    // Open ads and the package limit move together, so refresh both together.
+    await reloadPackage();
     setLoading(false);
   }, [activeBranch]);
 
@@ -97,11 +101,22 @@ export default function Jobs() {
         title={t('jobs.title')}
         subtitle={activeBranch ? activeBranch.name : t('jobs.subtitle')}
         actions={
-          <Button onClick={() => setOpen(true)} disabled={!activeBranch}>
+          <Button onClick={() => setOpen(true)} disabled={!activeBranch || !canCreate}>
             <Plus className="mr-2 h-4 w-4" /> {t('jobs.add')}
           </Button>
         }
       />
+
+      {!canCreate && (
+        <Card className="mb-4 border-amber-200 bg-amber-50">
+          <CardContent className="p-4 text-sm">
+            <p className="font-semibold">{t('pkg.limitTitle')}</p>
+            <p className="mt-1 text-muted-foreground">
+              {pkg && pkg.job_lock ? t('pkg.jobLockHint') : t('pkg.limitBody')}
+            </p>
+          </CardContent>
+        </Card>
+      )}
 
       {loading ? (
         <p className="py-10 text-center text-sm text-muted-foreground">

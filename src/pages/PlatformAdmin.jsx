@@ -1,6 +1,7 @@
 import React from 'react';
 import PageHeader from '@/components/PageHeader';
 import PlatformAdminManager from '@/components/platform/PlatformAdminManager';
+import PresetManager from '@/components/platform/PresetManager';
 import { Card, CardContent } from '@/components/ui/card';
 import { useI18n } from '@/lib/i18n';
 import { useWorkspace } from '@/lib/WorkspaceContext';
@@ -24,7 +25,10 @@ export default function PlatformAdmin() {
   return (
     <div>
       <PageHeader title={t('platform.title')} subtitle={t('platform.subtitle')} />
-      <PlatformAdminManager />
+      <div className="space-y-6">
+        <PlatformAdminManager />
+        <PresetManager />
+      </div>
     </div>
   );
 }

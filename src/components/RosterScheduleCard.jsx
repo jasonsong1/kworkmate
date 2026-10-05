@@ -35,7 +35,7 @@ export default function RosterScheduleCard({ branch }) {
     setHour(Number(branch.roster_email_hour ?? 20));
   }, [branch]);
 
-  const editable = canEdit('branch_settings');
+  const editable = canEdit('branches');
 
   const save = async () => {
     setSaving(true);

@@ -11,12 +11,17 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { useToast } from '@/components/ui/use-toast';
 import { useI18n } from '@/lib/i18n';
 import { useWorkspace } from '@/lib/WorkspaceContext';
+import { usePermissions } from '@/lib/permissions';
 import { money, visaLabel } from '@/lib/bh';
 import { base44 } from '@/api/base44Client';
 
 export default function Employees() {
   const { t } = useI18n();
-  const { activeBranch } = useWorkspace();
+  const { activeBranch, me, scopeOf } = useWorkspace();
+  const { canEdit } = usePermissions();
+  // A position with "own records only" reaches its own profile and nothing else.
+  const selfOnly = scopeOf('employees') === 'self';
+  const canManage = canEdit('employees');
   const { toast } = useToast();
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -34,6 +39,7 @@ export default function Employees() {
     }
     setLoading(true);
     const query = { branch_id: activeBranch.id };
+    if (selfOnly) query.user_email = (me && me.email) || '__none__';
     const term = search.trim();
     if (term) {
       query.$or = [
@@ -44,7 +50,7 @@ export default function Employees() {
     const page = await base44.entities.EmployeeProfile.filter(query, { sort: '-created_date', limit: 100 });
     setRows(page.items || []);
     setLoading(false);
-  }, [activeBranch, search]);
+  }, [activeBranch, search, selfOnly, me]);
 
   useEffect(() => {
     const timer = setTimeout(load, search ? 300 : 0);
@@ -93,7 +99,7 @@ export default function Employees() {
         title={t('employees.title')}
         subtitle={activeBranch ? activeBranch.name : t('employees.subtitle')}
         actions={
-        <Button onClick={openCreate} disabled={!activeBranch}>
+        <Button onClick={openCreate} disabled={!activeBranch || !canManage}>
             <Plus className="mr-2 h-4 w-4" /> {t('employees.add')}
           </Button>
         } />
@@ -168,7 +174,7 @@ export default function Employees() {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-1">
-                          <Button size="sm" variant="ghost" onClick={() => openEdit(row)} title={t('common.edit')}>
+                          <Button size="sm" variant="ghost" onClick={() => openEdit(row)} disabled={!canManage} title={t('common.edit')}>
                             <Pencil className="h-3.5 w-3.5" />
                           </Button>
                           <Button
@@ -206,6 +212,7 @@ export default function Employees() {
                         size="sm"
                         variant="ghost"
                         title={row.status === 'inactive' ? t('employees.activate') : t('employees.deactivate')}
+                        disabled={!canManage}
                         onClick={() => toggleActive(row)}>
                         
                             <Power className="h-3.5 w-3.5" />
@@ -214,6 +221,7 @@ export default function Employees() {
                         size="sm"
                         variant="ghost"
                         title={t('employees.delete')}
+                        disabled={!canManage}
                         onClick={() => removeEmployee(row)}>
                         
                             <Trash2 className="h-3.5 w-3.5 text-destructive" />

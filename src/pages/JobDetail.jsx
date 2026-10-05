@@ -17,13 +17,15 @@ import { useToast } from '@/components/ui/use-toast';
 import { useI18n } from '@/lib/i18n';
 import { useWorkspace } from '@/lib/WorkspaceContext';
 import { EMPLOYMENT_TYPES, visibleRequiredQuestions } from '@/lib/bh';
+import { canCreateJob, videoInterviewAllowed } from '@/lib/packages';
 import { base44 } from '@/api/base44Client';
 
 export default function JobDetail() {
   const { jobId } = useParams();
   const { t } = useI18n();
-  const { branches, company } = useWorkspace();
+  const { branches, company, pkg, reloadPackage } = useWorkspace();
   const { toast } = useToast();
+  const videoAllowed = videoInterviewAllowed(pkg);
   const roleOptions = (company && company.custom_roles) || [];
   const [job, setJob] = useState(null);
   const [branch, setBranch] = useState(null);
@@ -70,8 +72,18 @@ export default function JobDetail() {
 
   const toggleStatus = async () => {
     const next = job.status === 'open' ? 'closed' : 'open';
+    // Opening an ad is what the package limits, so the answer comes from the server.
+    if (next === 'open' && !canCreateJob(pkg)) {
+      toast({
+        title: t('pkg.limitTitle'),
+        description: pkg && pkg.job_lock ? t('pkg.jobLockHint') : t('pkg.limitBody'),
+        variant: 'destructive'
+      });
+      return;
+    }
     await base44.entities.Job.update(job.id, { status: next });
     patch({ status: next });
+    await reloadPackage();
   };
 
   if (!job) {
@@ -227,13 +239,15 @@ export default function JobDetail() {
                       onCheckedChange={(v) => patch({ mini_interview_enabled: v })}
                     />
                   </div>
-                  <div className="flex items-center justify-between rounded-lg border px-4 py-3">
-                    <span className="text-sm">{t('settings.videoInterviewStep')}</span>
-                    <Switch
-                      checked={job.video_interview_enabled !== false}
-                      onCheckedChange={(v) => patch({ video_interview_enabled: v })}
-                    />
-                  </div>
+                  {videoAllowed && (
+                    <div className="flex items-center justify-between rounded-lg border px-4 py-3">
+                      <span className="text-sm">{t('settings.videoInterviewStep')}</span>
+                      <Switch
+                        checked={job.video_interview_enabled !== false}
+                        onCheckedChange={(v) => patch({ video_interview_enabled: v })}
+                      />
+                    </div>
+                  )}
                   <div className="flex items-center justify-between rounded-lg border px-4 py-3">
                     <span className="text-sm">{t('settings.autoReject')}</span>
                     <Switch

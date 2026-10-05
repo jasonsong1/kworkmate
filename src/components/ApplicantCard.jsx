@@ -6,8 +6,12 @@ import VideoInterviewPanel from '@/components/VideoInterviewPanel';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { APPLICANT_STATUS, coverageDays, formatDateTime, visaLabel } from '@/lib/bh';
+import { useWorkspace } from '@/lib/WorkspaceContext';
+import { videoInterviewAllowed } from '@/lib/packages';
 
 export default function ApplicantCard({ applicant, actions, onOpen, onViewResume }) {
+  const { pkg } = useWorkspace();
+  const videoAllowed = videoInterviewAllowed(pkg);
   const meta = APPLICANT_STATUS[applicant.status] || APPLICANT_STATUS.submitted;
   const unreadable = applicant.analysis_status === 'unreadable';
   const pending = applicant.analysis_status === 'pending';
@@ -92,10 +96,10 @@ export default function ApplicantCard({ applicant, actions, onOpen, onViewResume
       </div>
 
       {(applicant.mini_interview_responses || []).length > 0 ||
-      (applicant.video_interview_responses || []).length > 0 ? (
+      (videoAllowed && (applicant.video_interview_responses || []).length > 0) ? (
         <div className="mt-4 space-y-3 rounded-lg border bg-muted/20 p-3">
           <MiniInterviewPanel responses={applicant.mini_interview_responses} />
-          <VideoInterviewPanel responses={applicant.video_interview_responses} />
+          {videoAllowed && <VideoInterviewPanel responses={applicant.video_interview_responses} />}
         </div>
       ) : null}
 

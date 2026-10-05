@@ -96,6 +96,25 @@
       "items": {
         "type": "object"
       }
+    },
+    "package": {
+      "type": "string"
+    },
+    "package_start_date": {
+      "type": "string"
+    },
+    "package_reactivated_at": {
+      "type": "string"
+    },
+    "package_job_lock": {
+      "type": "boolean",
+      "default": false
+    },
+    "pay_multipliers": {
+      "type": "object"
+    },
+    "qr_design": {
+      "type": "object"
     }
   },
   "required": [

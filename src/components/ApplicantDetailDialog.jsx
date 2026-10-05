@@ -8,6 +8,8 @@ import AvailabilityTable from '@/components/AvailabilityTable';
 import MiniInterviewPanel from '@/components/MiniInterviewPanel';
 import VideoInterviewPanel from '@/components/VideoInterviewPanel';
 import { useI18n } from '@/lib/i18n';
+import { useWorkspace } from '@/lib/WorkspaceContext';
+import { videoInterviewAllowed } from '@/lib/packages';
 import { APPLICANT_STATUS, formatDateTime, noticePeriodLabel, visaLabel } from '@/lib/bh';
 import { base44 } from '@/api/base44Client';
 
@@ -38,6 +40,8 @@ const EMAIL_TYPE_LABELS = {
 export default function ApplicantDetailDialog({ applicant, open, onOpenChange, onResent }) {
   const { t } = useI18n();
   const { toast } = useToast();
+  const { pkg } = useWorkspace();
+  const videoAllowed = videoInterviewAllowed(pkg);
   const [resending, setResending] = useState(false);
   if (!applicant) return null;
   const meta = APPLICANT_STATUS[applicant.status] || APPLICANT_STATUS.submitted;
@@ -166,7 +170,7 @@ export default function ApplicantDetailDialog({ applicant, open, onOpenChange, o
 
           <MiniInterviewPanel responses={applicant.mini_interview_responses} />
 
-          <VideoInterviewPanel responses={applicant.video_interview_responses} />
+          {videoAllowed && <VideoInterviewPanel responses={applicant.video_interview_responses} />}
 
           {(applicant.answers || []).length > 0 && (
             <div className="space-y-2">

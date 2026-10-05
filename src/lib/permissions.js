@@ -1,91 +1,21 @@
+// Every screen asks its question here. The answer is the one the server resolved out of the
+// package, the position preset and the employer grant, so a screen never judges on its own.
 import { useWorkspace } from '@/lib/WorkspaceContext';
 
-export const PERMISSION_AREAS = [
-  { key: 'roster' },
-  { key: 'attendance' },
-  { key: 'employees' },
-  { key: 'jobs' },
-  { key: 'templates' },
-  { key: 'branch_settings' },
-  { key: 'company_settings' }
-];
-
-export const PERMISSION_LEVELS = ['none', 'view', 'edit'];
-
-export const EDITABLE_ROLES = ['branch_manager', 'staff'];
-
-// Company wide defaults, used until a company or branch defines something else.
-export const DEFAULT_ROLE_PERMISSIONS = {
-  branch_manager: {
-    roster: 'edit',
-    attendance: 'edit',
-    employees: 'view',
-    jobs: 'edit',
-    templates: 'view',
-    branch_settings: 'edit',
-    company_settings: 'none'
-  },
-  staff: {
-    roster: 'view',
-    attendance: 'view',
-    employees: 'none',
-    jobs: 'none',
-    templates: 'none',
-    branch_settings: 'none',
-    company_settings: 'none'
-  }
-};
-
-const AREA_BY_PREFIX = [
-  ['/roster', 'roster'],
-  ['/attendance', 'attendance'],
-  ['/clock', 'attendance'],
-  ['/employees', 'employees'],
-  ['/jobs', 'jobs'],
-  ['/applicants', 'jobs'],
-  ['/interviews', 'jobs'],
-  ['/interview-settings', 'templates'],
-  ['/email-templates', 'templates'],
-  ['/template-design', 'templates'],
-  ['/job-design', 'templates'],
-  ['/branches', 'branch_settings'],
-  ['/property', 'branch_settings'],
-  ['/settings', 'company_settings']
-];
-
-export function areaForPath(pathname) {
-  const match = AREA_BY_PREFIX.find(([prefix]) => pathname.startsWith(prefix));
-  return match ? match[1] : null;
-}
-
-export function resolvePermissions(company, branch, role, isPlatformAdmin) {
-  const resolved = {};
-  // A super admin holds every permission in every company they enter.
-  if (isPlatformAdmin || role === 'company_admin') {
-    PERMISSION_AREAS.forEach((area) => {
-      resolved[area.key] = 'edit';
-    });
-    return resolved;
-  }
-  const fallback = DEFAULT_ROLE_PERMISSIONS[role] || DEFAULT_ROLE_PERMISSIONS.staff;
-  const companySet = (company && company.role_permissions && company.role_permissions[role]) || {};
-  const branchSet = (branch && branch.role_permissions && branch.role_permissions[role]) || {};
-  PERMISSION_AREAS.forEach((area) => {
-    resolved[area.key] = branchSet[area.key] || companySet[area.key] || fallback[area.key] || 'none';
-  });
-  return resolved;
-}
-
 export function usePermissions() {
-  const { company, activeBranch, role, isPlatformAdmin } = useWorkspace();
-  const permissions = resolvePermissions(company, activeBranch, role, isPlatformAdmin);
+  const { access, role, isPlatformAdmin, isCompanyAdmin } = useWorkspace();
+  const level = (module) => (access && access[module] ? access[module].level : 'none');
+  const scope = (module) => (access && access[module] ? access[module].scope : '');
+
   return {
     role,
     isPlatformAdmin,
-    isCompanyAdmin: isPlatformAdmin || role === 'company_admin',
-    permissions,
-    level: (area) => permissions[area] || 'none',
-    canView: (area) => (permissions[area] || 'none') !== 'none',
-    canEdit: (area) => permissions[area] === 'edit'
+    isCompanyAdmin,
+    permissions: access || {},
+    level,
+    scope,
+    canView: (module) => level(module) !== 'none',
+    canEdit: (module) => ['update', 'write'].includes(level(module)),
+    canWrite: (module) => level(module) === 'write'
   };
 }

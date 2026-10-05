@@ -1,13 +1,14 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowRight, Mail, Palette } from 'lucide-react';
+import { ArrowRight, Mail, Palette, QrCode } from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
 import { Card, CardContent } from '@/components/ui/card';
 import { useI18n } from '@/lib/i18n';
 
 const OPTIONS = [
   { to: '/email-templates', title: 'templates.emailTitle', hint: 'templates.emailHint', icon: Mail },
-  { to: '/job-design', title: 'templates.posterTitle', hint: 'templates.posterHint', icon: Palette }
+  { to: '/job-design', title: 'templates.posterTitle', hint: 'templates.posterHint', icon: Palette },
+  { to: '/qr-design', title: 'templates.qrTitle', hint: 'templates.qrHint', icon: QrCode }
 ];
 
 export default function TemplateDesign() {
@@ -17,7 +18,7 @@ export default function TemplateDesign() {
   return (
     <div>
       <PageHeader title={t('templates.title')} subtitle={t('templates.subtitle')} />
-      <div className="grid gap-5 sm:grid-cols-2">
+      <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
         {OPTIONS.map((option) => (
           <Card
             key={option.to}

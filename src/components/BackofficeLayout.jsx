@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { Languages, LogOut, Menu, Moon, Sun } from 'lucide-react';
+import { Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { Languages, LogOut, Menu, Moon, RefreshCw, Sun } from 'lucide-react';
 import AppSidebar from '@/components/AppSidebar';
 import CompanySwitcher from '@/components/company/CompanySwitcher';
 import { Button } from '@/components/ui/button';
@@ -8,25 +8,42 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { useI18n } from '@/lib/i18n';
 import { WorkspaceProvider, useWorkspace } from '@/lib/WorkspaceContext';
-import { areaForPath, usePermissions } from '@/lib/permissions';
+import { moduleForPath } from '@/lib/packages';
+import AccessExpired from '@/components/package/AccessExpired';
 import { Card, CardContent } from '@/components/ui/card';
-import { applyTheme, readTheme, saveTheme } from '@/lib/theme';
+import { applyTheme, readTheme, resetTheme, saveTheme } from '@/lib/theme';
 import { base44 } from '@/api/base44Client';
 
 function BackofficeShell() {
   const { t, toggle } = useI18n();
-  const { company, branches, activeBranchId, selectBranch, isPlatformAdmin, me } = useWorkspace();
-  const { canView } = usePermissions();
+  const {
+    company,
+    branches,
+    activeBranchId,
+    selectBranch,
+    isPlatformAdmin,
+    me,
+    pkg,
+    hasModule,
+    accessError,
+    reloadPackage
+  } = useWorkspace();
   const [open, setOpen] = useState(false);
   const [theme, setTheme] = useState(() => readTheme());
   const navigate = useNavigate();
   const { pathname } = useLocation();
-  const requiredArea = areaForPath(pathname);
-  const allowed = !requiredArea || canView(requiredArea);
+  const requiredModule = moduleForPath(pathname);
+  // A module outside the package, the position preset or the employer grant is simply not
+  // there: no lock, no notice, and its address does not open it either.
+  const allowed = !requiredModule || hasModule(requiredModule);
+  // A super admin is never locked out — they are the one who reactivates the company.
+  const expired = Boolean(pkg && pkg.expired) && !isPlatformAdmin;
   const activeBranchOptions = branches.filter((b) => b.is_active !== false);
 
   useEffect(() => {
     applyTheme(theme);
+    // Sign-in and the applicant pages are light, so the dark look is dropped on the way out.
+    return () => resetTheme();
   }, [theme]);
 
   // The look travels with the account, so it comes back on the next sign-in anywhere.
@@ -50,23 +67,27 @@ function BackofficeShell() {
   };
 
   return (
-    <div className="flex min-h-screen bg-muted/40">
-      <aside className="hidden w-64 shrink-0 border-r bg-background lg:block">
-        <AppSidebar />
-      </aside>
+    <div className="flex min-h-screen bg-background">
+      {!expired && (
+        <aside className="hidden w-64 shrink-0 border-r bg-card lg:block">
+          <AppSidebar />
+        </aside>
+      )}
 
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-30 flex items-center gap-3 border-b bg-background/95 px-4 py-3 backdrop-blur lg:px-6">
-          <Sheet open={open} onOpenChange={setOpen}>
-            <SheetTrigger asChild>
-              <Button variant="outline" size="icon" className="lg:hidden">
-                <Menu className="h-4 w-4" />
-              </Button>
-            </SheetTrigger>
-            <SheetContent side="left" className="w-64 p-0">
-              <AppSidebar onNavigate={() => setOpen(false)} />
-            </SheetContent>
-          </Sheet>
+          {!expired && (
+            <Sheet open={open} onOpenChange={setOpen}>
+              <SheetTrigger asChild>
+                <Button variant="outline" size="icon" className="lg:hidden">
+                  <Menu className="h-4 w-4" />
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="left" className="w-64 p-0">
+                <AppSidebar onNavigate={() => setOpen(false)} />
+              </SheetContent>
+            </Sheet>
+          )}
 
           <div className="min-w-0 flex-1">
             {!isPlatformAdmin && (
@@ -111,15 +132,18 @@ function BackofficeShell() {
         </header>
 
         <main className="min-w-0 flex-1 px-4 py-6 lg:px-8">
-          {allowed ? (
-            <Outlet />
-          ) : (
-            <Card>
-              <CardContent className="p-10 text-center text-sm text-muted-foreground">
-                {t('perm.noAccess')}
+          {!expired && accessError && (
+            <Card className="mb-4 border-amber-200 bg-amber-50 dark:border-amber-500/30 dark:bg-amber-500/10">
+              <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">
+                <p className="text-sm text-amber-800 dark:text-amber-200">{t('access.failed')}</p>
+                <Button variant="outline" size="sm" onClick={() => reloadPackage()}>
+                  <RefreshCw className="mr-2 h-4 w-4" /> {t('access.retry')}
+                </Button>
               </CardContent>
             </Card>
           )}
+
+          {expired ? <AccessExpired /> : !allowed ? <Navigate to="/" replace /> : <Outlet />}
         </main>
       </div>
     </div>);

@@ -1,5 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.52';
 import { formatEmployeeNumber, randomToken } from '../../shared/util.ts';
+import { hashPin, isValidPin, newPinSalt } from '../../shared/pin.ts';
 import { sendEmail, brandedEmail, portalLink } from '../../shared/email.ts';
 import { sendAccountAccessEmail } from '../../shared/account.ts';
 import { employeeLanguage, onboardingMail, onboardingReminderMail } from '../../shared/employeeMail.ts';
@@ -134,6 +135,17 @@ export default async function (req) {
     const roleKey =
       me.app_role === 'company_admin' && allowedRoles.includes(input.app_role) ? input.app_role : null;
 
+    // The store kiosk PIN is optional on the form: leaving it blank keeps whatever is stored.
+    const pinPatch = {};
+    if (String(input.pin || '').trim()) {
+      if (!isValidPin(input.pin)) {
+        return Response.json({ error: 'The PIN must be 4 to 6 digits' }, { status: 400 });
+      }
+      const salt = newPinSalt();
+      pinPatch.pin_salt = salt;
+      pinPatch.pin_hash = await hashPin(input.pin, salt);
+    }
+
     if (action === 'update') {
       const profile = await base44.asServiceRole.entities.EmployeeProfile.get(input.id);
       if (!profile || profile.company_id !== me.company_id) {
@@ -152,7 +164,8 @@ export default async function (req) {
         emergency_contact_name: input.emergency_contact_name || '',
         emergency_contact_phone: input.emergency_contact_phone || '',
         language: input.language === 'en' || input.language === 'ko' ? input.language : profile.language || 'ko',
-        app_role: roleKey || profile.app_role || 'staff'
+        app_role: roleKey || profile.app_role || 'staff',
+        ...pinPatch
       });
 
       if (roleKey) await applyRole(base44, company, branch, profile.user_email, roleKey);
@@ -214,6 +227,7 @@ export default async function (req) {
       onboarding_token: token,
       language: input.language === 'en' ? 'en' : 'ko',
       app_role: roleKey || 'staff',
+      ...pinPatch,
       docs: []
     });
 

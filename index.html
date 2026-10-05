@@ -9,7 +9,7 @@
       name="description"
       content="K-Workmate — multi-site hiring, mobile paperless onboarding and GPS attendance for hospitality franchise groups."
     />
-    <meta name="theme-color" content="#4338ca" />
+    <meta name="theme-color" content="#ffffff" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -17,11 +17,19 @@
       rel="stylesheet"
     />
     <script>
-      // Paint in the saved look straight away so the screen never flashes white first.
+      // Paint in the back-office look straight away so the screen never flashes light first.
+      // The sign-in screen and the applicant pages stay light.
       (function () {
         try {
-          if (localStorage.getItem('kw_theme') === 'dark') {
+          var publicPath = /^\/(login|register|forgot-password|reset-password|apply|interview|onboarding|mini-interview|video-interview)/.test(
+            window.location.pathname
+          );
+          var saved = localStorage.getItem('kw_theme_v2');
+          var dark = publicPath ? false : saved !== 'light';
+          if (dark) {
             document.documentElement.classList.add('dark');
+            var meta = document.querySelector('meta[name="theme-color"]');
+            if (meta) meta.setAttribute('content', '#111316');
           }
         } catch (e) {}
       })();

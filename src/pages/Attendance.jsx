@@ -1,10 +1,9 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { CheckCircle2, FileBarChart, Keyboard, Loader2, MapPin, QrCode, XCircle } from 'lucide-react';
+import { CheckCircle2, FileBarChart, Loader2, MapPin, QrCode, XCircle } from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
 import ApprovalActions from '@/components/attendance/ApprovalActions';
 import AttendanceReportDialog from '@/components/attendance/AttendanceReportDialog';
-import KioskQrDialog from '@/components/attendance/KioskQrDialog';
-import { kioskUrl } from '@/lib/kioskLink';
+import ClockQrDialog from '@/components/attendance/ClockQrDialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -13,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useI18n } from '@/lib/i18n';
 import { useWorkspace } from '@/lib/WorkspaceContext';
+import { usePermissions } from '@/lib/permissions';
 import { formatDateTime, todayIso } from '@/lib/bh';
 import { base44 } from '@/api/base44Client';
 
@@ -20,7 +20,11 @@ const ALL = 'all';
 
 export default function Attendance() {
   const { t } = useI18n();
-  const { activeBranch, me } = useWorkspace();
+  const { activeBranch, me, scopeOf } = useWorkspace();
+  const { canEdit } = usePermissions();
+  // "Own records only" is a data-range rule the person's position preset carries: a manager
+  // sees the branch, a floor position sees nothing but itself.
+  const selfOnly = scopeOf('attendance') === 'self';
   const [date, setDate] = useState(todayIso());
   const [employeeFilter, setEmployeeFilter] = useState(ALL);
   const [employees, setEmployees] = useState([]);
@@ -32,19 +36,19 @@ export default function Attendance() {
 
   useEffect(() => {
     setEmployeeFilter(ALL);
-    if (!activeBranch) {
+    if (!activeBranch || selfOnly) {
       setEmployees([]);
       return undefined;
     }
     let cancelled = false;
-    base44.entities.EmployeeProfile
-      .filter({ branch_id: activeBranch.id }, { sort: 'full_name', limit: 200 })
-      .then((page) => {
-        if (!cancelled) setEmployees((page.items || []).filter((person) => person.user_email));
-      })
-      .catch(() => {
-        if (!cancelled) setEmployees([]);
-      });
+    base44.entities.EmployeeProfile.
+    filter({ branch_id: activeBranch.id }, { sort: 'full_name', limit: 200 }).
+    then((page) => {
+      if (!cancelled) setEmployees((page.items || []).filter((person) => person.user_email));
+    }).
+    catch(() => {
+      if (!cancelled) setEmployees([]);
+    });
     return () => {
       cancelled = true;
     };
@@ -59,25 +63,26 @@ export default function Attendance() {
     const from = `${date}T00:00:00.000Z`;
     const to = `${date}T23:59:59.999Z`;
     const query = { branch_id: activeBranch.id, clock_in_at: { $gte: from, $lte: to } };
-    if (employeeFilter !== ALL) query.employee_email = employeeFilter;
+    if (selfOnly) query.employee_email = (me && me.email) || '__none__';
+    else if (employeeFilter !== ALL) query.employee_email = employeeFilter;
     const [list, grouped] = await Promise.all([
-      base44.entities.TimeEntry.filter(query, { sort: '-clock_in_at', limit: 200 }).then((page) => page.items || []),
-      base44.entities.TimeEntry
-        .aggregate({ query, groupBy: 'approval_status', sum: 'minutes' })
-        .catch(() => ({ rows: [] }))
-    ]);
+    base44.entities.TimeEntry.filter(query, { sort: '-clock_in_at', limit: 200 }).then((page) => page.items || []),
+    base44.entities.TimeEntry.
+    aggregate({ query, groupBy: 'approval_status', sum: 'minutes' }).
+    catch(() => ({ rows: [] }))]
+    );
     setRows(list);
     const buckets = grouped.rows || [];
     setStats({
       count: buckets.reduce((sum, bucket) => sum + (bucket.count || 0), 0),
       // Only what a manager has accepted counts as worked time.
-      minutes: buckets
-        .filter((bucket) => bucket.approval_status !== 'pending' && bucket.approval_status !== 'rejected')
-        .reduce((sum, bucket) => sum + (bucket.sum_minutes || 0), 0),
+      minutes: buckets.
+      filter((bucket) => bucket.approval_status !== 'pending' && bucket.approval_status !== 'rejected').
+      reduce((sum, bucket) => sum + (bucket.sum_minutes || 0), 0),
       pending: (buckets.find((bucket) => bucket.approval_status === 'pending') || {}).count || 0
     });
     setLoading(false);
-  }, [activeBranch, date, employeeFilter]);
+  }, [activeBranch, date, employeeFilter, selfOnly, me]);
 
   useEffect(() => {
     load();
@@ -93,12 +98,6 @@ export default function Attendance() {
     await load();
   };
 
-  // The number pad screen for the store tablet, opened in its own tab.
-  const openKiosk = () => {
-    if (!activeBranch) return;
-    window.open(kioskUrl(activeBranch.id, date), '_blank', 'noopener');
-  };
-
   const hours = Math.floor(stats.minutes / 60);
   const minutes = stats.minutes % 60;
 
@@ -108,33 +107,35 @@ export default function Attendance() {
         title={t('attendance.title')}
         subtitle={activeBranch ? activeBranch.name : t('attendance.subtitle')}
         actions={
-          <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
             <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-40" />
+            {!selfOnly && (
             <Select value={employeeFilter} onValueChange={setEmployeeFilter}>
               <SelectTrigger className="w-48">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value={ALL}>{t('common.all')}</SelectItem>
-                {employees.map((person) => (
-                  <SelectItem key={person.id} value={person.user_email}>
+                {employees.map((person) =>
+              <SelectItem key={person.id} value={person.user_email}>
                     {person.full_name}
                   </SelectItem>
-                ))}
+              )}
               </SelectContent>
             </Select>
-            <Button variant="outline" onClick={() => setQrOpen(true)} disabled={!activeBranch}>
-              <QrCode className="mr-2 h-4 w-4" /> {t('attendance.qr')}
-            </Button>
-            <Button variant="outline" onClick={openKiosk} disabled={!activeBranch}>
-              <Keyboard className="mr-2 h-4 w-4" /> {t('attendance.manualEntry')}
+            )}
+            
+
+          
+            <Button variant="outline" onClick={() => setQrOpen(true)} disabled={!activeBranch || !canEdit('attendance')}>
+              <QrCode className="mr-2 h-4 w-4" /> {t('attendance.qrButton')}
             </Button>
             <Button variant="outline" onClick={() => setReportOpen(true)} disabled={!activeBranch}>
               <FileBarChart className="mr-2 h-4 w-4" /> {t('attendance.report')}
             </Button>
           </div>
-        }
-      />
+        } />
+      
 
       <div className="mb-6 grid gap-4 sm:grid-cols-3">
         <Card>
@@ -159,21 +160,21 @@ export default function Attendance() {
         </Card>
       </div>
 
-      {stats.pending > 0 ? (
-        <p className="mb-4 text-xs text-muted-foreground">{t('attendance.pendingHint')}</p>
-      ) : null}
+      {stats.pending > 0 ?
+      <p className="mb-4 text-xs text-muted-foreground">{t('attendance.pendingHint')}</p> :
+      null}
 
       <Card>
         <CardContent className="p-4">
-          {loading ? (
-            <p className="py-10 text-center text-sm text-muted-foreground">
+          {loading ?
+          <p className="py-10 text-center text-sm text-muted-foreground">
               <Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin" />
               {t('common.loading')}
-            </p>
-          ) : rows.length === 0 ? (
-            <p className="py-10 text-center text-sm text-muted-foreground">{t('common.none')}</p>
-          ) : (
-            <div className="overflow-x-auto">
+            </p> :
+          rows.length === 0 ?
+          <p className="py-10 text-center text-sm text-muted-foreground">{t('common.none')}</p> :
+
+          <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -187,8 +188,8 @@ export default function Attendance() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {rows.map((row) => (
-                    <TableRow key={row.id}>
+                  {rows.map((row) =>
+                <TableRow key={row.id}>
                       <TableCell>
                         <p className="font-medium">{row.employee_name}</p>
                         <p className="text-xs text-muted-foreground">
@@ -210,42 +211,52 @@ export default function Attendance() {
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
-                          {row.geo_verified ? (
-                            <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100">
+                          {row.geo_verified ?
+                      <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100">
                               <CheckCircle2 className="mr-1 h-3 w-3" /> {t('attendance.verified')}
-                            </Badge>
-                          ) : (
-                            <Badge variant="secondary">
+                            </Badge> :
+
+                      <Badge variant="secondary">
                               <XCircle className="mr-1 h-3 w-3" /> {t('attendance.outside')}
                             </Badge>
-                          )}
-                          {typeof row.clock_in_distance_m === 'number' && (
-                            <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                      }
+                          {typeof row.clock_in_distance_m === 'number' &&
+                      <span className="flex items-center gap-1 text-xs text-muted-foreground">
                               <MapPin className="h-3 w-3" />
                               {row.clock_in_distance_m}m
                             </span>
-                          )}
+                      }
                         </div>
                       </TableCell>
                       <TableCell>
-                        <ApprovalActions row={row} onDecide={decide} />
+                        {canEdit('attendance') ? (
+                          <ApprovalActions row={row} onDecide={decide} />
+                        ) : (
+                          <Badge variant="secondary">
+                            {row.approval_status === 'rejected'
+                              ? t('attendance.rejected')
+                              : row.approval_status === 'pending'
+                                ? t('attendance.pending')
+                                : t('attendance.approved')}
+                          </Badge>
+                        )}
                       </TableCell>
                     </TableRow>
-                  ))}
+                )}
                 </TableBody>
               </Table>
             </div>
-          )}
+          }
         </CardContent>
       </Card>
 
-      <KioskQrDialog open={qrOpen} onOpenChange={setQrOpen} branch={activeBranch} date={date} />
+      <ClockQrDialog open={qrOpen} onOpenChange={setQrOpen} branch={activeBranch} />
 
       <AttendanceReportDialog
         open={reportOpen}
         onOpenChange={setReportOpen}
-        branch={activeBranch}
-      />
-    </div>
-  );
+        branch={activeBranch} />
+      
+    </div>);
+
 }

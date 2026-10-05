@@ -1,12 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { AlertCircle, CheckCircle2, Loader2, MapPin } from 'lucide-react';
+import QrCard from '@/components/attendance/QrCard';
+import { AlertCircle, CheckCircle2, Keyboard, Loader2, MapPin, QrCode } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { base44 } from '@/api/base44Client';
+import { kioskUrl } from '@/lib/kioskLink';
 
 // Employee numbers mix letters, digits and hyphens (ED-003, BOT-00007).
 const normaliseNumber = (value) => value.toUpperCase().replace(/[^A-Z0-9-]/g, '').slice(0, 12);
+const normalisePin = (value) => value.replace(/\D/g, '').slice(0, 6);
 
 const MESSAGES = {
   invalid_link: 'This link is not valid. Please ask your manager for a new QR code.',
@@ -14,6 +17,9 @@ const MESSAGES = {
   branch_unavailable: 'This store is not available right now.',
   employee_not_found: 'We could not find that employee number at this store.',
   employee_inactive: 'That employee number is no longer active.',
+  pin_required: 'Please enter your PIN.',
+  pin_not_set: 'No PIN is set for this employee number yet. Please ask your manager.',
+  pin_wrong: 'That PIN is not correct. Please try again.',
   already_clocked_in: 'This employee is already clocked in.',
   not_clocked_in: 'This employee has not clocked in yet.'
 };
@@ -22,7 +28,12 @@ export default function Kiosk() {
   const { token } = useParams();
   const [info, setInfo] = useState(null);
   const [state, setState] = useState('loading');
+  // The tablet shows the store QR for staff to scan with their own phone first, and the keypad
+  // for anyone without a phone as the second option. Both live in this one screen, which needs
+  // no sign in.
+  const [mode, setMode] = useState('qr');
   const [number, setNumber] = useState('');
+  const [pin, setPin] = useState('');
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState('');
@@ -61,9 +72,19 @@ export default function Kiosk() {
     setNumber(normaliseNumber(value));
   };
 
+  const changePin = (value) => {
+    setResult(null);
+    setError('');
+    setPin(normalisePin(value));
+  };
+
   const punch = async (action) => {
     if (!number) {
       setError('Please enter your employee number.');
+      return;
+    }
+    if (!pin) {
+      setError('Please enter your PIN.');
       return;
     }
     setBusy(true);
@@ -71,7 +92,8 @@ export default function Kiosk() {
     const response = await base44.functions.invoke('kioskPunch', {
       token,
       action,
-      employee_number: number
+      employee_number: number,
+      pin
     });
     setBusy(false);
     const data = response.data || {};
@@ -81,6 +103,7 @@ export default function Kiosk() {
     }
     setResult(data);
     setNumber('');
+    setPin('');
   };
 
   const personalPunch = async (action) => {
@@ -167,40 +190,80 @@ export default function Kiosk() {
           </div>
         ) : null}
 
-        <div className="rounded-2xl border bg-white p-6 shadow-sm">
-          <p className="text-sm font-semibold">No phone? Enter your employee number</p>
-          <div className="mt-4">
+        <div className="grid grid-cols-2 gap-2 rounded-2xl border bg-white p-1.5 shadow-sm">
+          <Button
+            variant={mode === 'qr' ? 'default' : 'ghost'}
+            className="h-12 text-base"
+            onClick={() => setMode('qr')}
+          >
+            <QrCode className="mr-2 h-4 w-4" /> Store QR
+          </Button>
+          <Button
+            variant={mode === 'number' ? 'default' : 'ghost'}
+            className="h-12 text-base"
+            onClick={() => setMode('number')}
+          >
+            <Keyboard className="mr-2 h-4 w-4" /> My number
+          </Button>
+        </div>
+
+        {mode === 'number' ? (
+          <div className="rounded-2xl border bg-white p-6 shadow-sm">
+            <p className="text-sm font-semibold">Enter your employee number and PIN</p>
+            <div className="mt-4">
+              <Input
+                value={number}
+                onChange={(event) => changeNumber(event.target.value)}
+                placeholder="ED-003"
+                autoComplete="off"
+                autoCapitalize="characters"
+                spellCheck={false}
+                disabled={busy}
+                className="h-20 text-center font-mono text-3xl font-bold tracking-widest"
+              />
+            </div>
+            <p className="mt-4 text-xs font-medium text-slate-500">PIN</p>
             <Input
-              value={number}
-              onChange={(event) => changeNumber(event.target.value)}
-              placeholder="ED-003"
+              value={pin}
+              onChange={(event) => changePin(event.target.value)}
+              placeholder="••••"
+              type="password"
+              inputMode="numeric"
               autoComplete="off"
-              autoCapitalize="characters"
               spellCheck={false}
               disabled={busy}
-              className="h-20 text-center font-mono text-3xl font-bold tracking-widest"
+              className="mt-1 h-16 text-center font-mono text-2xl tracking-[0.5em]"
+            />
+
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <Button size="lg" className="h-14 text-base" disabled={busy} onClick={() => punch('in')}>
+                {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Clock in
+              </Button>
+              <Button
+                size="lg"
+                variant="outline"
+                className="h-14 text-base"
+                disabled={busy}
+                onClick={() => punch('out')}
+              >
+                Clock out
+              </Button>
+            </div>
+
+            <p className="mt-3 text-xs text-slate-400">
+              Entries made here are saved as pending and a manager approves them.
+            </p>
+          </div>
+        ) : (
+          <div className="rounded-2xl border bg-white p-6 text-center shadow-sm">
+            <QrCard
+              url={kioskUrl(info.branch_id, info.date)}
+              design={info.qr_design}
+              fallbackTitle="Scan to clock in"
+              fallbackNote={`Point a phone camera at this code to open today’s clock for ${info.branch_name}, then enter your employee number and PIN.`}
             />
           </div>
-
-          <div className="mt-4 grid gap-3 sm:grid-cols-2">
-            <Button size="lg" className="h-14 text-base" disabled={busy} onClick={() => punch('in')}>
-              {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Clock in
-            </Button>
-            <Button
-              size="lg"
-              variant="outline"
-              className="h-14 text-base"
-              disabled={busy}
-              onClick={() => punch('out')}
-            >
-              Clock out
-            </Button>
-          </div>
-
-          <p className="mt-3 text-xs text-slate-400">
-            Entries made here are saved as pending and a manager approves them.
-          </p>
-        </div>
+        )}
 
         {result ? (
           <div className="flex items-start gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-5 text-emerald-800">

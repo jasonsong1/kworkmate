@@ -36,6 +36,7 @@ import VideoInterview from '@/pages/VideoInterview';
 import EmailTemplates from '@/pages/EmailTemplates';
 import TemplateDesign from '@/pages/TemplateDesign';
 import JobDesign from '@/pages/JobDesign';
+import QrDesign from '@/pages/QrDesign';
 import PlatformAdmin from '@/pages/PlatformAdmin';
 import Kiosk from '@/pages/Kiosk';
 
@@ -105,6 +106,7 @@ const AuthenticatedApp = () => {
           <Route path="/email-templates" element={<EmailTemplates />} />
           <Route path="/template-design" element={<TemplateDesign />} />
           <Route path="/job-design" element={<JobDesign />} />
+          <Route path="/qr-design" element={<QrDesign />} />
           <Route path="/clock" element={<Clock />} />
           <Route path="/platform" element={<PlatformAdmin />} />
         </Route>
