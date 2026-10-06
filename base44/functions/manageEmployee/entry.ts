@@ -139,6 +139,52 @@ export default async function (req) {
       return Response.json({ ok: true, deleted: profile.id, ...access });
     }
 
+    // Opening the account and sending its mail is kept off the save path: a slow invitation or
+    // mail provider must never leave the employer looking at a form that is still saving.
+    if (action === 'grant_access') {
+      const profile = await base44.asServiceRole.entities.EmployeeProfile.get(body.employee_id).catch(() => null);
+      if (!profile || profile.company_id !== me.company_id) {
+        return Response.json({ error: 'Employee not found' }, { status: 404 });
+      }
+      if (!me.branch_ids.includes(profile.branch_id)) {
+        return Response.json({ error: 'You cannot manage this branch' }, { status: 403 });
+      }
+      const branch = await base44.asServiceRole.entities.Branch.get(profile.branch_id).catch(() => null);
+      const store = branch ? branch.name : '';
+
+      // Someone on the books must be able to sign in straight away, so the account itself is
+      // always opened; only the password-setup email follows the employer's choice. An address
+      // the platform already knows has its access restored rather than re-invited.
+      const access = await sendAccountAccessEmail(base44, profile.user_email, body.send_invite !== false);
+
+      if (body.send_onboarding_email && profile.onboarding_token) {
+        const link = portalLink(body.origin, `/onboarding/${profile.onboarding_token}`);
+        const details = {
+          name: profile.full_name || 'team member',
+          store,
+          employeeNumber: profile.employee_number
+        };
+        // The first send welcomes them; a later one nudges the form they have not sent back yet.
+        const mail = profile.onboarding_submitted_at
+          ? onboardingReminderMail(employeeLanguage(profile.language), details)
+          : onboardingMail(employeeLanguage(profile.language), details);
+        await sendEmail(base44, {
+          to: profile.user_email,
+          subject: mail.subject,
+          html: brandedEmail({
+            heading: mail.heading,
+            brandColor: branch ? branch.brand_color : undefined,
+            lines: mail.lines,
+            ctaText: mail.cta,
+            ctaUrl: link,
+            footer: `${store} · K-Workmate`
+          })
+        });
+      }
+
+      return Response.json({ ok: true, employee: profile, ...access });
+    }
+
     const input = body.employee || {};
     const branch = await base44.asServiceRole.entities.Branch.get(body.branch_id || input.branch_id);
     if (!branch || branch.company_id !== me.company_id || !me.branch_ids.includes(branch.id)) {
@@ -203,28 +249,6 @@ export default async function (req) {
 
       if (roleKey) await applyRole(base44, company, branch, profile.user_email, roleKey);
 
-      if (input.send_onboarding_email && updated.onboarding_token) {
-        const link = portalLink(body.origin, `/onboarding/${updated.onboarding_token}`);
-        // The reminder is written in the language set on this person's profile.
-        const reminder = onboardingReminderMail(employeeLanguage(updated.language), {
-          name: updated.full_name,
-          store: branch.name,
-          employeeNumber: updated.employee_number
-        });
-        await sendEmail(base44, {
-          to: updated.user_email,
-          subject: reminder.subject,
-          html: brandedEmail({
-            heading: reminder.heading,
-            brandColor: branch.brand_color,
-            lines: reminder.lines,
-            ctaText: reminder.cta,
-            ctaUrl: link,
-            footer: `${branch.name} · K-Workmate`
-          })
-        });
-      }
-
       return Response.json({ ok: true, employee: updated });
     }
 
@@ -284,33 +308,9 @@ export default async function (req) {
 
     if (roleKey) await applyRole(base44, company, branch, email, roleKey);
 
-    // Someone on the books must be able to sign in straight away, so the account itself is
-    // always opened here; only the password-setup email follows the employer's choice. An
-    // address the platform already knows has its access restored rather than re-invited.
-    const access = await sendAccountAccessEmail(base44, email, input.send_invite !== false);
-
-    if (input.send_onboarding_email) {
-      const link = portalLink(body.origin, `/onboarding/${token}`);
-      const welcome = onboardingMail(input.language === 'en' ? 'en' : 'ko', {
-        name: input.full_name || 'team member',
-        store: branch.name,
-        employeeNumber
-      });
-      await sendEmail(base44, {
-        to: email,
-        subject: welcome.subject,
-        html: brandedEmail({
-          heading: welcome.heading,
-          brandColor: branch.brand_color,
-          lines: welcome.lines,
-          ctaText: welcome.cta,
-          ctaUrl: link,
-          footer: `${branch.name} · K-Workmate`
-        })
-      });
-    }
-
-    return Response.json({ ok: true, employee: profile, employee_number: employeeNumber, ...access });
+    // The record itself is what the employer is waiting for, so it answers before any mail goes
+    // out. The account is opened in its own call, which may take as long as the provider needs.
+    return Response.json({ ok: true, employee: profile, employee_number: employeeNumber });
   } catch (error) {
     return Response.json({ error: error.message }, { status: 500 });
   }

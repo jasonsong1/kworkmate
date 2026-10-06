@@ -102,28 +102,53 @@ export default function EmployeeDialog({ open, onOpenChange, branch, employee, o
     }
     setSaving(true);
     setError('');
-    const response = await base44.functions.invoke('manageEmployee', {
-      action: employee ? 'update' : 'create',
-      branch_id: branch.id,
-      origin: window.location.origin,
-      employee: {
-        ...form,
-        position: chosen ? chosen.label : employee && employee.position || '',
-        ...(employee ? { id: employee.id } : {})
+    try {
+      const response = await base44.functions.invoke('manageEmployee', {
+        action: employee ? 'update' : 'create',
+        branch_id: branch.id,
+        origin: window.location.origin,
+        employee: {
+          ...form,
+          position: chosen ? chosen.label : employee && employee.position || '',
+          ...(employee ? { id: employee.id } : {})
+        }
+      });
+      if (response.data?.error) {
+        setError(response.data.error);
+        return;
       }
-    });
-    setSaving(false);
-    if (response.data?.error) {
-      setError(response.data.error);
-      return;
+      const saved = response.data || {};
+      const savedId = employee ? employee.id : saved.employee && saved.employee.id;
+      toast({
+        title: employee ? t('employees.updated') : `${t('employees.added')} · ${saved.employee_number}`
+      });
+      onOpenChange(false);
+      onSaved && onSaved();
+
+      // The account is opened and its mail sent in a following call, so a slow invitation or
+      // mail provider never keeps the form on screen.
+      if (savedId) {
+        base44.functions.
+        invoke('manageEmployee', {
+          action: 'grant_access',
+          employee_id: savedId,
+          origin: window.location.origin,
+          send_invite: form.send_invite,
+          send_onboarding_email: form.send_onboarding_email
+        }).
+        then((result) => {
+          const access = result.data || {};
+          if (access.error) {
+            toast({ variant: 'destructive', title: access.error });
+            return;
+          }
+          if (!employee) toast({ title: accessNote(access) });
+        }).
+        catch(() => {});
+      }
+    } finally {
+      setSaving(false);
     }
-    const access = response.data || {};
-    toast({
-      title: employee ? t('employees.updated') : `${t('employees.added')} · ${access.employee_number}`,
-      description: employee ? undefined : accessNote(access)
-    });
-    onOpenChange(false);
-    onSaved && onSaved();
   };
 
   return (
