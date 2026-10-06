@@ -2,7 +2,7 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.52';
 import { formatEmployeeNumber, randomToken } from '../../shared/util.ts';
 import { hashPin, isValidPin, newPinSalt } from '../../shared/pin.ts';
 import { sendEmail, brandedEmail, portalLink } from '../../shared/email.ts';
-import { inviteIfNew, sendPasswordSetupEmail } from '../../shared/account.ts';
+import { sendAccountAccessEmail, releaseAppAccess } from '../../shared/account.ts';
 import { employeeLanguage, onboardingMail, onboardingReminderMail } from '../../shared/employeeMail.ts';
 import { packageState, resolveLimit } from '../../shared/packages.ts';
 
@@ -68,9 +68,13 @@ export default async function (req) {
         if (!isCompanyAdmin) patch.app_role = 'branch_manager';
         await base44.asServiceRole.entities.User.update(u.id, patch);
       }
-      const invite =
-        users.length === 0 ? await sendAccountAccessEmail(base44, target) : { invited: false, passwordEmail: false };
-      return Response.json({ ok: true, manager_emails: next, ...invite });
+      // A brand new address is invited; one the platform already knows walks back in through
+      // the manager records just written and needs no invitation.
+      const access =
+        users.length === 0
+          ? await sendAccountAccessEmail(base44, target)
+          : { invited: false, existing: true, password_email_sent: false, email_error: null };
+      return Response.json({ ok: true, manager_emails: next, ...access });
     }
 
     if (action === 'remove_manager') {
@@ -117,6 +121,22 @@ export default async function (req) {
 
     if (!me.company_id || !me.branch_ids || me.branch_ids.length === 0) {
       return Response.json({ error: 'Your account is not linked to a company yet' }, { status: 403 });
+    }
+
+    // Taking the employee off the books is what closes the app for them: the workspace is
+    // dropped from their account while the platform keeps their sign-in, so the same email
+    // registered again is linked once more on the next sign-in.
+    if (action === 'delete') {
+      const profile = await base44.asServiceRole.entities.EmployeeProfile.get(body.employee_id).catch(() => null);
+      if (!profile || profile.company_id !== me.company_id) {
+        return Response.json({ error: 'Employee not found' }, { status: 404 });
+      }
+      if (!me.branch_ids.includes(profile.branch_id)) {
+        return Response.json({ error: 'You cannot manage this branch' }, { status: 403 });
+      }
+      await base44.asServiceRole.entities.EmployeeProfile.delete(profile.id);
+      const access = await releaseAppAccess(base44, profile.user_email);
+      return Response.json({ ok: true, deleted: profile.id, ...access });
     }
 
     const input = body.employee || {};
@@ -265,10 +285,9 @@ export default async function (req) {
     if (roleKey) await applyRole(base44, company, branch, email, roleKey);
 
     // Someone on the books must be able to sign in straight away, so the account itself is
-    // always opened here; only the password-setup email follows the employer's choice.
-    const invited = await inviteIfNew(base44, email);
-    const passwordEmail = input.send_invite === false ? false : await sendPasswordSetupEmail(base44, email);
-    const invite = { invited, passwordEmail };
+    // always opened here; only the password-setup email follows the employer's choice. An
+    // address the platform already knows has its access restored rather than re-invited.
+    const access = await sendAccountAccessEmail(base44, email, input.send_invite !== false);
 
     if (input.send_onboarding_email) {
       const link = portalLink(body.origin, `/onboarding/${token}`);
@@ -291,7 +310,7 @@ export default async function (req) {
       });
     }
 
-    return Response.json({ ok: true, employee: profile, employee_number: employeeNumber, ...invite });
+    return Response.json({ ok: true, employee: profile, employee_number: employeeNumber, ...access });
   } catch (error) {
     return Response.json({ error: error.message }, { status: 500 });
   }

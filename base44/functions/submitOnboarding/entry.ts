@@ -103,7 +103,7 @@ export default async function (req) {
       ok: true,
       email_sent: emailSent,
       invited: account.invited,
-      password_email_sent: account.passwordEmail
+      password_email_sent: account.password_email_sent
     });
   } catch (error) {
     return Response.json({ error: error.message }, { status: 500 });

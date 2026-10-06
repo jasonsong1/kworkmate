@@ -80,16 +80,33 @@ export default function Employees() {
     setResettingId(row.id);
     const response = await base44.functions.invoke('sendPasswordSetup', { employee_id: row.id });
     setResettingId('');
-    if (response.data?.error) {
-      toast({ title: response.data.error, variant: 'destructive' });
+    const data = response.data || {};
+    if (data.error) {
+      toast({ title: data.error, variant: 'destructive' });
+      return;
+    }
+    // A silent failure would leave the employer thinking the link went out.
+    if (!data.password_email_sent) {
+      toast({ title: t('employees.resetFailed'), variant: 'destructive' });
       return;
     }
     toast({ title: t('employees.resetSent') });
   };
 
+  // Deleting the profile is also what takes the app away from that account, so the server
+  // closes the employee record and the account access together.
   const removeEmployee = async (row) => {
     if (!window.confirm(t('employees.deleteConfirm'))) return;
-    await base44.entities.EmployeeProfile.delete(row.id);
+    const response = await base44.functions.invoke('manageEmployee', { action: 'delete', employee_id: row.id });
+    const data = response.data || {};
+    if (data.error) {
+      toast({ title: data.error, variant: 'destructive' });
+      return;
+    }
+    toast({
+      title: t('employees.deleted'),
+      description: data.kept ? t('employees.accessKept') : t('employees.accessBlocked')
+    });
     load();
   };
 

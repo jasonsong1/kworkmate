@@ -85,6 +85,15 @@ export default function EmployeeDialog({ open, onOpenChange, branch, employee, o
 
   const set = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
 
+  // What the employer is told about the account itself: a brand new address is invited, while
+  // one the platform already knows simply has its way back in reopened.
+  const accessNote = (data) => {
+    if (data.email_error) return data.email_error;
+    if (data.invited) return t('employees.accessInvited');
+    if (data.existing) return data.password_email_sent ? t('employees.accessRestored') : t('employees.accessKnown');
+    return t('employees.accessGranted');
+  };
+
   const submit = async () => {
     if (!branch) return;
     if (!form.full_name.trim() || !form.user_email.trim()) {
@@ -108,7 +117,11 @@ export default function EmployeeDialog({ open, onOpenChange, branch, employee, o
       setError(response.data.error);
       return;
     }
-    toast({ title: employee ? 'Employee updated' : `Employee added · ${response.data.employee_number}` });
+    const access = response.data || {};
+    toast({
+      title: employee ? t('employees.updated') : `${t('employees.added')} · ${access.employee_number}`,
+      description: employee ? undefined : accessNote(access)
+    });
     onOpenChange(false);
     onSaved && onSaved();
   };
