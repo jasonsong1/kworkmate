@@ -29,9 +29,20 @@ function writeJson(key, value) {
   }
 }
 
+function writeToken(value) {
+  try {
+    localStorage.setItem(TOKEN_KEY, String(value || ''));
+  } catch (error) {
+    /* a private window may refuse storage: the session then simply does not survive a reload */
+  }
+}
+
 export function kwToken() {
   try {
-    return localStorage.getItem(TOKEN_KEY) || '';
+    const stored = localStorage.getItem(TOKEN_KEY) || '';
+    // Sessions saved by an earlier build went through JSON, which wrapped the token in quotes and
+    // made every request unrecognisable to the server. Unwrap those so they still work.
+    return stored.replace(/^"(.*)"$/, '$1');
   } catch (error) {
     return '';
   }
@@ -89,7 +100,8 @@ export async function kwCall(name, payload) {
 export async function kwLogin(identifier, password) {
   const data = await kwCall('kwLogin', { identifier, password });
   if (!data || !data.token) throw new Error('Wrong ID or password');
-  writeJson(TOKEN_KEY, data.token);
+  // Stored as the plain string it is: quoting it here was what broke the session check.
+  writeToken(data.token);
   storeIdentity(data.user);
   verifyPromise = Promise.resolve({ ...(data.user || {}), ...kwExtras() });
   return data;
