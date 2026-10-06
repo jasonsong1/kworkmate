@@ -4,12 +4,16 @@ import { base44 } from "@/api/base44Client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { LogIn, Mail, Lock, Loader2 } from "lucide-react";
+import { Hash, LogIn, Mail, Lock, Loader2 } from "lucide-react";
 import AuthLayout from "@/components/AuthLayout";
 import GoogleIcon from "@/components/GoogleIcon";
 import { safeReturnTo } from "@/lib/authReturnTo";
+import { cn } from "@/lib/utils";
 
 export default function Login() {
+  // The employer hands out an employee number, but the platform signs in with the work address
+  // on the account, which is what the number resolves to before the password is checked.
+  const [mode, setMode] = useState("email");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -23,7 +27,15 @@ export default function Login() {
     setError("");
     setLoading(true);
     try {
-      await base44.auth.loginViaEmailPassword(email, password);
+      let address = email.trim();
+      if (mode === "number") {
+        const response = await base44.functions.invoke("resolveEmployeeLogin", {
+          employee_number: address,
+        });
+        if (response.data?.error) throw new Error(response.data.error);
+        address = response.data.email;
+      }
+      await base44.auth.loginViaEmailPassword(address, password);
       window.location.href = returnTo;
     } catch (err) {
       setError(err.message || "Invalid email or password");
@@ -68,16 +80,42 @@ export default function Login() {
       )}
 
       <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="grid grid-cols-2 gap-1 rounded-lg bg-muted p-1">
+          <button
+            type="button"
+            onClick={() => { setMode("email"); setEmail(""); setError(""); }}
+            className={cn(
+              "rounded-md px-3 py-2 text-sm font-medium transition-colors",
+              mode === "email" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"
+            )}
+          >
+            Work email
+          </button>
+          <button
+            type="button"
+            onClick={() => { setMode("number"); setEmail(""); setError(""); }}
+            className={cn(
+              "rounded-md px-3 py-2 text-sm font-medium transition-colors",
+              mode === "number" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"
+            )}
+          >
+            Employee number
+          </button>
+        </div>
         <div className="space-y-2">
-          <Label htmlFor="email">Email</Label>
+          <Label htmlFor="identifier">{mode === "email" ? "Email" : "Employee number"}</Label>
           <div className="relative">
-            <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" aria-hidden="true" />
+            {mode === "email" ? (
+              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" aria-hidden="true" />
+            ) : (
+              <Hash className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" aria-hidden="true" />
+            )}
             <Input
-              id="email"
-              type="email"
-              autoComplete="email"
+              id="identifier"
+              type={mode === "email" ? "email" : "text"}
+              autoComplete={mode === "email" ? "email" : "username"}
               autoFocus
-              placeholder="you@example.com"
+              placeholder={mode === "email" ? "you@example.com" : "BRN-001"}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="pl-10 h-12"

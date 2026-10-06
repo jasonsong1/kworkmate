@@ -770,8 +770,8 @@ const dict = {
     'roster.onLeaveBlocked': 'This person is on approved leave that day.',
     'access.failed': 'Your access settings could not be loaded. Nothing is restricted until they arrive.',
     'access.retry': 'Try again',
-    'access.deniedTitle': 'No access yet',
-    'access.deniedBody': 'This account is not linked to a company on the platform. Accounts and branches are opened by the employer, so please ask them to add you.',
+    'access.deniedTitle': 'This account is not linked yet',
+    'access.deniedBody': 'No employee record matches the address you signed in with. Ask your employer to add this exact email address, or sign out and sign in with the account they registered.',
     'access.signOut': 'Sign out'
   },
   ko: {
@@ -1540,8 +1540,8 @@ const dict = {
     'roster.onLeaveBlocked': '해당 직원은 그날 승인된 휴가입니다.',
     'access.failed': '권한 정보를 불러오지 못했습니다. 정보가 도착할 때까지는 아무것도 제한하지 않습니다.',
     'access.retry': '다시 시도',
-    'access.deniedTitle': '아직 접근 권한이 없습니다',
-    'access.deniedBody': '이 계정은 플랫폼의 회사에 연결되어 있지 않습니다. 계정과 지점은 회사에서 만들어 드리므로 담당자에게 등록을 요청해 주세요.',
+    'access.deniedTitle': '계정이 아직 연결되지 않았습니다',
+    'access.deniedBody': '로그인한 주소와 일치하는 직원 정보가 없습니다. 고용주에게 이 이메일 주소로 등록해 달라고 요청하거나, 등록된 계정(구글 또는 회사 이메일)으로 다시 로그인해 주세요.',
     'access.signOut': '로그아웃'
   }
 };

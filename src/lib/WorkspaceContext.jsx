@@ -45,20 +45,48 @@ export function WorkspaceProvider({ children }) {
     setLoading(true);
     let user = await base44.auth.me().catch(() => null);
 
-    if (user && !user.company_id) {
-      await base44.functions.invoke('syncMyProfile', {}).catch(() => null);
-      user = await base44.auth.me().catch(() => null);
-    }
+    // The employer's records decide which company and branches an account belongs to, so a
+    // first sign-in has the answer worked out on the server and carried back with the call.
+    const link = async () => {
+      const response = await base44.functions.invoke('syncMyProfile', {}).catch(() => null);
+      const data = response && response.data && !response.data.error ? response.data : null;
+      const fresh = await base44.auth.me().catch(() => null);
+      // A session opened before the employer linked the account still reports no company, so
+      // the answer the call has just returned fills the gap.
+      user =
+        fresh && !fresh.company_id && data && data.company_id
+          ? {
+              ...fresh,
+              company_id: data.company_id,
+              branch_id: data.branch_id,
+              branch_ids: data.branch_ids || [],
+              app_role: data.app_role || 'staff'
+            }
+          : fresh;
+      return data;
+    };
+
+    let linked = null;
+    if (user && !user.company_id) linked = await link();
 
     setMe(user);
 
     const superAdmin = Boolean(user && user.role === 'admin');
 
     if (user && user.company_id) {
-      const [companies, allBranches] = await Promise.all([
+      let [companies, allBranches] = await Promise.all([
         base44.entities.Company.filter({ id: user.company_id }).catch(() => []),
         base44.entities.Branch.filter({ company_id: user.company_id }).catch(() => [])
       ]);
+      // The tenant the account belongs to is read once more on the server when the direct read
+      // comes back empty, so a linked employee is never shut out of their own workspace.
+      if (companies.length === 0) {
+        if (!linked) linked = await link();
+        if (linked && linked.company_id === user.company_id) {
+          companies = linked.company ? [linked.company] : [];
+          allBranches = linked.branches || [];
+        }
+      }
       setCompany(companies[0] || null);
 
       const isCompanyAdmin = superAdmin || user.app_role === 'company_admin';
