@@ -51,6 +51,15 @@ export default async function (req) {
       return Response.json({ ok: true, role: 'user' });
     }
 
+    // Taking the account off the platform altogether; the person can be invited again later.
+    if (action === 'delete') {
+      if (target.id === me.id) {
+        return Response.json({ error: 'You cannot delete your own account' }, { status: 400 });
+      }
+      await base44.asServiceRole.entities.User.delete(target.id);
+      return Response.json({ ok: true, deleted: true });
+    }
+
     return Response.json({ error: 'Unknown action' }, { status: 400 });
   } catch (error) {
     return Response.json({ error: error.message }, { status: 500 });

@@ -2,7 +2,7 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.52';
 import { formatEmployeeNumber, randomToken } from '../../shared/util.ts';
 import { hashPin, isValidPin, newPinSalt } from '../../shared/pin.ts';
 import { sendEmail, brandedEmail, portalLink } from '../../shared/email.ts';
-import { sendAccountAccessEmail } from '../../shared/account.ts';
+import { inviteIfNew, sendPasswordSetupEmail } from '../../shared/account.ts';
 import { employeeLanguage, onboardingMail, onboardingReminderMail } from '../../shared/employeeMail.ts';
 import { packageState, resolveLimit } from '../../shared/packages.ts';
 
@@ -264,10 +264,11 @@ export default async function (req) {
 
     if (roleKey) await applyRole(base44, company, branch, email, roleKey);
 
-    // The employee sets their own password from the platform email, so the invite and
-    // the password setup link always go out together.
-    let invite = { invited: false, passwordEmail: false };
-    if (input.send_invite !== false) invite = await sendAccountAccessEmail(base44, email);
+    // Someone on the books must be able to sign in straight away, so the account itself is
+    // always opened here; only the password-setup email follows the employer's choice.
+    const invited = await inviteIfNew(base44, email);
+    const passwordEmail = input.send_invite === false ? false : await sendPasswordSetupEmail(base44, email);
+    const invite = { invited, passwordEmail };
 
     if (input.send_onboarding_email) {
       const link = portalLink(body.origin, `/onboarding/${token}`);

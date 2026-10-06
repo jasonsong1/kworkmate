@@ -107,7 +107,15 @@ export default function PropertySetup() {
 
   const customRoles = (company && company.custom_roles) || [];
   const branchMatrixRoles = customRoles.map((role) => role.key);
-  const branchRoleLabels = Object.fromEntries(customRoles.map((role) => [role.key, role.label]));
+  // The platform position preset a company role sits under is shown next to it, so the ceiling
+  // the table applies is never a mystery.
+  const branchRoleLabels = Object.fromEntries(
+    customRoles.map((role) => {
+      const preset = presets.find((item) => item.key === role.preset_key);
+      const presetLabel = preset ? preset.label || preset.label_en || preset.key : '';
+      return [role.key, presetLabel ? `${role.label} · ${presetLabel}` : role.label];
+    })
+  );
   // This branch can only narrow what the company (and the package, and the position preset)
   // already allows, so only those modules and ceilings are offered.
   const branchPackageModules = MODULES.filter(

@@ -4,6 +4,7 @@ import { CalendarDays, CalendarPlus, Loader2, QrCode, UserCircle2 } from 'lucide
 import PageHeader from '@/components/PageHeader';
 import AvailabilityMatrix from '@/components/AvailabilityMatrix';
 import CalendarSubscribeCard from '@/components/CalendarSubscribeCard';
+import ClockScanButton from '@/components/attendance/ClockScanButton';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -11,6 +12,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { useI18n } from '@/lib/i18n';
 import { useWorkspace } from '@/lib/WorkspaceContext';
 import { emptyAvailability, money, todayIso } from '@/lib/bh';
+import { kioskUrl } from '@/lib/kioskLink';
 import { base44 } from '@/api/base44Client';
 
 export default function StaffHome() {
@@ -59,6 +61,11 @@ export default function StaffHome() {
     toast({ title: t('staff.availabilitySaved') });
   };
 
+  // The store keeps this screen open on a device; the phone camera reads the code from it.
+  const openQr = () => {
+    if (activeBranch) window.open(kioskUrl(activeBranch.id, todayIso()), '_blank', 'noopener');
+  };
+
   return (
     <div>
       <PageHeader
@@ -66,14 +73,13 @@ export default function StaffHome() {
         subtitle={activeBranch ? activeBranch.name : me ? me.email : ''}
         actions={
           <>
+            <Button variant="outline" onClick={openQr} disabled={!activeBranch}>
+              <QrCode className="mr-2 h-4 w-4" /> {t('staff.qrButton')}
+            </Button>
+            <ClockScanButton onRecorded={load} />
             <Button variant="outline" asChild>
               <Link to="/leave">
                 <CalendarPlus className="mr-2 h-4 w-4" /> {t('leave.title')}
-              </Link>
-            </Button>
-            <Button asChild>
-              <Link to="/clock">
-                <QrCode className="mr-2 h-4 w-4" /> {t('nav.clock')}
               </Link>
             </Button>
           </>
@@ -115,13 +121,8 @@ export default function StaffHome() {
                       {t('employees.completed')}
                     </Badge>
                   ) : (
-                    <div className="mt-1 space-y-2">
+                    <div className="mt-1">
                       <Badge variant="secondary">{t('employees.pending')}</Badge>
-                      <Button size="sm" asChild className="w-full sm:w-auto">
-                        <Link to={`/onboarding/${employeeProfile.onboarding_token}`}>
-                          {t('employees.sendOnboarding')}
-                        </Link>
-                      </Button>
                     </div>
                   )}
                 </div>

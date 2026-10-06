@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Building2, Loader2, Plus, Search, Trash2 } from 'lucide-react';
+import { Building2, Loader2, Plus, Power, RotateCcw, Search } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -15,6 +15,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/components/ui/use-toast';
 import { useI18n } from '@/lib/i18n';
 import { useWorkspace } from '@/lib/WorkspaceContext';
@@ -22,12 +23,13 @@ import { base44 } from '@/api/base44Client';
 
 const escapeRegex = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-// Every company on the platform, for the app owner only: step into one, add a new one, or
-// remove one. Adding and removing companies used to sit behind the company switcher.
+// Every company on the platform, for the app owner only. A company is never removed: it is
+// closed down, which keeps all of its records and can be undone from the second tab.
 export default function CompanyManager() {
   const { t } = useI18n();
   const { toast } = useToast();
   const { company, switchCompany, reload } = useWorkspace();
+  const [tab, setTab] = useState('active');
   const [query, setQuery] = useState('');
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -41,7 +43,8 @@ export default function CompanyManager() {
     setLoading(true);
     const timer = setTimeout(async () => {
       const term = query.trim();
-      const filter = term ? { name: { $regex: escapeRegex(term), $options: 'i' } } : {};
+      const filter = tab === 'active' ? { deactivated: { $ne: true } } : { deactivated: true };
+      if (term) filter.name = { $regex: escapeRegex(term), $options: 'i' };
       const page = await base44.entities.Company.filter(filter, { sort: 'name', limit: 50 });
       if (cancelled) return;
       setRows(page.items || []);
@@ -51,7 +54,7 @@ export default function CompanyManager() {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [query]);
+  }, [query, tab]);
 
   const enter = async (item) => {
     if (company && company.id === item.id) return;
@@ -66,16 +69,20 @@ export default function CompanyManager() {
     }
   };
 
-  const remove = async (item) => {
+  const setOpen = async (item, next) => {
     setBusyId(item.id);
-    await base44.entities.Company.delete(item.id);
+    await base44.entities.Company.update(item.id, {
+      deactivated: next === 'deactivated',
+      deactivated_at: next === 'deactivated' ? new Date().toISOString() : ''
+    });
     setBusyId('');
     setConfirm(null);
     setRows((prev) => prev.filter((row) => row.id !== item.id));
-    toast({ title: t('company.deleted') });
-    // Removing the company the workspace is standing in leaves nothing to stand on.
+    toast({ title: next === 'deactivated' ? t('company.deactivated') : t('company.reactivated') });
     if (company && company.id === item.id) await reload();
   };
+
+  const closing = Boolean(confirm && !confirm.deactivated);
 
   return (
     <>
@@ -90,6 +97,13 @@ export default function CompanyManager() {
           <p className="text-xs text-muted-foreground">{t('company.manageHint')}</p>
         </CardHeader>
         <CardContent>
+          <Tabs value={tab} onValueChange={setTab} className="mb-4">
+            <TabsList>
+              <TabsTrigger value="active">{t('company.tabActive')}</TabsTrigger>
+              <TabsTrigger value="deactivated">{t('company.tabInactive')}</TabsTrigger>
+            </TabsList>
+          </Tabs>
+
           <div className="relative mb-4 max-w-sm">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
@@ -105,7 +119,9 @@ export default function CompanyManager() {
               <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
             </div>
           ) : rows.length === 0 ? (
-            <p className="py-10 text-center text-sm text-muted-foreground">{t('company.none')}</p>
+            <p className="py-10 text-center text-sm text-muted-foreground">
+              {tab === 'active' ? t('company.none') : t('company.noneInactive')}
+            </p>
           ) : (
             <ul className="divide-y">
               {rows.map((item) => (
@@ -117,6 +133,7 @@ export default function CompanyManager() {
                       {company && company.id === item.id && (
                         <Badge variant="outline">{t('company.current')}</Badge>
                       )}
+                      {item.deactivated && <Badge variant="secondary">{t('company.tabInactive')}</Badge>}
                     </p>
                     <p className="truncate text-xs text-muted-foreground">{item.abn || item.id}</p>
                   </div>
@@ -133,11 +150,18 @@ export default function CompanyManager() {
                     <Button
                       size="sm"
                       variant="ghost"
-                      title={t('common.delete')}
                       disabled={busyId === item.id}
                       onClick={() => setConfirm(item)}
                     >
-                      <Trash2 className="h-4 w-4 text-destructive" />
+                      {item.deactivated ? (
+                        <>
+                          <RotateCcw className="mr-1.5 h-3.5 w-3.5" /> {t('company.reactivate')}
+                        </>
+                      ) : (
+                        <>
+                          <Power className="mr-1.5 h-3.5 w-3.5 text-destructive" /> {t('company.deactivate')}
+                        </>
+                      )}
                     </Button>
                   </div>
                 </li>
@@ -152,15 +176,23 @@ export default function CompanyManager() {
       <AlertDialog open={Boolean(confirm)} onOpenChange={(next) => !next && setConfirm(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>{t('company.deleteTitle')}</AlertDialogTitle>
+            <AlertDialogTitle>
+              {closing ? t('company.deactivateTitle') : t('company.reactivateTitle')}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              {t('company.deleteHint').replace('{name}', (confirm && confirm.name) || '')}
+              {t(closing ? 'company.deactivateHint' : 'company.reactivateHint').replace(
+                '{name}',
+                (confirm && confirm.name) || ''
+              )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
-            <AlertDialogAction onClick={() => remove(confirm)} disabled={busyId === (confirm && confirm.id)}>
-              {t('common.delete')}
+            <AlertDialogAction
+              onClick={() => setOpen(confirm, closing ? 'deactivated' : 'active')}
+              disabled={busyId === (confirm && confirm.id)}
+            >
+              {closing ? t('company.deactivate') : t('company.reactivate')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

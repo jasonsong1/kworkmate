@@ -121,6 +121,13 @@
     },
     "qr_design": {
       "type": "object"
+    },
+    "deactivated": {
+      "type": "boolean",
+      "default": false
+    },
+    "deactivated_at": {
+      "type": "string"
     }
   },
   "required": [
