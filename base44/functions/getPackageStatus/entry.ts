@@ -1,4 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.52';
+import { resolveCaller } from '../../shared/kwAuth.ts';
 import { ALL_FEATURES, ALL_MODULES, packageState, resolveLimit, today } from '../../shared/packages.ts';
 import { mergePresets, presetFor, resolveAccess, resolvePresetKey } from '../../shared/access.ts';
 
@@ -14,7 +15,7 @@ function rowsOf(result) {
 export default async function (req) {
   try {
     const base44 = createClientFromRequest(req);
-    const me = await base44.auth.me();
+    const me = await resolveCaller(base44, req);
     if (!me) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
     const body = await req.json().catch(() => ({}));

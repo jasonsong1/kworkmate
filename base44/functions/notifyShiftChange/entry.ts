@@ -1,4 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.52';
+import { resolveCaller } from '../../shared/kwAuth.ts';
 import { employeeRecipients, languageMap, notifyStaff } from '../../shared/notify.ts';
 import { shiftChangedMail } from '../../shared/employeeMail.ts';
 
@@ -7,7 +8,7 @@ import { shiftChangedMail } from '../../shared/employeeMail.ts';
 export default async function (req: Request) {
   try {
     const base44 = createClientFromRequest(req);
-    const me = await base44.auth.me();
+    const me = await resolveCaller(base44, req);
     if (!me) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
     const body = await req.json().catch(() => ({}));

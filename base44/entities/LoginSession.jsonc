@@ -1,0 +1,76 @@
+{
+  "name": "LoginSession",
+  "type": "object",
+  "properties": {
+    "token": {
+      "type": "string"
+    },
+    "profile_id": {
+      "type": "string"
+    },
+    "email": {
+      "type": "string"
+    },
+    "full_name": {
+      "type": "string"
+    },
+    "company_id": {
+      "type": "string"
+    },
+    "branch_id": {
+      "type": "string"
+    },
+    "branch_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "app_role": {
+      "type": "string",
+      "default": "staff"
+    },
+    "active": {
+      "type": "boolean",
+      "default": true
+    },
+    "expires_at": {
+      "type": "string"
+    },
+    "last_seen_at": {
+      "type": "string"
+    },
+    "revoked_at": {
+      "type": "string"
+    },
+    "user_agent": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "token",
+    "email"
+  ],
+  "rls": {
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

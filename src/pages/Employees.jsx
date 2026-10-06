@@ -3,6 +3,7 @@ import { FileText, KeyRound, Pencil, Plus, Power, Search, Send, Trash2 } from 'l
 import PageHeader from '@/components/PageHeader';
 import EmployeeDialog from '@/components/EmployeeDialog';
 import EmployeeDocumentsDialog from '@/components/EmployeeDocumentsDialog';
+import EmployeeLoginDialog from '@/components/EmployeeLoginDialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -29,7 +30,7 @@ export default function Employees() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [docsFor, setDocsFor] = useState(null);
-  const [resettingId, setResettingId] = useState('');
+  const [loginFor, setLoginFor] = useState(null);
 
   const load = useCallback(async () => {
     if (!activeBranch) {
@@ -73,24 +74,6 @@ export default function Employees() {
     });
     toast({ title: t('common.save') });
     load();
-  };
-
-  // The platform owns passwords, so this asks it to email the employee a setup link.
-  const sendPasswordEmail = async (row) => {
-    setResettingId(row.id);
-    const response = await base44.functions.invoke('sendPasswordSetup', { employee_id: row.id });
-    setResettingId('');
-    const data = response.data || {};
-    if (data.error) {
-      toast({ title: data.error, variant: 'destructive' });
-      return;
-    }
-    // A silent failure would leave the employer thinking the link went out.
-    if (!data.password_email_sent) {
-      toast({ title: t('employees.resetFailed'), variant: 'destructive' });
-      return;
-    }
-    toast({ title: t('employees.resetSent') });
   };
 
   // Deleting the profile is also what takes the app away from that account, so the server
@@ -208,9 +191,10 @@ export default function Employees() {
                           <Button
                         size="sm"
                         variant="ghost"
-                        title={t('employees.resetEmail')}
-                        onClick={() => sendPasswordEmail(row)}
-                        disabled={resettingId === row.id}>
+                        title={row.password_set ? t('employees.passwordOn') : t('employees.loginAccess')}
+                        onClick={() => setLoginFor(row)}
+                        disabled={!canManage}
+                        className={row.password_set ? 'text-emerald-600' : ''}>
                         
                             <KeyRound className="h-3.5 w-3.5" />
                           </Button>
@@ -267,6 +251,12 @@ export default function Employees() {
         open={Boolean(docsFor)}
         onOpenChange={(v) => !v && setDocsFor(null)}
         employee={docsFor} />
+
+      <EmployeeLoginDialog
+        open={Boolean(loginFor)}
+        onOpenChange={(v) => !v && setLoginFor(null)}
+        employee={loginFor}
+        onSaved={load} />
       
     </div>);
 

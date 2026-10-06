@@ -157,6 +157,35 @@
     },
     "pin_hash": {
       "type": "string"
+    },
+    "login_id": {
+      "type": "string"
+    },
+    "password_hash": {
+      "type": "string"
+    },
+    "password_salt": {
+      "type": "string"
+    },
+    "password_set": {
+      "type": "boolean",
+      "default": false
+    },
+    "password_updated_at": {
+      "type": "string"
+    },
+    "password_set_by": {
+      "type": "string"
+    },
+    "login_failed_count": {
+      "type": "number",
+      "default": 0
+    },
+    "login_locked_until": {
+      "type": "string"
+    },
+    "last_login_at": {
+      "type": "string"
     }
   },
   "required": [

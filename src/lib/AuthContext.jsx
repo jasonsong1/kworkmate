@@ -1,6 +1,7 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
 import { appParams } from '@/lib/app-params';
+import { kwActive, kwClearSession, kwLogout, kwVerify } from '@/lib/kwAuthClient';
 
 const AuthContext = createContext();
 
@@ -11,21 +12,39 @@ export const AuthProvider = ({ children }) => {
   const [isLoadingPublicSettings, setIsLoadingPublicSettings] = useState(true);
   const [authError, setAuthError] = useState(null);
   const [authChecked, setAuthChecked] = useState(false);
+  const [isKwSession, setIsKwSession] = useState(false);
   const [appPublicSettings, setAppPublicSettings] = useState(null); // Contains only { id, public_settings }
 
   useEffect(() => {
     checkAppState();
   }, []);
 
+  // An employee the employer issued an ID and password to holds this app's own session, so that
+  // is answered first and no platform sign-in is expected of them.
+  const acceptKwSession = async () => {
+    if (!kwActive()) return false;
+    const kwUser = await kwVerify();
+    if (!kwUser) return false;
+    setUser(kwUser);
+    setIsAuthenticated(true);
+    setIsKwSession(true);
+    setIsLoadingAuth(false);
+    setIsLoadingPublicSettings(false);
+    setAuthChecked(true);
+    return true;
+  };
+
   const checkAppState = async () => {
     try {
       setIsLoadingPublicSettings(true);
       setAuthError(null);
-      
+
+      if (await acceptKwSession()) return;
+
       try {
         const publicSettings = await base44.app.getPublicSettings();
         setAppPublicSettings(publicSettings);
-        
+
         // If we got the app public settings successfully, check if user is authenticated
         if (appParams.token) {
           await checkUserAuth();
@@ -37,7 +56,7 @@ export const AuthProvider = ({ children }) => {
         setIsLoadingPublicSettings(false);
       } catch (appError) {
         console.error('App state check failed:', appError);
-        
+
         // Handle app-level errors
         if (appError.status === 403 && appError.data?.extra_data?.reason) {
           const reason = appError.data.extra_data.reason;
@@ -81,9 +100,13 @@ export const AuthProvider = ({ children }) => {
     try {
       // Now check if the user is authenticated
       setIsLoadingAuth(true);
+
+      if (await acceptKwSession()) return;
+
       const currentUser = await base44.auth.me();
       setUser(currentUser);
       setIsAuthenticated(true);
+      setIsKwSession(false);
       setIsLoadingAuth(false);
       setAuthChecked(true);
     } catch (error) {
@@ -91,7 +114,7 @@ export const AuthProvider = ({ children }) => {
       setIsLoadingAuth(false);
       setIsAuthenticated(false);
       setAuthChecked(true);
-      
+
       // If user auth fails, it might be an expired token
       if (error.status === 401 || error.status === 403) {
         setAuthError({
@@ -102,10 +125,18 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const logout = (shouldRedirect = true) => {
+  const logout = async (shouldRedirect = true) => {
     setUser(null);
     setIsAuthenticated(false);
-    
+
+    if (kwActive()) {
+      await kwLogout();
+      setIsKwSession(false);
+      if (shouldRedirect) window.location.href = '/login';
+      return;
+    }
+
+    setIsKwSession(false);
     if (shouldRedirect) {
       // Use the SDK's logout method which handles token cleanup and redirect
       base44.auth.logout(window.location.href);
@@ -116,19 +147,25 @@ export const AuthProvider = ({ children }) => {
   };
 
   const navigateToLogin = () => {
+    if (kwActive()) {
+      kwClearSession();
+      window.location.href = '/login';
+      return;
+    }
     // Use the SDK's redirectToLogin method
     base44.auth.redirectToLogin(window.location.href);
   };
 
   return (
-    <AuthContext.Provider value={{ 
-      user, 
-      isAuthenticated, 
+    <AuthContext.Provider value={{
+      user,
+      isAuthenticated,
       isLoadingAuth,
       isLoadingPublicSettings,
       authError,
       appPublicSettings,
       authChecked,
+      isKwSession,
       logout,
       navigateToLogin,
       checkUserAuth,

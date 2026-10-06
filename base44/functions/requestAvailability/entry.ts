@@ -1,4 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.52';
+import { resolveCaller } from '../../shared/kwAuth.ts';
 import { sendEmail, brandedEmail, portalLink } from '../../shared/email.ts';
 import { availabilityMail, employeeLanguage } from '../../shared/employeeMail.ts';
 
@@ -11,7 +12,7 @@ function rowsOf(result) {
 export default async function (req) {
   try {
     const base44 = createClientFromRequest(req);
-    const me = await base44.auth.me();
+    const me = await resolveCaller(base44, req);
     if (!me) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
     const body = await req.json();
