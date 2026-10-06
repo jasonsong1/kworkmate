@@ -147,10 +147,21 @@ export default async function (req) {
       pinPatch.pin_hash = await hashPin(input.pin, salt);
     }
 
+    // The employer keeps the onboarding status moving, but completion stays behind an actual
+    // submission: without the employee's submitted form the profile cannot be called complete.
+    const STATUSES = ['pending', 'in_progress', 'completed'];
+    const requestedStatus = STATUSES.includes(input.onboarding_status) ? input.onboarding_status : null;
+
     if (action === 'update') {
       const profile = await base44.asServiceRole.entities.EmployeeProfile.get(input.id);
       if (!profile || profile.company_id !== me.company_id) {
         return Response.json({ error: 'Employee not found' }, { status: 404 });
+      }
+      if (requestedStatus === 'completed' && !profile.onboarding_submitted_at) {
+        return Response.json(
+          { error: 'This employee has not submitted their onboarding form yet' },
+          { status: 400 }
+        );
       }
       const updated = await base44.asServiceRole.entities.EmployeeProfile.update(profile.id, {
         full_name: input.full_name || profile.full_name,
@@ -165,6 +176,7 @@ export default async function (req) {
         emergency_contact_name: input.emergency_contact_name || '',
         emergency_contact_phone: input.emergency_contact_phone || '',
         language: input.language === 'en' || input.language === 'ko' ? input.language : profile.language || 'ko',
+        onboarding_status: requestedStatus || profile.onboarding_status || 'pending',
         app_role: roleKey || profile.app_role || 'staff',
         ...pinPatch
       });

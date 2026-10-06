@@ -27,6 +27,7 @@ const empty = {
   emergency_contact_phone: '',
   language: 'ko',
   pin: '',
+  onboarding_status: 'pending',
   send_invite: true,
   send_onboarding_email: true
 };
@@ -40,6 +41,8 @@ export default function EmployeeDialog({ open, onOpenChange, branch, employee, o
   const [error, setError] = useState('');
 
   const canAssignRole = myRole === 'company_admin';
+  // Completion is only reachable once the employee has actually submitted their onboarding.
+  const onboardingSubmitted = Boolean(employee && employee.onboarding_submitted_at);
   // Positions come from company settings. Company admins are appointed there too, and a
   // branch manager keeps the role they were assigned, so both stay listed when already held.
   const roleOptions = [
@@ -71,6 +74,7 @@ export default function EmployeeDialog({ open, onOpenChange, branch, employee, o
         emergency_contact_name: employee.emergency_contact_name || '',
         emergency_contact_phone: employee.emergency_contact_phone || '',
         language: employee.language === 'en' ? 'en' : 'ko',
+        onboarding_status: employee.onboarding_status || 'pending',
         send_invite: false,
         send_onboarding_email: false
       });
@@ -272,12 +276,35 @@ export default function EmployeeDialog({ open, onOpenChange, branch, employee, o
           }
 
           {employee &&
-          <div className="sm:col-span-2 flex items-center justify-between rounded-lg border px-4 py-3">
+          <div className="sm:col-span-2 space-y-3 rounded-lg border px-4 py-3">
+              <div className="flex items-center justify-between gap-4">
               <span className="text-sm">{t('employees.sendOnboarding')}</span>
               <Switch
               checked={form.send_onboarding_email}
               onCheckedChange={(v) => set('send_onboarding_email', v)} />
-            
+              </div>
+              <div className="flex items-center justify-between gap-4">
+                <span className="text-sm">{t('employees.onboarding')}</span>
+                <Select
+                value={form.onboarding_status}
+                onValueChange={(v) => set('onboarding_status', v)}>
+                  <SelectTrigger className="w-40">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="pending">{t('employees.statusPending')}</SelectItem>
+                    <SelectItem value="in_progress">{t('employees.statusInProgress')}</SelectItem>
+                    <SelectItem
+                    value="completed"
+                    disabled={!onboardingSubmitted && form.onboarding_status !== 'completed'}>
+                      {t('employees.statusCompleted')}
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {!onboardingSubmitted &&
+              <p className="text-xs text-muted-foreground">{t('employees.statusLocked')}</p>
+              }
             </div>
           }
         </div>

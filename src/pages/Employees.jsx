@@ -168,6 +168,8 @@ export default function Employees() {
                     <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100">
                             {t('employees.completed')}
                           </Badge> :
+                    row.onboarding_status === 'in_progress' ?
+                    <Badge variant="secondary">{t('employees.statusInProgress')}</Badge> :
 
                     <Badge variant="secondary">{t('employees.pending')}</Badge>
                     }
