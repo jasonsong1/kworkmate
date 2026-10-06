@@ -146,14 +146,15 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  // Everyone signs in on this app's own login page — an employee with the ID and password their
+  // employer issued, a manager with their work email — so a visitor who needs to sign in is sent
+  // there, never to the platform's hosted sign-in screen.
   const navigateToLogin = () => {
-    if (kwActive()) {
-      kwClearSession();
-      window.location.href = '/login';
-      return;
-    }
-    // Use the SDK's redirectToLogin method
-    base44.auth.redirectToLogin(window.location.href);
+    if (kwActive()) kwClearSession();
+    const here = window.location.pathname + window.location.search;
+    const onAuthPage = here.startsWith('/login') || here.startsWith('/register');
+    window.location.href =
+      onAuthPage || here === '/' ? '/login' : `/login?returnTo=${encodeURIComponent(here)}`;
   };
 
   return (

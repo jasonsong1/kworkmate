@@ -40,7 +40,9 @@ import QrDesign from '@/pages/QrDesign';
 import PlatformAdmin from '@/pages/PlatformAdmin';
 import Kiosk from '@/pages/Kiosk';
 
-const PUBLIC_PATHS = ['/apply/', '/interview/', '/onboarding/', '/mini-interview/', '/video-interview/', '/kiosk/'];
+// Paths that render for a visitor who is not signed in: the applicant and onboarding surfaces,
+// plus this app's own sign-in pages, which must never be swapped for a platform redirect.
+const PUBLIC_PATHS = ['/apply/', '/interview/', '/onboarding/', '/mini-interview/', '/video-interview/', '/kiosk/', '/login', '/forgot-password', '/reset-password'];
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
