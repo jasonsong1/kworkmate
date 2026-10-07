@@ -8,7 +8,12 @@ function rowsOf(result: any) {
   return Array.isArray(result) ? result : (result && result.items) || [];
 }
 
-// Who has to be told about a branch: its managers and the company admins.
+// A manager is one of the roles the platform ships with, or a position the company named itself
+// on a manager preset — which is how most employers describe their own managers.
+const MANAGER_PRESETS = ['manager', 'supervisor_manager'];
+
+// Who has to be told about a branch: its managers and the company admins. A store's own manager
+// list is what makes somebody a manager of that store, so a manager next door hears nothing.
 export async function branchManagers(base44: any, company: any, branch: any) {
   const emails = new Set<string>();
   (branch && Array.isArray(branch.manager_emails) ? branch.manager_emails : []).forEach((email: string) => {
@@ -17,14 +22,22 @@ export async function branchManagers(base44: any, company: any, branch: any) {
   (company && Array.isArray(company.member_emails) ? company.member_emails : []).forEach((email: string) => {
     if (email) emails.add(email);
   });
+  const managerRoles = new Set<string>(['company_admin', 'branch_manager']);
+  (company && Array.isArray(company.custom_roles) ? company.custom_roles : []).forEach((role: any) => {
+    if (role && role.key && MANAGER_PRESETS.includes(role.preset_key)) managerRoles.add(role.key);
+  });
   const profiles = rowsOf(
     await base44.asServiceRole.entities.EmployeeProfile.filter(
-      { company_id: company && company.id, app_role: 'company_admin' },
-      { limit: 50 }
+      { company_id: company && company.id },
+      { limit: 200 }
     ).catch(() => [])
   );
   profiles.forEach((person: any) => {
-    if (person && person.user_email) emails.add(person.user_email);
+    if (!person || !person.user_email || !managerRoles.has(person.app_role)) return;
+    // A company admin runs the whole company; a store's manager hears about that store only.
+    if (person.app_role === 'company_admin' || !branch || !person.branch_id || person.branch_id === branch.id) {
+      emails.add(person.user_email);
+    }
   });
   return Array.from(emails);
 }

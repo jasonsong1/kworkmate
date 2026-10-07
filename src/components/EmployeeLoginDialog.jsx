@@ -28,19 +28,36 @@ export default function EmployeeLoginDialog({ open, onOpenChange, employee, onSa
     setError('');
   }, [open, employee]);
 
+  // The refusals the server names with a code are the ones this screen has its own words for;
+  // anything else is shown exactly as it came back. A refusal can arrive either way — as a
+  // failed request or as an error in the answer — and either way the button stops turning.
+  const REFUSALS = { password_reused: 'password.reused' };
+  const explain = (said) =>
+    said && REFUSALS[said] ? t(REFUSALS[said]) : said || t('employees.passwordFailed');
+
   const send = async (body) => {
     setBusy(true);
     setError('');
-    const response = await base44.functions.invoke('kwSetEmployeePassword', body);
-    setBusy(false);
-    const data = response.data || {};
-    if (data.error) {
-      setError(data.error);
+    try {
+      const response = await base44.functions.invoke('kwSetEmployeePassword', body);
+      const data = response.data || {};
+      if (data.error) {
+        setError(explain(data.error));
+        return null;
+      }
+      onSaved && onSaved();
+      onOpenChange(false);
+      return data;
+    } catch (error) {
+      const said =
+        (error && error.response && error.response.data && error.response.data.error) ||
+        (error && error.message) ||
+        '';
+      setError(explain(said));
       return null;
+    } finally {
+      setBusy(false);
     }
-    onSaved && onSaved();
-    onOpenChange(false);
-    return data;
   };
 
   const issue = async () => {

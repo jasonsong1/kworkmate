@@ -6,6 +6,9 @@
 // resolveCaller() prefers whichever is present, so screens shared by managers and staff
 // keep working either way.
 
+import { mergePresets, presetFor, resolveAccess, resolvePresetKey } from './access.ts';
+import { ALL_MODULES, packageState } from './packages.ts';
+
 const encoder = new TextEncoder();
 const ITERATIONS = 100000;
 const SESSION_DAYS = 30;
@@ -246,91 +249,119 @@ export function isManagerIdentity(me) {
 }
 
 // ---------- what a caller may reach ----------
-// scope: 'company' | 'branch' | 'global'. self_field names the column that belongs to one
-// person, so an employee only ever reaches rows that are theirs.
+// One rule per entity: which area of the app owns it (module), which rows belong to one person
+// (self_field), and whether the row is theirs to write whatever the grants say (self_service).
 export const GATEWAY_ENTITIES = {
-  Company: { scope: 'company', company_field: 'id', writes: { staff: 'none', manager: 'none' } },
-  Branch: { scope: 'company', company_field: 'company_id', writes: { staff: 'none', manager: 'none' } },
-  PositionPreset: { scope: 'global', writes: { staff: 'none', manager: 'none' } },
+  // The company and its stores are the context every screen stands on: nobody is asked for a
+  // grant before their own address and opening hours can be shown.
+  Company: { scope: 'company', company_field: 'id', module: 'settings', context: true },
+  Branch: { scope: 'company', company_field: 'company_id', module: 'branches', context: true },
+  PositionPreset: { scope: 'global' },
   EmployeeProfile: {
     scope: 'company',
     company_field: 'company_id',
     self_field: 'user_email',
-    staff_fields: ['phone', 'address', 'language', 'emergency_contact_name', 'emergency_contact_phone'],
-    writes: { staff: 'fields', manager: 'none' }
+    module: 'employees',
+    staff_fields: ['phone', 'address', 'language', 'emergency_contact_name', 'emergency_contact_phone']
   },
-  LeaveType: { scope: 'company', company_field: 'company_id', writes: { staff: 'none', manager: 'none' } },
-  RegionalHoliday: { scope: 'company', company_field: 'company_id', writes: { staff: 'none', manager: 'none' } },
-  RosterSetting: { scope: 'branch', branch_field: 'branch_id', writes: { staff: 'none', manager: 'none' } },
+  LeaveType: { scope: 'company', company_field: 'company_id', module: 'leave' },
+  RegionalHoliday: { scope: 'company', company_field: 'company_id', module: 'settings' },
+  RosterSetting: { scope: 'branch', branch_field: 'branch_id', module: 'roster' },
   // Hiring is the manager's own work: the ad, the people who answered it and the interview
   // slots they can book.
-  Job: { scope: 'branch', branch_field: 'branch_id', writes: { staff: 'none', manager: 'all' } },
-  Applicant: { scope: 'branch', branch_field: 'branch_id', writes: { staff: 'none', manager: 'all' } },
-  InterviewSlot: { scope: 'branch', branch_field: 'branch_id', writes: { staff: 'none', manager: 'all' } },
-  Shift: {
-    scope: 'branch',
-    branch_field: 'branch_id',
-    self_field: 'employee_email',
-    writes: { staff: 'none', manager: 'all' }
-  },
-  TimeEntry: {
-    scope: 'branch',
-    branch_field: 'branch_id',
-    self_field: 'employee_email',
-    writes: { staff: 'all', manager: 'all' }
-  },
-  LeaveRequest: {
-    scope: 'branch',
-    branch_field: 'branch_id',
-    self_field: 'employee_email',
-    writes: { staff: 'all', manager: 'all' }
-  },
-  LeaveBalance: {
-    scope: 'branch',
-    branch_field: 'branch_id',
-    self_field: 'employee_email',
-    writes: { staff: 'none', manager: 'none' }
-  },
-  AvailabilitySubmission: {
-    scope: 'branch',
-    branch_field: 'branch_id',
-    self_field: 'employee_email',
-    writes: { staff: 'all', manager: 'all' }
-  },
-  Notification: {
-    scope: 'company',
-    company_field: 'company_id',
-    self_field: 'user_email',
-    writes: { staff: 'all', manager: 'all' }
-  },
-  CalendarSubscription: {
-    scope: 'company',
-    company_field: 'company_id',
-    self_field: 'user_email',
-    writes: { staff: 'all', manager: 'all' }
-  },
-  PushSubscription: {
-    scope: 'company',
-    company_field: 'company_id',
-    self_field: 'user_email',
-    writes: { staff: 'all', manager: 'all' }
-  }
+  Job: { scope: 'branch', branch_field: 'branch_id', module: 'jobs' },
+  Applicant: { scope: 'branch', branch_field: 'branch_id', module: 'applicants' },
+  InterviewSlot: { scope: 'branch', branch_field: 'branch_id', module: 'interviews' },
+  Shift: { scope: 'branch', branch_field: 'branch_id', self_field: 'employee_email', module: 'roster' },
+  // What a person records about themselves — their hours, leave, availability — is always
+  // theirs to write; only somebody else's row needs a grant.
+  TimeEntry: { scope: 'branch', branch_field: 'branch_id', self_field: 'employee_email', module: 'attendance', self_service: true },
+  LeaveRequest: { scope: 'branch', branch_field: 'branch_id', self_field: 'employee_email', module: 'leave', self_service: true },
+  LeaveBalance: { scope: 'branch', branch_field: 'branch_id', self_field: 'employee_email', module: 'leave' },
+  AvailabilitySubmission: { scope: 'branch', branch_field: 'branch_id', self_field: 'employee_email', module: 'roster', self_service: true },
+  // Everything a person keeps about themselves: their own bell, their own calendar link, their
+  // own phone. Never anybody else's, whatever position they hold.
+  Notification: { scope: 'company', company_field: 'company_id', self_field: 'user_email', module: 'dashboard', self_only: true, self_service: true },
+  CalendarSubscription: { scope: 'company', company_field: 'company_id', self_field: 'user_email', module: 'dashboard', self_only: true, self_service: true },
+  PushSubscription: { scope: 'company', company_field: 'company_id', self_field: 'user_email', module: 'dashboard', self_only: true, self_service: true }
 };
 
-export function scopeQuery(me, rule) {
-  if (!rule || rule.scope === 'global') return {};
-  const staff = !isManagerIdentity(me);
-  if (staff && rule.self_field) return { [rule.self_field]: lower(me.email) };
-  const branches = (me.branch_ids || []).filter(Boolean);
-  if (rule.scope === 'branch') {
-    if (branches.length > 0) return { [rule.branch_field]: { $in: branches } };
-    return rule.company_field ? { [rule.company_field]: me.company_id } : {};
+const LEVEL_RANK = { none: 0, read: 1, update: 2, write: 3 };
+// A query that matches no row at all, for an area the employer did not open to this person.
+const NO_ROWS = { id: '__none__' };
+
+// The employer's own answer to "what may this person do", resolved from the same three layers
+// every screen reads: the package the company paid for, the position preset their role holds,
+// and the grant saved for that role on the company and on the branch they work in.
+export async function accessFor(base44: any, me: any) {
+  const roleKey = clean(me && me.app_role) || 'staff';
+  const isAdmin = Boolean(me && me.role === 'admin');
+  const isCompanyAdmin = isAdmin || roleKey === 'company_admin';
+  const companyId = clean(me && me.company_id);
+  const company = companyId
+    ? await base44.asServiceRole.entities.Company.get(companyId).catch(() => null)
+    : null;
+  const stored = rowsOf(await base44.asServiceRole.entities.PositionPreset.list().catch(() => []));
+  const presets = mergePresets(stored);
+  const customRoles = company && Array.isArray(company.custom_roles) ? company.custom_roles : [];
+  const preset = presetFor(resolvePresetKey({ roleKey, customRoles, isCompanyAdmin }), presets);
+  const branchId = clean(me && me.branch_id);
+  const branch = branchId
+    ? await base44.asServiceRole.entities.Branch.get(branchId).catch(() => null)
+    : null;
+  const modules = company ? packageState(company).modules : ALL_MODULES;
+  return resolveAccess({
+    packageModules: isAdmin ? ALL_MODULES : modules,
+    preset,
+    companyGrant: company && company.role_permissions ? company.role_permissions[roleKey] : null,
+    branchGrant: branch && branch.role_permissions ? branch.role_permissions[roleKey] : null,
+    isCompanyAdmin
+  });
+}
+
+function cellFor(rule: any, access: any) {
+  if (!rule || !rule.module) return null;
+  return (access && access[rule.module]) || null;
+}
+
+// Which rows this person reaches for one entity: their own, their branch's, the company's, the
+// context their screen stands on, or none at all.
+function scopeOf(rule: any, access: any) {
+  if (rule.self_only && rule.self_field) return 'self';
+  const cell = cellFor(rule, access);
+  if (!cell) {
+    if (rule.self_field) return 'self';
+    return rule.context ? 'context' : 'none';
   }
-  return { [rule.company_field]: me.company_id };
+  const scope = cell.scope || 'company';
+  // An area whose rows belong to one person each: a read grant still only opens their own.
+  if (scope === 'self' && !rule.self_field) return 'context';
+  return scope;
+}
+
+function companyRows(me: any, rule: any) {
+  if (rule.scope === 'company' && rule.company_field === 'id') return { id: me.company_id };
+  if (rule.company_field) return { [rule.company_field]: me.company_id };
+  return { company_id: me.company_id };
+}
+
+export function scopeQuery(me: any, rule: any, access: any) {
+  if (!rule || rule.scope === 'global') return {};
+  const scope = scopeOf(rule, access);
+  if (scope === 'none') return NO_ROWS;
+  if (scope === 'self') {
+    return rule.self_field ? { [rule.self_field]: lower(me.email) } : companyRows(me, rule);
+  }
+  const branches = (me.branch_ids || []).filter(Boolean);
+  if (scope === 'branch' && rule.branch_field && branches.length > 0) {
+    return { [rule.branch_field]: { $in: branches } };
+  }
+  // 'company', and 'branch' for somebody who works in no branch at all.
+  return companyRows(me, rule);
 }
 
 // The scope is written last, so what the caller sent can never widen it.
-export function mergeScope(query, scope) {
+export function mergeScope(query: any, scope: any) {
   const merged = { ...(query || {}) };
   Object.keys(scope || {}).forEach((key) => {
     merged[key] = scope[key];
@@ -338,12 +369,7 @@ export function mergeScope(query, scope) {
   return merged;
 }
 
-function scopeValue(record, want) {
-  const got = record ? record[Object.keys(want)[0]] : undefined;
-  return got;
-}
-
-export function inScope(record, scope) {
+export function inScope(record: any, scope: any) {
   if (!record) return false;
   return Object.keys(scope || {}).every((key) => {
     const want = scope[key];
@@ -353,34 +379,44 @@ export function inScope(record, scope) {
   });
 }
 
-export function pickFields(data, fields) {
+export function pickFields(data: any, fields: any) {
   const source = data || {};
-  const out = {};
-  (fields || []).forEach((field) => {
+  const out: any = {};
+  (fields || []).forEach((field: string) => {
     if (field in source) out[field] = source[field];
   });
   return out;
 }
 
-// Every row an employee writes is stamped with their own identity and their own branch,
-// whatever the browser sent.
-export function scopeData(me, rule, data) {
+// Every row a person writes is stamped with their own identity and their own branch, whatever
+// the browser sent.
+export function scopeData(me: any, rule: any, data: any, access: any) {
   const out = { ...(data || {}) };
   if (!rule || rule.scope === 'global') return out;
-  const staff = !isManagerIdentity(me);
+  const scope = scopeOf(rule, access);
   const branches = (me.branch_ids || []).filter(Boolean);
   if (rule.scope === 'company') {
     if (rule.company_field && rule.company_field !== 'id') out[rule.company_field] = me.company_id;
-    if (staff && rule.self_field) out[rule.self_field] = lower(me.email);
-    return out;
+  } else {
+    out.company_id = me.company_id;
+    if (rule.branch_field) {
+      const wanted = clean(out[rule.branch_field]) || me.branch_id || branches[0] || '';
+      out[rule.branch_field] = branches.includes(wanted) ? wanted : me.branch_id || branches[0] || '';
+    }
   }
-  out.company_id = me.company_id;
-  if (rule.branch_field) {
-    const wanted = clean(out[rule.branch_field]) || me.branch_id || branches[0] || '';
-    out[rule.branch_field] = branches.includes(wanted) ? wanted : me.branch_id || branches[0] || '';
-  }
-  if (staff && rule.self_field) out[rule.self_field] = lower(me.email);
+  if (scope === 'self' && rule.self_field) out[rule.self_field] = lower(me.email);
   return out;
 }
 
-export { scopeValue };
+// Writing follows the same answer: what the employer granted for this position, and nothing
+// else. Two things stay outside it — a person's own self-service rows, and the few contact
+// details of their own staff record.
+export function writeMode(rule: any, access: any) {
+  if (!rule) return 'none';
+  if (rule.self_service) return 'all';
+  const cell = cellFor(rule, access);
+  const level = (cell && cell.level) || 'none';
+  if (LEVEL_RANK[level] >= LEVEL_RANK.update) return 'all';
+  if (rule.staff_fields && (level === 'read' || !cell)) return 'fields';
+  return 'none';
+}

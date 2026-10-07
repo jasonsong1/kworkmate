@@ -54,7 +54,7 @@ export default async function (req) {
     const problem = passwordProblem(password);
     if (problem) return Response.json({ error: problem }, { status: 400 });
     if (await passwordReused(profile, password)) {
-      return Response.json({ error: 'That password has been used before. Choose a new one.' }, { status: 400 });
+      return Response.json({ error: 'password_reused' }, { status: 400 });
     }
     if (!clean(profile.user_email)) {
       return Response.json(

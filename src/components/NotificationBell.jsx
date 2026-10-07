@@ -27,7 +27,24 @@ export default function NotificationBell() {
 
   useEffect(() => {
     load();
-  }, [load]);
+    // Approvals land while the manager is on another screen, so the bell keeps itself up to
+    // date: live where the platform can push the change, and on a slow timer everywhere else.
+    let unsubscribe = () => {};
+    try {
+      const handle = base44.entities.Notification.subscribe((event) => {
+        const row = (event && event.data) || {};
+        if (!row.user_email || (me && row.user_email === me.email)) load();
+      });
+      if (typeof handle === 'function') unsubscribe = handle;
+    } catch (error) {
+      /* live updates are a bonus; the timer below still brings the news */
+    }
+    const timer = setInterval(load, 60000);
+    return () => {
+      unsubscribe();
+      clearInterval(timer);
+    };
+  }, [load, me]);
 
   const unread = items.filter((item) => !item.read).length;
 

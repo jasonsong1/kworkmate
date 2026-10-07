@@ -58,6 +58,18 @@ export default async function (req) {
       return Response.json({ ok: true });
     }
 
+    // Their own paperwork, and only their own: the file has to be one this record already
+    // carries before anything is signed, so nobody can ask for somebody else's document.
+    if (action === 'sign_document') {
+      const uri = String(body.file_uri || '');
+      const docs = Array.isArray(profile.docs) ? profile.docs : [];
+      if (!uri || !docs.some((doc) => doc && doc.file_uri === uri)) {
+        return Response.json({ error: 'That document is not on your own record' }, { status: 403 });
+      }
+      const { signed_url } = await base44.asServiceRole.integrations.Core.CreateFileSignedUrl({ file_uri: uri });
+      return Response.json({ ok: true, signed_url });
+    }
+
     return Response.json({
       ok: true,
       user: userFromSession({

@@ -1,14 +1,15 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.52';
 import {
+  accessFor,
   GATEWAY_ENTITIES,
   inScope,
-  isManagerIdentity,
   mergeScope,
   pickFields,
   resolveCaller,
   scopeData,
   scopeQuery,
-  seal
+  seal,
+  writeMode
 } from '../../shared/kwAuth.ts';
 
 const READ_OPS = ['list', 'filter', 'get', 'count', 'aggregate'];
@@ -48,15 +49,17 @@ export default async function (req) {
     if (!rule) return Response.json({ error: 'This screen is not open to this account' }, { status: 403 });
     if (!ALL_OPS.includes(op)) return Response.json({ error: 'Unknown operation' }, { status: 400 });
 
-    const staff = !isManagerIdentity(me);
-    const writes = (rule.writes && rule.writes[staff ? 'staff' : 'manager']) || 'none';
+    // What the employer granted this person, resolved from the package, their position preset
+    // and the grants saved for it — the same answer the screens were drawn from.
+    const access = await accessFor(base44, me);
+    const writes = writeMode(rule, access);
     if (!READ_OPS.includes(op) && writes === 'none') {
       return Response.json({ error: 'This account cannot change those records' }, { status: 403 });
     }
 
     const store = base44.asServiceRole.entities[entity];
-    const scope = scopeQuery(me, rule);
-    const patch = (data) => (writes === 'fields' ? pickFields(data, rule.staff_fields) : scopeData(me, rule, data));
+    const scope = scopeQuery(me, rule, access);
+    const patch = (data) => (writes === 'fields' ? pickFields(data, rule.staff_fields) : scopeData(me, rule, data, access));
 
     switch (op) {
       case 'list': {

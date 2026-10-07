@@ -71,32 +71,38 @@ export default function Jobs() {
   const create = async () => {
     if (!form.title.trim() || !activeBranch) return;
     setSaving(true);
-    const job = await base44.entities.Job.create({
-      company_id: activeBranch.company_id,
-      branch_id: activeBranch.id,
-      title: form.title,
-      position: form.position,
-      employment_type: form.employment_type,
-      hourly_rate: Number(form.hourly_rate) || 0,
-      description: '',
-      status: 'draft',
-      required_questions: defaultRequiredQuestions(),
-      custom_questions: [],
-      screening_min_score: 60,
-      auto_reject_email: company ? company.auto_reject_email !== false : true,
-      mini_interview_enabled: company ? company.mini_interview_enabled !== false : true,
-      video_interview_enabled: company ? company.video_interview_enabled !== false : false,
-      contact_email: company ? company.contact_email : '',
-      brand_color: activeBranch.brand_color || '#4338ca',
-      logo_url: activeBranch.logo_url || '',
-      top_n_cycle: 1
-    });
-    setSaving(false);
-    setOpen(false);
-    setForm({ title: '', position: '', employment_type: 'casual', hourly_rate: '' });
-    toast({ title: 'Job ad created' });
-    await load();
-    navigate(`/jobs/${job.id}`);
+    try {
+      const job = await base44.entities.Job.create({
+        company_id: activeBranch.company_id,
+        branch_id: activeBranch.id,
+        title: form.title,
+        position: form.position,
+        employment_type: form.employment_type,
+        hourly_rate: Number(form.hourly_rate) || 0,
+        description: '',
+        status: 'draft',
+        required_questions: defaultRequiredQuestions(),
+        custom_questions: [],
+        screening_min_score: 60,
+        auto_reject_email: company ? company.auto_reject_email !== false : true,
+        mini_interview_enabled: company ? company.mini_interview_enabled !== false : true,
+        video_interview_enabled: company ? company.video_interview_enabled !== false : false,
+        contact_email: company ? company.contact_email : '',
+        brand_color: activeBranch.brand_color || '#4338ca',
+        logo_url: activeBranch.logo_url || '',
+        top_n_cycle: 1
+      });
+      setOpen(false);
+      setForm({ title: '', position: '', employment_type: 'casual', hourly_rate: '' });
+      toast({ title: 'Job ad created' });
+      await load();
+      navigate(`/jobs/${job.id}`);
+    } catch (error) {
+      // The dialog stays open with a reason instead of a button that turns forever.
+      toast({ title: error.message || 'The job ad could not be created', variant: 'destructive' });
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
