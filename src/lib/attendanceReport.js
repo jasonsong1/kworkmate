@@ -1,5 +1,5 @@
 import { jsPDF } from 'jspdf';
-import { dayTypeFor, localDate, stateLabel } from '@/lib/holidays';
+import { dayTypeFor, localDate, stateLabel, timeZoneFor } from '@/lib/holidays';
 
 const APPROVAL_LABEL = { pending: 'Pending', approved: 'Approved', rejected: 'Rejected' };
 const DAY_TYPE_LABEL = { weekday: 'Weekday', saturday: 'Saturday', sunday: 'Sunday' };
@@ -9,11 +9,16 @@ function dayPart(value, state) {
   return localDate(value, state);
 }
 
-function timePart(value) {
+// The punch time on the branch's own clock, the same way the screen above shows it.
+function timePart(value, state) {
   if (!value) return '';
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return '';
-  return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+  return d.toLocaleTimeString(undefined, {
+    timeZone: timeZoneFor(state),
+    hour: '2-digit',
+    minute: '2-digit'
+  });
 }
 
 function hours(minutes) {
@@ -58,8 +63,8 @@ export function reportRows(entries, options = {}) {
       pay.date,
       row.employee_name || '',
       row.employee_number || '',
-      timePart(row.clock_in_at),
-      timePart(row.clock_out_at),
+      timePart(row.clock_in_at, opts.state),
+      timePart(row.clock_out_at, opts.state),
       hours(row.minutes),
       pay.dayType,
       pay.rateText,
