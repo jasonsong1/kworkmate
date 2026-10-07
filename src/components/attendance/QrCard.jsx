@@ -4,7 +4,7 @@ import { QRCodeSVG } from 'qrcode.react';
 // The stored clock-in QR design, drawn the same way on the back-office screen and on the
 // store kiosk. Text is passed in rather than translated here, because the store screen is
 // always English.
-export default function QrCard({ url, design, fallbackTitle, fallbackNote }) {
+export default function QrCard({ url, design, fallbackTitle, fallbackNote, noteClassName = 'text-muted-foreground' }) {
   const saved = design || {};
   const color = saved.brand_color || '#111111';
   const size = Math.min(320, Math.max(160, Number(saved.size) || 240));
@@ -21,7 +21,7 @@ export default function QrCard({ url, design, fallbackTitle, fallbackNote }) {
       <div className="mt-3 flex justify-center rounded-2xl border p-3" style={{ borderColor: color }}>
         <QRCodeSVG value={url} size={size} level="M" marginSize={4} />
       </div>
-      {note ? <p className="mt-3 text-xs text-muted-foreground">{note}</p> : null}
+      {note ? <p className={`mt-3 text-xs ${noteClassName}`}>{note}</p> : null}
     </div>
   );
 }

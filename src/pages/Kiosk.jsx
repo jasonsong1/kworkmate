@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { base44 } from '@/api/base44Client';
 import { kioskUrl } from '@/lib/kioskLink';
+import { cn } from '@/lib/utils';
 
 // Employee numbers mix letters, digits, spaces and hyphens (ED-003, BOT-00007), and are typed by
 // hand, so whatever is typed is kept as-is and only trimmed when the punch is sent.
@@ -139,26 +140,26 @@ export default function Kiosk() {
 
   if (state === 'loading') {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50">
-        <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
+      <div className="flex min-h-screen items-center justify-center bg-[#f8fafc]">
+        <Loader2 className="h-6 w-6 animate-spin text-[#94a3b8]" />
       </div>
     );
   }
 
   if (state === 'invalid') {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
-        <div className="w-full max-w-md rounded-2xl border bg-white p-8 text-center shadow-sm">
-          <AlertCircle className="mx-auto mb-4 h-8 w-8 text-slate-400" />
+      <div className="flex min-h-screen items-center justify-center bg-[#f8fafc] px-4">
+        <div className="w-full max-w-md rounded-2xl border bg-white p-8 text-center text-[#0f172a] shadow-sm">
+          <AlertCircle className="mx-auto mb-4 h-8 w-8 text-[#94a3b8]" />
           <h1 className="text-lg font-semibold">Kiosk unavailable</h1>
-          <p className="mt-2 text-sm text-slate-500">{error}</p>
+          <p className="mt-2 text-sm text-[#475569]">{error}</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 pb-16">
+    <div className="min-h-screen bg-[#f8fafc] pb-16">
       <header className="px-6 py-8 text-white" style={{ backgroundColor: brand }}>
         <div className="mx-auto max-w-xl text-center">
           {logoUrl ? (
@@ -174,8 +175,8 @@ export default function Kiosk() {
 
       <main className="mx-auto max-w-xl space-y-6 px-4 py-6">
         {me ? (
-          <div className="rounded-2xl border bg-white p-6 shadow-sm">
-            <p className="text-sm text-slate-500">Signed in as</p>
+          <div className="rounded-2xl border bg-white p-6 text-[#0f172a] shadow-sm">
+            <p className="text-sm text-[#475569]">Signed in as</p>
             <p className="text-lg font-semibold">{me.full_name || me.email}</p>
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
               <Button size="lg" className="h-14 text-base" disabled={busy} onClick={() => personalPunch('in')}>
@@ -184,14 +185,14 @@ export default function Kiosk() {
               <Button
                 size="lg"
                 variant="outline"
-                className="h-14 text-base"
+                className="h-14 text-base text-[#0f172a]"
                 disabled={busy}
                 onClick={() => personalPunch('out')}
               >
                 Clock out
               </Button>
             </div>
-            <p className="mt-3 flex items-center gap-2 text-xs text-slate-400">
+            <p className="mt-3 flex items-center gap-2 text-xs text-[#64748b]">
               <MapPin className="h-3.5 w-3.5" />
               {coords ? `${coords.lat.toFixed(5)}, ${coords.lng.toFixed(5)}` : 'Waiting for your location…'}
             </p>
@@ -201,14 +202,14 @@ export default function Kiosk() {
         <div className="grid grid-cols-2 gap-2 rounded-2xl border bg-white p-1.5 shadow-sm">
           <Button
             variant={mode === 'qr' ? 'default' : 'ghost'}
-            className="h-12 text-base"
+            className={cn('h-12 text-base', mode !== 'qr' && 'text-[#0f172a]')}
             onClick={() => setMode('qr')}
           >
             <QrCode className="mr-2 h-4 w-4" /> Store QR
           </Button>
           <Button
             variant={mode === 'number' ? 'default' : 'ghost'}
-            className="h-12 text-base"
+            className={cn('h-12 text-base', mode !== 'number' && 'text-[#0f172a]')}
             onClick={() => setMode('number')}
           >
             <Keyboard className="mr-2 h-4 w-4" /> My number
@@ -216,7 +217,7 @@ export default function Kiosk() {
         </div>
 
         {mode === 'number' ? (
-          <div className="rounded-2xl border bg-white p-6 shadow-sm">
+          <div className="rounded-2xl border bg-white p-6 text-[#0f172a] shadow-sm">
             <p className="text-sm font-semibold">Enter your employee number and PIN</p>
             <div className="mt-4">
               <Input
@@ -227,10 +228,10 @@ export default function Kiosk() {
                 autoCapitalize="characters"
                 spellCheck={false}
                 disabled={busy}
-                className="h-20 text-center font-mono text-3xl font-bold tracking-widest"
+                className="h-20 text-center font-mono text-3xl font-bold tracking-widest text-[#0f172a] placeholder:text-[#94a3b8]"
               />
             </div>
-            <p className="mt-4 text-xs font-medium text-slate-500">PIN</p>
+            <p className="mt-4 text-xs font-medium text-[#475569]">PIN</p>
             <Input
               value={pin}
               onChange={(event) => changePin(event.target.value)}
@@ -240,7 +241,7 @@ export default function Kiosk() {
               autoComplete="off"
               spellCheck={false}
               disabled={busy}
-              className="mt-1 h-16 text-center font-mono text-2xl tracking-[0.5em]"
+              className="mt-1 h-16 text-center font-mono text-2xl tracking-[0.5em] text-[#0f172a] placeholder:text-[#94a3b8]"
             />
 
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -250,7 +251,7 @@ export default function Kiosk() {
               <Button
                 size="lg"
                 variant="outline"
-                className="h-14 text-base"
+                className="h-14 text-base text-[#0f172a]"
                 disabled={busy}
                 onClick={() => punch('out')}
               >
@@ -258,15 +259,16 @@ export default function Kiosk() {
               </Button>
             </div>
 
-            <p className="mt-3 text-xs text-slate-400">
+            <p className="mt-3 text-xs text-[#64748b]">
               Entries made here are saved as pending and a manager approves them.
             </p>
           </div>
         ) : (
-          <div className="rounded-2xl border bg-white p-6 text-center shadow-sm">
+          <div className="rounded-2xl border bg-white p-6 text-center text-[#0f172a] shadow-sm">
             <QrCard
               url={kioskUrl(info.branch_id, info.date)}
               design={info.qr_design}
+              noteClassName="text-[#475569]"
               fallbackTitle="Scan to clock in"
               fallbackNote={`Point a phone camera at this code to open today’s clock for ${info.branch_name}, then enter your employee number and PIN.`}
             />
@@ -274,7 +276,7 @@ export default function Kiosk() {
         )}
 
         {result ? (
-          <div className="flex items-start gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-5 text-emerald-800">
+          <div className="flex items-start gap-3 rounded-2xl border border-[#a7f3d0] bg-[#ecfdf5] p-5 text-[#065f46]">
             <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0" />
             <div>
               <p className="font-semibold">
@@ -289,7 +291,7 @@ export default function Kiosk() {
         ) : null}
 
         {error ? (
-          <div className="flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 p-5 text-red-700">
+          <div className="flex items-start gap-3 rounded-2xl border border-[#fecaca] bg-[#fef2f2] p-5 text-[#b91c1c]">
             <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" />
             <p className="text-sm">{error}</p>
           </div>
