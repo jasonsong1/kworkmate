@@ -17,12 +17,14 @@ import { base44 } from '@/api/base44Client';
 
 export default function StaffHome() {
   const { t } = useI18n();
-  const { me, employeeProfile, activeBranch } = useWorkspace();
+  const { me, employeeProfile, activeBranch, hasModule, presetKey } = useWorkspace();
   const { toast } = useToast();
   const [shifts, setShifts] = useState([]);
   const [availability, setAvailability] = useState(emptyAvailability());
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  // The floor position holds no store code of its own; a supervisor or a manager does.
+  const isFloorStaff = presetKey === 'floor_staff';
 
   const load = useCallback(async () => {
     if (!me) return;
@@ -73,15 +75,22 @@ export default function StaffHome() {
         subtitle={activeBranch ? activeBranch.name : me ? me.email : ''}
         actions={
           <>
-            <Button variant="outline" onClick={openQr} disabled={!activeBranch}>
-              <QrCode className="mr-2 h-4 w-4" /> {t('staff.qrButton')}
-            </Button>
+            {/* The store's own code is shown on the store's device, so a floor position does not
+                carry that button. */}
+            {!isFloorStaff && (
+              <Button variant="outline" onClick={openQr} disabled={!activeBranch}>
+                <QrCode className="mr-2 h-4 w-4" /> {t('staff.qrButton')}
+              </Button>
+            )}
             <ClockScanButton onRecorded={load} />
-            <Button variant="outline" asChild>
-              <Link to="/leave">
-                <CalendarPlus className="mr-2 h-4 w-4" /> {t('leave.title')}
-              </Link>
-            </Button>
+            {/* A package without leave offers no leave button. */}
+            {hasModule('leave') && (
+              <Button variant="outline" asChild>
+                <Link to="/leave">
+                  <CalendarPlus className="mr-2 h-4 w-4" /> {t('leave.title')}
+                </Link>
+              </Button>
+            )}
           </>
         }
       />
