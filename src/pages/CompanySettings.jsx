@@ -34,9 +34,12 @@ const PANEL_MODULES = {
 
 export default function CompanySettings() {
   const { t } = useI18n();
-  const { company, reload, role, isPlatformAdmin, pkg, presets, feature, hasModule } = useWorkspace();
+  const { company, reload, role, isPlatformAdmin, pkg, presets, feature, hasModule, levelOf } = useWorkspace();
   const videoAllowed = videoInterviewAllowed(pkg);
   const miniAllowed = feature('mini_interview');
+  // Saving follows what this person's company settings area allows, not the title on their
+  // account: a role the company itself defined can hold it without being the company admin.
+  const canSave = role === 'company_admin' || ['update', 'write'].includes(levelOf('settings'));
   // Only the modules the company's package actually includes are offered here; the rest are
   // not part of this company and never appear in the table.
   const packageModules = MODULES.filter(
@@ -170,7 +173,7 @@ export default function CompanySettings() {
         title={t('settings.title')}
         subtitle={t('settings.subtitle')}
         actions={
-        <Button onClick={save} disabled={saving || role !== 'company_admin'}>
+        <Button onClick={save} disabled={saving || !canSave}>
             {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             {t('common.save')}
           </Button>

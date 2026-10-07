@@ -98,6 +98,23 @@ export default async function (req) {
       return Response.json({ ok: true, docs: next });
     }
 
+    // Their own file, removed by themselves: what the employer filed or the onboarding run
+    // produced stays on the record.
+    if (action === 'delete_document') {
+      const uri = String(body.file_uri || '');
+      const docs = Array.isArray(profile.docs) ? profile.docs : [];
+      const target = docs.find((doc) => doc && doc.file_uri === uri);
+      if (!target) {
+        return Response.json({ error: 'That document is not on your own record' }, { status: 403 });
+      }
+      if (target.type !== 'staff_upload' && target.uploaded_by !== 'self') {
+        return Response.json({ error: 'Only a document you uploaded yourself can be removed' }, { status: 400 });
+      }
+      const next = docs.filter((doc) => !(doc && doc.file_uri === uri));
+      await base44.asServiceRole.entities.EmployeeProfile.update(profile.id, { docs: next });
+      return Response.json({ ok: true, docs: next });
+    }
+
     return Response.json({
       ok: true,
       user: userFromSession({

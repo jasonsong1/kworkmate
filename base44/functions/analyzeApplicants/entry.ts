@@ -1,5 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.52';
-import { sendEmail, brandedEmail } from '../../shared/email.ts';
+import { sendEmail } from '../../shared/email.ts';
 import { renderStageEmail } from '../../shared/emailStages.ts';
 
 const RESUME_SCHEMA = {
@@ -201,31 +201,8 @@ export default async function (req) {
     });
     if (updates.length > 0) await base44.asServiceRole.entities.Applicant.bulkUpdate(updates);
 
-    if (body.applicant_id) {
-      const mine = updates.find((u) => u.id === body.applicant_id);
-      if (mine && mine.rank <= limit && mine.status === 'top10') {
-        const shortlist = updates.slice(0, limit).map((u, i) => `${i + 1}. ${scored[i].full_name} — ${scored[i].ai_score}`).join('\n');
-        const recipients = [
-          ...new Set([...(branch && branch.manager_emails) || [], job.contact_email].filter(Boolean))
-        ].slice(0, 3);
-        for (const to of recipients) {
-          await sendEmail(base44, {
-            to,
-            subject: `New top candidate — ${job.title}`,
-            html: brandedEmail({
-              heading: 'A candidate entered your AI shortlist',
-              brandColor: job.brand_color,
-              lines: [
-                `<b>${scored.find((s) => s.id === body.applicant_id).full_name}</b> scored ${mine.rank} out of the current applicants for ${job.title}.`,
-                'Current AI top list:',
-                `<pre style="font-family:monospace;font-size:13px;color:#334155;white-space:pre-wrap">${shortlist}</pre>`
-              ],
-              footer: `${company ? company.name : ''} · K-Workmate`
-            })
-          });
-        }
-      }
-    }
+    // Nobody is emailed here: a candidate attaching a resume on the job page only fills the
+    // shortlist in the back office, it does not mail the manager.
 
     return Response.json({ ok: true, analysed, ranked: updates.length, pending_left: pendingLeft });
   } catch (error) {

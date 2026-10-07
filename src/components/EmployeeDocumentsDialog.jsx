@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { FileText, Loader2, Upload } from 'lucide-react';
+import { FileText, Loader2, Trash2, Upload } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -15,6 +15,7 @@ export default function EmployeeDocumentsDialog({ open, onOpenChange, employee }
   const [loadingId, setLoadingId] = useState(null);
   const [docs, setDocs] = useState([]);
   const [uploading, setUploading] = useState(false);
+  const [removingId, setRemovingId] = useState(null);
   const fileRef = useRef(null);
 
   useEffect(() => {
@@ -57,6 +58,22 @@ export default function EmployeeDocumentsDialog({ open, onOpenChange, employee }
       toast({ title: error.message || t('employees.docUploadFailed'), variant: 'destructive' });
     } finally {
       setUploading(false);
+    }
+  };
+
+  // A file the employee filed themselves is theirs to remove; what the employer or the
+  // onboarding run put on the record stays.
+  const remove = async (doc) => {
+    if (!doc || !doc.file_uri) return;
+    setRemovingId(doc.file_uri);
+    try {
+      const saved = await kwCall('kwSession', { action: 'delete_document', file_uri: doc.file_uri });
+      setDocs((saved && saved.docs) || docs.filter((item) => item.file_uri !== doc.file_uri));
+      toast({ title: t('employees.docDeleted') });
+    } catch (error) {
+      toast({ title: error.message || t('employees.docDeleteFailed'), variant: 'destructive' });
+    } finally {
+      setRemovingId(null);
     }
   };
 
@@ -123,6 +140,21 @@ export default function EmployeeDocumentsDialog({ open, onOpenChange, employee }
                     t('common.open')
                   )}
                 </Button>
+                {viaOwnRecord && (doc.uploaded_by === 'self' || doc.type === 'staff_upload') && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => remove(doc)}
+                    disabled={removingId === doc.file_uri}
+                    title={t('common.delete')}
+                  >
+                    {removingId === doc.file_uri ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                    )}
+                  </Button>
+                )}
               </div>
             ))}
           </div>
