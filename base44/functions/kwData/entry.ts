@@ -4,6 +4,7 @@ import {
   GATEWAY_ENTITIES,
   inScope,
   mergeScope,
+  NO_ROWS,
   pickFields,
   resolveCaller,
   scopeData,
@@ -59,6 +60,14 @@ export default async function (req) {
 
     const store = base44.asServiceRole.entities[entity];
     const scope = scopeQuery(me, rule, access);
+    // An area the employer did not open to this person answers empty without reaching the
+    // database at all: there are no rows here for them, so there is nothing to ask for.
+    if (scope === NO_ROWS) {
+      if (op === 'count') return ok(0);
+      if (op === 'aggregate') return ok({ rows: [], truncated: false });
+      if (READ_OPS.includes(op) && op !== 'get') return ok({ items: [], next_cursor: null, has_more: false });
+      return forbidden();
+    }
     const patch = (data) => (writes === 'fields' ? pickFields(data, rule.staff_fields) : scopeData(me, rule, data, access));
 
     switch (op) {

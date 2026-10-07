@@ -7,7 +7,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { useI18n } from '@/lib/i18n';
 import { formatDateTime } from '@/lib/bh';
 import { base44 } from '@/api/base44Client';
-import { kwActive, kwCall } from '@/lib/kwAuthClient';
+import { kwActive, kwCall, kwIdentity } from '@/lib/kwAuthClient';
 
 export default function EmployeeDocumentsDialog({ open, onOpenChange, employee }) {
   const { t } = useI18n();
@@ -16,14 +16,17 @@ export default function EmployeeDocumentsDialog({ open, onOpenChange, employee }
 
   // A signed-in employee holds this app's own session rather than a platform one, so their own
   // staff record is what signs the file — and only a file that record already carries is ever
-  // signed. The employer's screen keeps the platform's own signing.
+  // signed. The employer's own screen keeps the platform's own signing.
   const openDoc = async (doc) => {
     if (!doc || !doc.file_uri) return;
     setLoadingId(doc.file_uri);
+    const identity = kwIdentity();
+    const ownRecord = Boolean(identity && employee && identity.email === employee.user_email);
     try {
-      const signed = kwActive()
-        ? await kwCall('kwSession', { action: 'sign_document', file_uri: doc.file_uri })
-        : await base44.integrations.Core.CreateFileSignedUrl({ file_uri: doc.file_uri });
+      const signed =
+        kwActive() && ownRecord
+          ? await kwCall('kwSession', { action: 'sign_document', file_uri: doc.file_uri })
+          : await base44.integrations.Core.CreateFileSignedUrl({ file_uri: doc.file_uri });
       if (signed && signed.signed_url) window.open(signed.signed_url, '_blank', 'noopener');
     } catch (error) {
       toast({ title: error.message || t('employees.docOpenFailed'), variant: 'destructive' });

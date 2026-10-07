@@ -287,8 +287,9 @@ export const GATEWAY_ENTITIES = {
 };
 
 const LEVEL_RANK = { none: 0, read: 1, update: 2, write: 3 };
-// A query that matches no row at all, for an area the employer did not open to this person.
-const NO_ROWS = { id: '__none__' };
+// The answer for an area the employer did not open to this person: a marker rather than a
+// query, so nothing is ever asked of the database on their behalf.
+export const NO_ROWS = { none: true };
 
 // The employer's own answer to "what may this person do", resolved from the same three layers
 // every screen reads: the package the company paid for, the position preset their role holds,

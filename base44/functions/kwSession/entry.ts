@@ -18,9 +18,11 @@ import {
 export default async function (req) {
   try {
     const base44 = createClientFromRequest(req);
+    // The caller is resolved before the body is read: the session can travel in the body
+    // itself, and a body can only be read once.
+    const me = await resolveCaller(base44, req);
     const body = await req.json().catch(() => ({}));
     const action = String(body.action || 'me');
-    const me = await resolveCaller(base44, req);
     if (!me) return Response.json({ error: 'Sign-in required' }, { status: 401 });
 
     if (!me.kw) {
