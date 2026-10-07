@@ -12,7 +12,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { useI18n } from '@/lib/i18n';
 import { useWorkspace } from '@/lib/WorkspaceContext';
 import { usePermissions } from '@/lib/permissions';
-import { formatDateTime, todayIso } from '@/lib/bh';
+import { todayIso } from '@/lib/bh';
+import { dayRangeForState, formatTimeInZone, stateFromBranch } from '@/lib/holidays';
 import { kioskUrl } from '@/lib/kioskLink';
 import { base44 } from '@/api/base44Client';
 
@@ -25,6 +26,8 @@ export default function Attendance() {
   // "Own records only" is a data-range rule the person's position preset carries: a manager
   // sees the branch, a floor position sees nothing but itself.
   const selfOnly = scopeOf('attendance') === 'self';
+  // Every punch is read on the clock of the store it belongs to, whatever zone the viewer is in.
+  const branchState = stateFromBranch(activeBranch);
   const [date, setDate] = useState(todayIso());
   const [employeeFilter, setEmployeeFilter] = useState(ALL);
   const [employees, setEmployees] = useState([]);
@@ -59,8 +62,7 @@ export default function Attendance() {
       return;
     }
     setLoading(true);
-    const from = `${date}T00:00:00.000Z`;
-    const to = `${date}T23:59:59.999Z`;
+    const { from, to } = dayRangeForState(date, branchState);
     const query = { branch_id: activeBranch.id, clock_in_at: { $gte: from, $lte: to } };
     if (selfOnly) query.employee_email = (me && me.email) || '__none__';
     else if (employeeFilter !== ALL) query.employee_email = employeeFilter;
@@ -81,7 +83,7 @@ export default function Attendance() {
       pending: (buckets.find((bucket) => bucket.approval_status === 'pending') || {}).count || 0
     });
     setLoading(false);
-  }, [activeBranch, date, employeeFilter, selfOnly, me]);
+  }, [activeBranch, branchState, date, employeeFilter, selfOnly, me]);
 
   useEffect(() => {
     load();
@@ -204,9 +206,13 @@ export default function Attendance() {
                           {row.source === 'manual' ? t('attendance.sourceManual') : t('attendance.sourceApp')}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-sm">{formatDateTime(row.clock_in_at)}</TableCell>
+                      <TableCell className="text-sm">{formatTimeInZone(row.clock_in_at, branchState)}</TableCell>
                       <TableCell className="text-sm">
-                        {row.clock_out_at ? formatDateTime(row.clock_out_at) : <Badge variant="secondary">Active</Badge>}
+                        {row.clock_out_at ? (
+                          formatTimeInZone(row.clock_out_at, branchState)
+                        ) : (
+                          <Badge variant="secondary">Active</Badge>
+                        )}
                       </TableCell>
                       <TableCell className="text-sm">
                         {row.minutes ? `${Math.floor(row.minutes / 60)}h ${row.minutes % 60}m` : '—'}

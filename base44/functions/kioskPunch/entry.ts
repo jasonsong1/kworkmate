@@ -1,9 +1,27 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.52';
-import { decodeKioskToken, timezoneForBranch, todayIn } from '../../shared/kiosk.ts';
+import { decodeKioskToken, timeIn, timezoneForBranch, todayIn } from '../../shared/kiosk.ts';
 import { verifyPin } from '../../shared/pin.ts';
+import { branchManagers, notifyStaff } from '../../shared/notify.ts';
 
 function rowsOf(result) {
   return Array.isArray(result) ? result : (result && result.items) || [];
+}
+
+// A manual punch only counts once a manager accepts it, so the manager hears about it in the
+// app straight away: it shows in the bell at the top of their screen.
+async function alertManagers(base44, company, branch, person, action) {
+  const emails = await branchManagers(base44, company, branch);
+  if (emails.length === 0) return;
+  const time = timeIn(timezoneForBranch(branch));
+  await notifyStaff(base44, {
+    company,
+    branch,
+    recipients: emails.map((email) => ({ email })),
+    type: 'attendance_approval',
+    title: action === 'in' ? 'Clock-in needs approval' : 'Clock-out needs approval',
+    body: `${person.full_name || person.user_email} clocked ${action === 'in' ? 'in' : 'out'} at ${time}.`,
+    link: '/attendance'
+  });
 }
 
 // Reachable without signing in, because it is opened on a store tablet: the link itself
@@ -105,6 +123,8 @@ export default async function (req) {
         approval_status: 'pending'
       });
 
+      await alertManagers(base44, company, branch, person, 'in').catch(() => null);
+
       return Response.json({ ok: true, action: 'in', name: person.full_name, employee_number: canonical });
     }
 
@@ -121,6 +141,8 @@ export default async function (req) {
       approved_by_email: '',
       approved_at: ''
     });
+
+    await alertManagers(base44, company, branch, person, 'out').catch(() => null);
 
     return Response.json({ ok: true, action: 'out', name: person.full_name, employee_number: canonical });
   } catch (error) {

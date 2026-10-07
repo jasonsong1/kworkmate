@@ -15,7 +15,7 @@ import { base44 } from '@/api/base44Client';
 
 export default function EmailTemplates() {
   const { t } = useI18n();
-  const { company, role, patchCompany } = useWorkspace();
+  const { company, isManager, levelOf, feature, patchCompany } = useWorkspace();
   const { toast } = useToast();
   const [branding, setBranding] = useState(null);
   const [templates, setTemplates] = useState(null);
@@ -33,10 +33,16 @@ export default function EmailTemplates() {
     setTemplates(mergeTemplates(company.email_templates));
   }, [company]);
 
-  const canEdit = role === 'company_admin';
+  // The branding and the stage copy are the company's own design: a manager keeps them, and so
+  // does any position the employer granted the template area to.
+  const canEdit = isManager || ['update', 'write'].includes(levelOf('templates'));
+  // A stage that belongs to a kind of interview the package does not include is not offered.
+  const STAGE_FEATURE = { mini: 'mini_interview', video: 'video_interview' };
+  const stageList = EMAIL_STAGES.filter((item) => !STAGE_FEATURE[item.key] || feature(STAGE_FEATURE[item.key]));
+  const activeKey = stageList.some((item) => item.key === stageKey) ? stageKey : stageList[0].key;
   const patchBranding = (patch) => setBranding((prev) => ({ ...prev, ...patch }));
   const patchStage = (patch) =>
-    setTemplates((prev) => ({ ...prev, [stageKey]: { ...prev[stageKey], ...patch } }));
+    setTemplates((prev) => ({ ...prev, [activeKey]: { ...prev[activeKey], ...patch } }));
 
   const uploadLogo = async (file) => {
     setUploading(true);
@@ -49,7 +55,7 @@ export default function EmailTemplates() {
   };
 
   const resetStage = () => {
-    const stage = getStage(stageKey);
+    const stage = getStage(activeKey);
     patchStage({ subject: stage.subject, heading: stage.heading, body: stage.body, cta: stage.cta });
   };
 
@@ -74,10 +80,10 @@ export default function EmailTemplates() {
     return <p className="text-sm text-muted-foreground">{t('common.loading')}</p>;
   }
 
-  const stage = getStage(stageKey);
+  const stage = getStage(activeKey);
   const preview = renderEmailPreview({
-    stageKey,
-    values: templates[stageKey],
+    stageKey: activeKey,
+    values: templates[activeKey],
     branding,
     companyName: company ? company.name : ''
   });
@@ -111,14 +117,14 @@ export default function EmailTemplates() {
             </CardHeader>
             <CardContent className="space-y-5">
               <div className="flex flex-wrap gap-2">
-                {EMAIL_STAGES.map((item) => (
+                {stageList.map((item) => (
                   <button
                     key={item.key}
                     type="button"
                     onClick={() => setStageKey(item.key)}
                     className={cn(
                       'rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors',
-                      item.key === stageKey
+                      item.key === activeKey
                         ? 'border-primary bg-primary text-primary-foreground'
                         : 'bg-background text-muted-foreground hover:bg-muted'
                     )}
@@ -129,9 +135,9 @@ export default function EmailTemplates() {
               </div>
 
               <EmailStageEditor
-                key={stageKey}
+                key={activeKey}
                 stage={stage}
-                values={templates[stageKey]}
+                values={templates[activeKey]}
                 onChange={patchStage}
                 onReset={resetStage}
                 disabled={!canEdit}

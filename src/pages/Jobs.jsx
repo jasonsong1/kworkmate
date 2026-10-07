@@ -43,21 +43,25 @@ export default function Jobs() {
       return;
     }
     setLoading(true);
-    const [list, grouped] = await Promise.all([
-      base44.entities.Job
-        .filter({ branch_id: activeBranch.id }, { sort: '-created_date', limit: 100 })
-        .then((page) => page.items || []),
-      base44.entities.Applicant.aggregate({ query: { branch_id: activeBranch.id }, groupBy: 'job_id' }).catch(() => ({ rows: [] }))
-    ]);
-    setJobs(list);
-    const map = {};
-    (grouped.rows || []).forEach((row) => {
-      map[row.job_id] = row.count;
-    });
-    setCounts(map);
-    // Open ads and the package limit move together, so refresh both together.
-    await reloadPackage();
-    setLoading(false);
+    try {
+      const [list, grouped] = await Promise.all([
+        base44.entities.Job
+          .filter({ branch_id: activeBranch.id }, { sort: '-created_date', limit: 100 })
+          .then((page) => page.items || []),
+        base44.entities.Applicant.aggregate({ query: { branch_id: activeBranch.id }, groupBy: 'job_id' }).catch(() => ({ rows: [] }))
+      ]);
+      setJobs(list);
+      const map = {};
+      (grouped.rows || []).forEach((row) => {
+        map[row.job_id] = row.count;
+      });
+      setCounts(map);
+      // Open ads and the package limit move together, so refresh both together.
+      await reloadPackage();
+    } finally {
+      // A screen that could not read the ads still stops loading and says so.
+      setLoading(false);
+    }
   }, [activeBranch]);
 
   useEffect(() => {

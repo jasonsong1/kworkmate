@@ -240,6 +240,49 @@ export function localDate(value, state) {
   return `${pick('year')}-${pick('month')}-${pick('day')}`;
 }
 
+// A punch is read on the branch's own clock, so a manager in Sydney looking at a Perth store
+// sees the times the Perth store recorded.
+export function formatTimeInZone(value, state) {
+  if (!value) return '—';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return date.toLocaleString(undefined, {
+    timeZone: timeZoneFor(state),
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+}
+
+// How far ahead of UTC the zone is at that instant, in milliseconds.
+function zoneOffset(date, zone) {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: zone,
+    hour12: false,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  }).formatToParts(date);
+  const pick = (type) => Number((parts.find((part) => part.type === type) || {}).value || 0);
+  const asUtc = Date.UTC(pick('year'), pick('month') - 1, pick('day'), pick('hour') % 24, pick('minute'), pick('second'));
+  return asUtc - date.getTime();
+}
+
+// The stretch of UTC a local calendar day at the branch covers, so a day's filter picks up
+// exactly the punches that store counts as that day.
+export function dayRangeForState(dateIso, state) {
+  const midnight = new Date(`${dateIso}T00:00:00Z`);
+  const shift = zoneOffset(midnight, timeZoneFor(state));
+  return {
+    from: new Date(midnight.getTime() - shift).toISOString(),
+    to: new Date(midnight.getTime() + 24 * 60 * 60 * 1000 - shift - 1).toISOString()
+  };
+}
+
 export function holidaysForYear(state, year) {
   const code = normalizeState(state);
   if (!code) return {};

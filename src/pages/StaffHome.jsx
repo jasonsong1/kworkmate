@@ -1,10 +1,11 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { CalendarDays, CalendarPlus, Loader2, QrCode, UserCircle2 } from 'lucide-react';
+import { CalendarDays, CalendarPlus, FolderOpen, Loader2, QrCode, Timer, UserCircle2 } from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
 import AvailabilityMatrix from '@/components/AvailabilityMatrix';
 import CalendarSubscribeCard from '@/components/CalendarSubscribeCard';
 import ClockScanButton from '@/components/attendance/ClockScanButton';
+import EmployeeDocumentsDialog from '@/components/EmployeeDocumentsDialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -23,8 +24,11 @@ export default function StaffHome() {
   const [availability, setAvailability] = useState(emptyAvailability());
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [docsOpen, setDocsOpen] = useState(false);
   // The floor position holds no store code of its own; a supervisor or a manager does.
   const isFloorStaff = presetKey === 'floor_staff';
+  // A package that does not include attendance has nothing to clock with.
+  const attendance = hasModule('attendance');
 
   const load = useCallback(async () => {
     if (!me) return;
@@ -76,19 +80,33 @@ export default function StaffHome() {
         actions={
           <>
             {/* The store's own code is shown on the store's device, so a floor position does not
-                carry that button. */}
-            {!isFloorStaff && (
+                carry that button. A package without attendance carries neither it nor the scan. */}
+            {attendance && !isFloorStaff && (
               <Button variant="outline" onClick={openQr} disabled={!activeBranch}>
                 <QrCode className="mr-2 h-4 w-4" /> {t('staff.qrButton')}
               </Button>
             )}
-            <ClockScanButton onRecorded={load} />
+            {attendance && <ClockScanButton onRecorded={load} />}
+            {/* Their own attendance records, when their position holds the area. */}
+            {attendance && (
+              <Button variant="outline" asChild>
+                <Link to="/attendance">
+                  <Timer className="mr-2 h-4 w-4" /> {t('nav.attendance')}
+                </Link>
+              </Button>
+            )}
             {/* A package without leave offers no leave button. */}
             {hasModule('leave') && (
               <Button variant="outline" asChild>
                 <Link to="/leave">
                   <CalendarPlus className="mr-2 h-4 w-4" /> {t('leave.title')}
                 </Link>
+              </Button>
+            )}
+            {/* The documents their employer keeps on their own staff record. */}
+            {employeeProfile && (
+              <Button variant="outline" onClick={() => setDocsOpen(true)}>
+                <FolderOpen className="mr-2 h-4 w-4" /> {t('employees.vault')}
               </Button>
             )}
           </>
@@ -188,6 +206,8 @@ export default function StaffHome() {
           <CalendarSubscribeCard />
         </div>
       </div>
+
+      <EmployeeDocumentsDialog open={docsOpen} onOpenChange={setDocsOpen} employee={employeeProfile} />
     </div>
   );
 }

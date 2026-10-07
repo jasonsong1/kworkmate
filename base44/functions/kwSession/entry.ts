@@ -1,9 +1,11 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.52';
 import {
-  MIN_PASSWORD_LENGTH,
   closeSession,
   hashPassword,
   lower,
+  passwordHistory,
+  passwordProblem,
+  passwordReused,
   randomSalt,
   resolveCaller,
   sealRecord,
@@ -37,15 +39,18 @@ export default async function (req) {
     if (action === 'change_password') {
       const current = String(body.current_password || '');
       const next = String(body.new_password || '');
-      if (next.length < MIN_PASSWORD_LENGTH) {
-        return Response.json({ error: `Use at least ${MIN_PASSWORD_LENGTH} characters` }, { status: 400 });
-      }
+      const problem = passwordProblem(next);
+      if (problem) return Response.json({ error: problem }, { status: 400 });
       const ok = await verifyPassword(current, profile.password_salt, profile.password_hash);
       if (!ok) return Response.json({ error: 'The current password is wrong' }, { status: 401 });
+      if (await passwordReused(profile, next)) {
+        return Response.json({ error: 'That password has been used before. Choose a new one.' }, { status: 400 });
+      }
       const salt = randomSalt();
       await base44.asServiceRole.entities.EmployeeProfile.update(profile.id, {
         password_salt: salt,
         password_hash: await hashPassword(next, salt),
+        password_history: passwordHistory(profile),
         password_set: true,
         password_updated_at: new Date().toISOString(),
         password_set_by: 'self'

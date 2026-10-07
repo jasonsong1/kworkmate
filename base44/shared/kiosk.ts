@@ -26,6 +26,16 @@ export function todayIn(timeZone) {
   }).format(new Date());
 }
 
+// A clock time as the store's own clock shows it, for whoever has to read it elsewhere.
+export function timeIn(timeZone, value = new Date()) {
+  return new Intl.DateTimeFormat('en-AU', {
+    timeZone,
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
+  }).format(value);
+}
+
 export function kioskToken(branchId, date) {
   return `${branchId}~${date}`;
 }

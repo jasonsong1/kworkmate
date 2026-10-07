@@ -167,6 +167,12 @@
     "password_salt": {
       "type": "string"
     },
+    "password_history": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
     "password_set": {
       "type": "boolean",
       "default": false

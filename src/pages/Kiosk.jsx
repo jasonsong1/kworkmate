@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import QrCard from '@/components/attendance/QrCard';
 import { Image } from '@/components/ui/image';
-import { AlertCircle, CheckCircle2, Keyboard, Loader2, MapPin, QrCode } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Keyboard, Loader2, LogIn, LogOut, QrCode } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { base44 } from '@/api/base44Client';
@@ -41,7 +41,9 @@ export default function Kiosk() {
   const [result, setResult] = useState(null);
   const [error, setError] = useState('');
   const [me, setMe] = useState(null);
-  const [coords, setCoords] = useState(null);
+  // Which punch the person is about to record. The buttons only choose it; the store code
+  // below is what records it.
+  const [intent, setIntent] = useState('');
 
   useEffect(() => {
     const load = async () => {
@@ -59,15 +61,6 @@ export default function Kiosk() {
     };
     load();
   }, [token]);
-
-  useEffect(() => {
-    if (!navigator.geolocation) return;
-    navigator.geolocation.getCurrentPosition(
-      (pos) => setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-      () => {},
-      { enableHighAccuracy: true, timeout: 10000 }
-    );
-  }, []);
 
   const changeNumber = (value) => {
     setResult(null);
@@ -104,35 +97,19 @@ export default function Kiosk() {
       setError(MESSAGES[data.error] || data.error);
       return;
     }
-    setResult(data);
+    // A punch made with a number only counts once a manager has accepted it.
+    setResult({ ...data, pending: true });
     setNumber('');
     setPin('');
   };
 
-  const personalPunch = async (action) => {
-    if (!coords) {
-      setError('Location is needed to record your own attendance. Please allow location access.');
-      return;
-    }
-    setBusy(true);
+  // Clock in or clock out is chosen here, and nothing is recorded by choosing it: the store
+  // code below is what records the punch.
+  const chooseIntent = (action) => {
+    setIntent(action);
+    setMode('qr');
     setError('');
-    const response = await base44.functions.invoke('attendancePunch', {
-      branch_id: info.branch_id,
-      action,
-      lat: coords.lat,
-      lng: coords.lng
-    });
-    setBusy(false);
-    const data = response.data || {};
-    if (data.outside_radius) {
-      setError(`You are ${data.distance}m from the store (allowed ${data.radius}m).`);
-      return;
-    }
-    if (data.error) {
-      setError(data.error);
-      return;
-    }
-    setResult({ name: me ? me.full_name : '', action });
+    setResult(null);
   };
 
   const brand = (info && info.brand_color) || '#4338ca';
@@ -160,8 +137,12 @@ export default function Kiosk() {
 
   return (
     <div className="min-h-screen bg-[#f8fafc] pb-16">
-      <header className="px-6 py-8 text-white" style={{ backgroundColor: brand }}>
-        <div className="mx-auto max-w-xl text-center">
+      <header className="relative overflow-hidden px-6 pb-12 pt-10 text-white" style={{ backgroundColor: brand }}>
+        <div
+          className="pointer-events-none absolute inset-0 opacity-25"
+          style={{ backgroundImage: 'radial-gradient(circle at 15% 0%, #ffffff 0%, transparent 45%)' }}
+        />
+        <div className="relative mx-auto max-w-xl text-center">
           {logoUrl ? (
             <div className="mx-auto mb-4 h-16 w-40 overflow-hidden rounded-xl bg-white/95 p-3">
               <Image src={logoUrl} alt={info.company_name || ''} fittingType="fit" className="h-full w-full" />
@@ -175,49 +156,69 @@ export default function Kiosk() {
 
       <main className="mx-auto max-w-xl space-y-6 px-4 py-6">
         {me ? (
-          <div className="rounded-2xl border bg-white p-6 text-[#0f172a] shadow-sm">
-            <p className="text-sm text-[#475569]">Signed in as</p>
-            <p className="text-lg font-semibold">{me.full_name || me.email}</p>
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              <Button size="lg" className="h-14 text-base" disabled={busy} onClick={() => personalPunch('in')}>
-                Clock in
-              </Button>
-              <Button
-                size="lg"
-                variant="outline"
-                className="h-14 text-base text-[#0f172a]"
-                disabled={busy}
-                onClick={() => personalPunch('out')}
-              >
-                Clock out
-              </Button>
+          <div className="rounded-3xl border border-[#e2e8f0] bg-white p-6 text-[#0f172a] shadow-sm">
+            <div className="flex items-center gap-3">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#eef2ff] text-base font-semibold text-[#4338ca]">
+                {(me.full_name || me.email || '?').slice(0, 1).toUpperCase()}
+              </span>
+              <div className="min-w-0">
+                <p className="text-xs text-[#64748b]">Signed in as</p>
+                <p className="truncate text-lg font-semibold leading-tight">{me.full_name || me.email}</p>
+              </div>
             </div>
-            <p className="mt-3 flex items-center gap-2 text-xs text-[#64748b]">
-              <MapPin className="h-3.5 w-3.5" />
-              {coords ? `${coords.lat.toFixed(5)}, ${coords.lng.toFixed(5)}` : 'Waiting for your location…'}
+
+            <div className="mt-4 grid grid-cols-2 gap-1.5 rounded-2xl bg-[#f1f5f9] p-1.5">
+              <button
+                type="button"
+                onClick={() => chooseIntent('in')}
+                className={cn(
+                  'flex h-12 items-center justify-center gap-2 rounded-xl text-base font-semibold transition-colors',
+                  intent === 'in' ? 'bg-white text-[#0f172a] shadow-sm' : 'text-[#475569]'
+                )}
+              >
+                <LogIn className="h-4 w-4" /> Clock in
+              </button>
+              <button
+                type="button"
+                onClick={() => chooseIntent('out')}
+                className={cn(
+                  'flex h-12 items-center justify-center gap-2 rounded-xl text-base font-semibold transition-colors',
+                  intent === 'out' ? 'bg-white text-[#0f172a] shadow-sm' : 'text-[#475569]'
+                )}
+              >
+                <LogOut className="h-4 w-4" /> Clock out
+              </button>
+            </div>
+
+            <p className="mt-3 text-xs text-[#64748b]">
+              {intent
+                ? `Clock ${intent === 'out' ? 'out' : 'in'} chosen — scan the store code below with your phone to record it.`
+                : 'Choose clock in or clock out first, then scan the store code below with your phone.'}
             </p>
           </div>
         ) : null}
 
-        <div className="grid grid-cols-2 gap-2 rounded-2xl border bg-white p-1.5 shadow-sm">
-          <Button
-            variant={mode === 'qr' ? 'default' : 'ghost'}
-            className={cn('h-12 text-base', mode !== 'qr' && 'text-[#0f172a]')}
-            onClick={() => setMode('qr')}
-          >
-            <QrCode className="mr-2 h-4 w-4" /> Store QR
-          </Button>
-          <Button
-            variant={mode === 'number' ? 'default' : 'ghost'}
-            className={cn('h-12 text-base', mode !== 'number' && 'text-[#0f172a]')}
-            onClick={() => setMode('number')}
-          >
-            <Keyboard className="mr-2 h-4 w-4" /> My number
-          </Button>
+        <div className="grid grid-cols-2 gap-1.5 rounded-2xl bg-[#e9eef5] p-1.5">
+          {[
+            { key: 'qr', label: 'Store QR', icon: QrCode },
+            { key: 'number', label: 'My number', icon: Keyboard }
+          ].map((item) => (
+            <button
+              key={item.key}
+              type="button"
+              onClick={() => setMode(item.key)}
+              className={cn(
+                'flex h-12 items-center justify-center gap-2 rounded-xl text-base font-semibold transition-colors',
+                mode === item.key ? 'bg-white text-[#0f172a] shadow-sm' : 'text-[#475569]'
+              )}
+            >
+              <item.icon className="h-4 w-4" /> {item.label}
+            </button>
+          ))}
         </div>
 
         {mode === 'number' ? (
-          <div className="rounded-2xl border bg-white p-6 text-[#0f172a] shadow-sm">
+          <div className="rounded-3xl border border-[#e2e8f0] bg-white p-6 text-[#0f172a] shadow-sm">
             <p className="text-sm font-semibold">Enter your employee number and PIN</p>
             <div className="mt-4">
               <Input
@@ -264,12 +265,12 @@ export default function Kiosk() {
             </p>
           </div>
         ) : (
-          <div className="rounded-2xl border bg-white p-6 text-center text-[#0f172a] shadow-sm">
+          <div className="rounded-3xl border border-[#e2e8f0] bg-white p-6 text-center text-[#0f172a] shadow-sm">
             <QrCard
               url={kioskUrl(info.branch_id, info.date)}
               design={info.qr_design}
               noteClassName="text-[#475569]"
-              fallbackTitle="Scan to clock in"
+              fallbackTitle={intent === 'out' ? 'Scan to clock out' : 'Scan to clock in'}
               fallbackNote={`Point a phone camera at this code to open today’s clock for ${info.branch_name}, then enter your employee number and PIN.`}
             />
           </div>
@@ -280,11 +281,11 @@ export default function Kiosk() {
             <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0" />
             <div>
               <p className="font-semibold">
-                {result.action === 'in' ? 'Clock in recorded' : 'Clock out recorded'}
+                {result.action === 'in' ? 'Clock in request sent' : 'Clock out request sent'}
               </p>
               <p className="text-sm">
                 {result.name ? `${result.name} · ` : ''}
-                {me ? 'Thank you.' : 'Waiting for manager approval.'}
+                Inform your manager for approval.
               </p>
             </div>
           </div>

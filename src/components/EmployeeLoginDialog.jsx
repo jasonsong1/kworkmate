@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/components/ui/use-toast';
 import { useI18n } from '@/lib/i18n';
+import { passwordProblem } from '@/lib/password';
 
 // Where the employer hands over the sign-in itself. Nothing is emailed: they choose the ID,
 // set the password, and the employee can use it straight away.
@@ -43,8 +44,9 @@ export default function EmployeeLoginDialog({ open, onOpenChange, employee, onSa
   };
 
   const issue = async () => {
-    if (password.length < 6) {
-      setError(t('employees.passwordShort'));
+    const problem = passwordProblem(password);
+    if (problem) {
+      setError(t(`password.${problem}`));
       return;
     }
     if (password !== confirm) {
@@ -96,6 +98,7 @@ export default function EmployeeLoginDialog({ open, onOpenChange, employee, onSa
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
             />
+            <p className="text-xs text-muted-foreground">{t('password.rule')}</p>
           </div>
           <div className="space-y-2">
             <Label htmlFor="kw-password-confirm">{t('employees.passwordConfirm')}</Label>

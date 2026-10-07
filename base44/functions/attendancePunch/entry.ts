@@ -1,6 +1,7 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.52';
 import { resolveCaller } from '../../shared/kwAuth.ts';
 import { haversineMeters } from '../../shared/util.ts';
+import { timezoneForBranch, todayIn } from '../../shared/kiosk.ts';
 
 export default async function (req) {
   try {
@@ -41,7 +42,8 @@ export default async function (req) {
       if (active.length > 0) {
         return Response.json({ ok: false, already_active: true, entry: active[0], distance, radius });
       }
-      const today = nowIso.slice(0, 10);
+      // The shift a punch belongs to is the store's own day, not the UTC one.
+      const today = todayIn(timezoneForBranch(branch));
       const shifts = await base44.asServiceRole.entities.Shift.filter({
         branch_id: branchId,
         employee_email: me.email,

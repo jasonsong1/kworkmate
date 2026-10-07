@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/components/ui/use-toast';
 import { useI18n } from '@/lib/i18n';
 import { useWorkspace } from '@/lib/WorkspaceContext';
+import ModuleInfoTip from '@/components/package/ModuleInfoTip';
 import { PACKAGE_KEYS, PACKAGE_NAMES } from '@/lib/packages';
 import { base44 } from '@/api/base44Client';
 
@@ -108,7 +109,12 @@ export default function PackageCard() {
       <CardContent className="space-y-4">
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           <Stat
-            label={t('pkg.current')}
+            label={
+              <span className="inline-flex items-center gap-1.5">
+                {t('pkg.current')}
+                <ModuleInfoTip modules={pkg.modules} />
+              </span>
+            }
             value={assigned ? t(PACKAGE_NAMES[pkg.package]) : t('pkg.notAssigned')}
           />
           <Stat label={t('pkg.startDate')} value={pkg.start_date || '—'} />

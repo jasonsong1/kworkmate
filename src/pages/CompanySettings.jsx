@@ -24,9 +24,17 @@ import { MODULES, clampAccess, grantedModules, levelRank, moduleLabelKey, normal
 import CompanyPicker from '@/components/platform/CompanyPicker';
 import { base44 } from '@/api/base44Client';
 
+// Some settings panels only make sense with the modules behind them: issuing other accounts and
+// the permission table belong to a staff list, penalty rates to a roster.
+const PANEL_MODULES = {
+  admins: ['employees'],
+  permissions: ['employees'],
+  pay: ['roster']
+};
+
 export default function CompanySettings() {
   const { t } = useI18n();
-  const { company, reload, role, isPlatformAdmin, pkg, presets, feature } = useWorkspace();
+  const { company, reload, role, isPlatformAdmin, pkg, presets, feature, hasModule } = useWorkspace();
   const videoAllowed = videoInterviewAllowed(pkg);
   const miniAllowed = feature('mini_interview');
   // Only the modules the company's package actually includes are offered here; the rest are
@@ -152,7 +160,9 @@ export default function CompanySettings() {
     { key: 'admins', label: t('settings.cat.admins') },
     { key: 'permissions', label: t('settings.cat.permissions') },
     { key: 'pay', label: t('settings.cat.pay') }
-  ];
+  ].filter((category) => (PANEL_MODULES[category.key] || []).every((module) => hasModule(module)));
+  // A panel this package does not carry is never the open one.
+  const activeTab = CATEGORIES.some((category) => category.key === tab) ? tab : 'company';
 
   return (
     <div>
@@ -166,7 +176,7 @@ export default function CompanySettings() {
           </Button>
         } />
 
-      <Tabs value={tab} onValueChange={setTab}>
+      <Tabs value={activeTab} onValueChange={setTab}>
         <TabsList className="mb-6 flex-wrap">
           {CATEGORIES.map((category) =>
           <TabsTrigger key={category.key} value={category.key}>

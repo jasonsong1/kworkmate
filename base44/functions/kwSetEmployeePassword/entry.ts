@@ -1,10 +1,12 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.52';
 import {
-  MIN_PASSWORD_LENGTH,
   clean,
   closeSessionsFor,
   hashPassword,
   lower,
+  passwordHistory,
+  passwordProblem,
+  passwordReused,
   randomSalt,
   sealRecord
 } from '../../shared/kwAuth.ts';
@@ -49,8 +51,10 @@ export default async function (req) {
     }
 
     const password = String(body.password || '');
-    if (password.length < MIN_PASSWORD_LENGTH) {
-      return Response.json({ error: `Use at least ${MIN_PASSWORD_LENGTH} characters` }, { status: 400 });
+    const problem = passwordProblem(password);
+    if (problem) return Response.json({ error: problem }, { status: 400 });
+    if (await passwordReused(profile, password)) {
+      return Response.json({ error: 'That password has been used before. Choose a new one.' }, { status: 400 });
     }
     if (!clean(profile.user_email)) {
       return Response.json(
@@ -65,6 +69,7 @@ export default async function (req) {
       login_id: loginId,
       password_salt: salt,
       password_hash: await hashPassword(password, salt),
+      password_history: passwordHistory(profile),
       password_set: true,
       password_updated_at: new Date().toISOString(),
       password_set_by: lower(me.email),

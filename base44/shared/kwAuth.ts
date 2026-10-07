@@ -12,9 +12,10 @@ const SESSION_DAYS = 30;
 export const MAX_FAILURES = 5;
 export const LOCK_MINUTES = 10;
 export const SESSION_HEADER = 'x-kw-session';
-export const MIN_PASSWORD_LENGTH = 6;
+export const MIN_PASSWORD_LENGTH = 10;
+export const PASSWORD_HISTORY_LIMIT = 5;
 
-const SEALED_FIELDS = ['password_hash', 'password_salt', 'pin_hash', 'pin_salt'];
+const SEALED_FIELDS = ['password_hash', 'password_salt', 'password_history', 'pin_hash', 'pin_salt'];
 export const MANAGER_ROLES = ['company_admin', 'branch_manager'];
 
 export function clean(value) {
@@ -69,6 +70,42 @@ function sameHex(left, right) {
 export async function verifyPassword(password, salt, hash) {
   if (!password || !salt || !hash) return false;
   return sameHex(await hashPassword(password, salt), String(hash));
+}
+
+// One rule for every password an employee ever holds: long enough, and mixing the four kinds of
+// character. The employer handing one over and the employee choosing their own hear the same rule.
+export function passwordProblem(password) {
+  const value = String(password || '');
+  if (value.length < MIN_PASSWORD_LENGTH) return `Use at least ${MIN_PASSWORD_LENGTH} characters`;
+  if (!/[A-Z]/.test(value)) return 'Add at least one uppercase letter';
+  if (!/[a-z]/.test(value)) return 'Add at least one lowercase letter';
+  if (!/[0-9]/.test(value)) return 'Add at least one number';
+  if (!/[^A-Za-z0-9]/.test(value)) return 'Add at least one symbol';
+  return '';
+}
+
+// A password this person has already used — the one in force or one of the few kept before it —
+// can never be handed back to them.
+export async function passwordReused(profile, password) {
+  const kept = Array.isArray(profile && profile.password_history) ? profile.password_history : [];
+  const entries = [
+    profile && profile.password_hash ? { salt: profile.password_salt, hash: profile.password_hash } : null,
+    ...kept
+  ].filter((entry) => entry && entry.salt && entry.hash);
+  for (const entry of entries) {
+    if (await verifyPassword(password, entry.salt, entry.hash)) return true;
+  }
+  return false;
+}
+
+// The password being replaced joins the ones already remembered.
+export function passwordHistory(profile) {
+  const kept = Array.isArray(profile && profile.password_history) ? profile.password_history : [];
+  const previous =
+    profile && profile.password_hash && profile.password_salt
+      ? [{ salt: profile.password_salt, hash: profile.password_hash, at: new Date().toISOString() }]
+      : [];
+  return [...previous, ...kept].slice(0, PASSWORD_HISTORY_LIMIT);
 }
 
 // The hash never leaves the server: every answer that carries an employee goes through here.
@@ -225,6 +262,11 @@ export const GATEWAY_ENTITIES = {
   LeaveType: { scope: 'company', company_field: 'company_id', writes: { staff: 'none', manager: 'none' } },
   RegionalHoliday: { scope: 'company', company_field: 'company_id', writes: { staff: 'none', manager: 'none' } },
   RosterSetting: { scope: 'branch', branch_field: 'branch_id', writes: { staff: 'none', manager: 'none' } },
+  // Hiring is the manager's own work: the ad, the people who answered it and the interview
+  // slots they can book.
+  Job: { scope: 'branch', branch_field: 'branch_id', writes: { staff: 'none', manager: 'all' } },
+  Applicant: { scope: 'branch', branch_field: 'branch_id', writes: { staff: 'none', manager: 'all' } },
+  InterviewSlot: { scope: 'branch', branch_field: 'branch_id', writes: { staff: 'none', manager: 'all' } },
   Shift: {
     scope: 'branch',
     branch_field: 'branch_id',
