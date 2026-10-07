@@ -17,15 +17,19 @@ import { useToast } from '@/components/ui/use-toast';
 import { useI18n } from '@/lib/i18n';
 import { useWorkspace } from '@/lib/WorkspaceContext';
 import { EMPLOYMENT_TYPES, visibleRequiredQuestions } from '@/lib/bh';
-import { canCreateJob, videoInterviewAllowed } from '@/lib/packages';
+import { canCreateJob, featureAllowed, videoInterviewAllowed } from '@/lib/packages';
 import { base44 } from '@/api/base44Client';
 
 export default function JobDetail() {
   const { jobId } = useParams();
   const { t } = useI18n();
-  const { branches, company, pkg, reloadPackage } = useWorkspace();
+  const { branches, company, pkg, reloadPackage, hasModule } = useWorkspace();
   const { toast } = useToast();
   const videoAllowed = videoInterviewAllowed(pkg);
+  // The step and the questions are their own parts of the package, so an ad on a package
+  // without them never offers them.
+  const miniAllowed = featureAllowed(pkg, 'mini_interview');
+  const interviewQuestions = hasModule('interview_settings');
   const roleOptions = (company && company.custom_roles) || [];
   const [job, setJob] = useState(null);
   const [branch, setBranch] = useState(null);
@@ -232,13 +236,15 @@ export default function JobDetail() {
                   <CardTitle className="text-base">{t('settings.screening')}</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="flex items-center justify-between rounded-lg border px-4 py-3">
-                    <span className="text-sm">Mini interview step</span>
-                    <Switch
-                      checked={job.mini_interview_enabled !== false}
-                      onCheckedChange={(v) => patch({ mini_interview_enabled: v })}
-                    />
-                  </div>
+                  {miniAllowed && (
+                    <div className="flex items-center justify-between rounded-lg border px-4 py-3">
+                      <span className="text-sm">{t('settings.miniInterviewStep')}</span>
+                      <Switch
+                        checked={job.mini_interview_enabled !== false}
+                        onCheckedChange={(v) => patch({ mini_interview_enabled: v })}
+                      />
+                    </div>
+                  )}
                   {videoAllowed && (
                     <div className="flex items-center justify-between rounded-lg border px-4 py-3">
                       <span className="text-sm">{t('settings.videoInterviewStep')}</span>
@@ -258,9 +264,11 @@ export default function JobDetail() {
                   <div>
                     <div className="mb-2 flex items-center justify-between gap-2">
                       <Label>{t('settings.screeningFocus')}</Label>
-                      <Button variant="outline" size="sm" asChild>
-                        <Link to="/interview-settings">{t('settings.interviewSetup')}</Link>
-                      </Button>
+                      {interviewQuestions && (
+                        <Button variant="outline" size="sm" asChild>
+                          <Link to="/interview-settings">{t('settings.interviewSetup')}</Link>
+                        </Button>
+                      )}
                     </div>
                     <Textarea
                       rows={4}

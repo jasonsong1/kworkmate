@@ -4,22 +4,27 @@ import { ArrowRight, Mail, Palette, QrCode } from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
 import { Card, CardContent } from '@/components/ui/card';
 import { useI18n } from '@/lib/i18n';
+import { useWorkspace } from '@/lib/WorkspaceContext';
 
 const OPTIONS = [
   { to: '/email-templates', title: 'templates.emailTitle', hint: 'templates.emailHint', icon: Mail },
   { to: '/job-design', title: 'templates.posterTitle', hint: 'templates.posterHint', icon: Palette },
-  { to: '/qr-design', title: 'templates.qrTitle', hint: 'templates.qrHint', icon: QrCode }
+  // The code staff scan at the store belongs to attendance, so a package without that module
+  // has no design to offer here.
+  { to: '/qr-design', title: 'templates.qrTitle', hint: 'templates.qrHint', icon: QrCode, module: 'attendance' }
 ];
 
 export default function TemplateDesign() {
   const { t } = useI18n();
+  const { hasModule } = useWorkspace();
   const navigate = useNavigate();
+  const options = OPTIONS.filter((option) => !option.module || hasModule(option.module));
 
   return (
     <div>
       <PageHeader title={t('templates.title')} subtitle={t('templates.subtitle')} />
       <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-        {OPTIONS.map((option) => (
+        {options.map((option) => (
           <Card
             key={option.to}
             className="cursor-pointer transition-colors hover:border-primary/50"

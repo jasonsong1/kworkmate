@@ -72,6 +72,32 @@ export default async function (req) {
       return Response.json({ ok: true, signed_url });
     }
 
+    // Their own file, filed by themselves: it lands on the same record the employer sees, and
+    // only a file this app has just stored privately can be filed.
+    if (action === 'add_document') {
+      const uri = String(body.file_uri || '');
+      const name = String(body.name || '').trim().slice(0, 120) || 'Document';
+      if (!/private\//.test(uri)) {
+        return Response.json({ error: 'Upload the file before filing it' }, { status: 400 });
+      }
+      const docs = Array.isArray(profile.docs) ? profile.docs : [];
+      if (docs.length >= 30) {
+        return Response.json({ error: 'Your document vault is full' }, { status: 400 });
+      }
+      const next = [
+        ...docs,
+        {
+          name,
+          type: 'staff_upload',
+          file_uri: uri,
+          created_at: new Date().toISOString(),
+          uploaded_by: 'self'
+        }
+      ];
+      await base44.asServiceRole.entities.EmployeeProfile.update(profile.id, { docs: next });
+      return Response.json({ ok: true, docs: next });
+    }
+
     return Response.json({
       ok: true,
       user: userFromSession({

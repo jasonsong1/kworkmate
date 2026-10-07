@@ -189,6 +189,9 @@ export default function StaffHome() {
           </CardContent>
         </Card>
 
+        {/* Availability is what a roster is built from, so a package without a roster keeps
+            none of it. */}
+        {hasModule('roster') && (
         <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle className="text-base">{t('staff.availability')}</CardTitle>
@@ -200,7 +203,7 @@ export default function StaffHome() {
               {t('staff.submitAvailability')}
             </Button>
           </CardContent>
-        </Card>
+        </Card>)}
 
         <div className="lg:col-span-2">
           <CalendarSubscribeCard />

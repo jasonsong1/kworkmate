@@ -56,7 +56,7 @@ export default async function (req) {
 
     const incomingDocs = Array.isArray(body.docs) ? body.docs.slice(0, 10) : [];
     const existingDocs = Array.isArray(employee.docs) ? employee.docs : [];
-    const keep = existingDocs.filter((d) => d && d.type === 'resume');
+    const keep = existingDocs.filter((d) => d && (d.type === 'resume' || d.uploaded_by === 'self'));
 
     const signedAt = new Date().toISOString();
 

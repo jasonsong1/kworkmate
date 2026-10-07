@@ -35,6 +35,7 @@ const MODULE_BY_PREFIX = [
   ['/email-templates', 'templates'],
   ['/template-design', 'templates'],
   ['/job-design', 'templates'],
+  ['/qr-design', 'attendance'],
   ['/roster', 'roster'],
   ['/leave', 'leave'],
   ['/attendance', 'attendance'],

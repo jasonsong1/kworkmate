@@ -250,9 +250,13 @@ export default function CompanySettings() {
               <div className="sm:col-span-3">
                 <div className="mb-2 flex items-center justify-between gap-2">
                   <Label>{t('settings.screeningFocus')}</Label>
-                  <Button variant="outline" size="sm" asChild>
-                    <Link to="/interview-settings">{t('settings.interviewSetup')}</Link>
-                  </Button>
+                  {/* The interview questions sit in the interview settings module: a package
+                      without it sets no questions here. */}
+                  {hasModule('interview_settings') && (
+                    <Button variant="outline" size="sm" asChild>
+                      <Link to="/interview-settings">{t('settings.interviewSetup')}</Link>
+                    </Button>
+                  )}
                 </div>
                 <Textarea
                   rows={4}

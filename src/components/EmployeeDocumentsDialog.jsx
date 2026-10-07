@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { FileText, Loader2 } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { FileText, Loader2, Upload } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -13,20 +13,27 @@ export default function EmployeeDocumentsDialog({ open, onOpenChange, employee }
   const { t } = useI18n();
   const { toast } = useToast();
   const [loadingId, setLoadingId] = useState(null);
+  const [docs, setDocs] = useState([]);
+  const [uploading, setUploading] = useState(false);
+  const fileRef = useRef(null);
+
+  useEffect(() => {
+    setDocs((employee && employee.docs) || []);
+  }, [employee]);
 
   // A signed-in employee holds this app's own session rather than a platform one, so their own
   // staff record is what signs the file — and only a file that record already carries is ever
   // signed. The employer's own screen keeps the platform's own signing.
+  const identity = kwIdentity();
+  const viaOwnRecord = Boolean(kwActive() && identity && employee && identity.email === employee.user_email);
+
   const openDoc = async (doc) => {
     if (!doc || !doc.file_uri) return;
     setLoadingId(doc.file_uri);
-    const identity = kwIdentity();
-    const ownRecord = Boolean(identity && employee && identity.email === employee.user_email);
     try {
-      const signed =
-        kwActive() && ownRecord
-          ? await kwCall('kwSession', { action: 'sign_document', file_uri: doc.file_uri })
-          : await base44.integrations.Core.CreateFileSignedUrl({ file_uri: doc.file_uri });
+      const signed = viaOwnRecord
+        ? await kwCall('kwSession', { action: 'sign_document', file_uri: doc.file_uri })
+        : await base44.integrations.Core.CreateFileSignedUrl({ file_uri: doc.file_uri });
       if (signed && signed.signed_url) window.open(signed.signed_url, '_blank', 'noopener');
     } catch (error) {
       toast({ title: error.message || t('employees.docOpenFailed'), variant: 'destructive' });
@@ -35,7 +42,23 @@ export default function EmployeeDocumentsDialog({ open, onOpenChange, employee }
     }
   };
 
-  const docs = (employee && employee.docs) || [];
+  // Their own file, filed by themselves: the employer sees it on the same record.
+  const upload = async (event) => {
+    const file = event.target.files && event.target.files[0];
+    event.target.value = '';
+    if (!file) return;
+    setUploading(true);
+    try {
+      const { file_uri } = await base44.integrations.Core.UploadPrivateFile({ file });
+      const saved = await kwCall('kwSession', { action: 'add_document', file_uri, name: file.name });
+      setDocs((saved && saved.docs) || docs);
+      toast({ title: t('employees.docUploaded') });
+    } catch (error) {
+      toast({ title: error.message || t('employees.docUploadFailed'), variant: 'destructive' });
+    } finally {
+      setUploading(false);
+    }
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -45,6 +68,34 @@ export default function EmployeeDocumentsDialog({ open, onOpenChange, employee }
             {t('employees.vault')} — {employee ? employee.full_name : ''}
           </DialogTitle>
         </DialogHeader>
+
+        {/* An employee files their own documents here; the employer's copy of this screen does
+            not offer it. */}
+        {viaOwnRecord && (
+          <div className="flex items-center justify-between gap-3 rounded-lg border px-4 py-3">
+            <p className="text-sm text-muted-foreground">{t('employees.docUploadHint')}</p>
+            <Button
+              size="sm"
+              onClick={() => fileRef.current && fileRef.current.click()}
+              disabled={uploading}
+            >
+              {uploading ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <>
+                  <Upload className="mr-2 h-3.5 w-3.5" /> {t('common.upload')}
+                </>
+              )}
+            </Button>
+            <input
+              ref={fileRef}
+              type="file"
+              className="hidden"
+              accept=".pdf,.png,.jpg,.jpeg,.webp,.doc,.docx,.xls,.xlsx"
+              onChange={upload}
+            />
+          </div>
+        )}
 
         {docs.length === 0 ? (
           <p className="py-8 text-center text-sm text-muted-foreground">{t('employees.noDocs')}</p>
