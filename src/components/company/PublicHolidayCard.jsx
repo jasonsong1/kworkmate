@@ -1,9 +1,18 @@
 import React, { useEffect, useState } from 'react';
-import { CalendarDays, MapPin } from 'lucide-react';
+import { CalendarDays, MapPin, Trash2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useToast } from '@/components/ui/use-toast';
 import { useI18n } from '@/lib/i18n';
 import { useWorkspace } from '@/lib/WorkspaceContext';
-import { normalizeState, regionalMap, stateFromBranch, stateLabel, upcomingHolidays } from '@/lib/holidays';
+import {
+  isHolidayExcluded,
+  normalizeState,
+  regionalMap,
+  stateFromBranch,
+  stateLabel,
+  upcomingHolidays
+} from '@/lib/holidays';
 import { todayIso } from '@/lib/bh';
 import { base44 } from '@/api/base44Client';
 import RegionalHolidayEditor from '@/components/company/RegionalHolidayEditor';
@@ -18,13 +27,22 @@ function formatDay(dateIso, lang) {
 }
 
 // Holidays are read from each branch address, with the dates imported from the official
-// state schedule on top, so the admin can check what each store is paid by.
+// state schedule on top, so the admin can check what each store is paid by — and take a date
+// off the list when the store does not observe it.
 export default function PublicHolidayCard({ multiplier }) {
   const { t, lang } = useI18n();
-  const { company, branches } = useWorkspace();
+  const { company, branches, role, presetKey, isManager, levelOf, patchCompany } = useWorkspace();
+  const { toast } = useToast();
   const [records, setRecords] = useState([]);
   const today = todayIso();
   const companyId = company ? company.id : '';
+  // A deleted holiday stays deleted: the date is remembered on the company.
+  const exclusions = company && Array.isArray(company.holiday_exclusions) ? company.holiday_exclusions : [];
+  const canEdit =
+    role === 'company_admin' ||
+    isManager ||
+    ['manager', 'supervisor_manager'].includes(presetKey) ||
+    ['update', 'write'].includes(levelOf('settings'));
 
   const load = async () => {
     if (!companyId) return;
@@ -50,7 +68,20 @@ export default function PublicHolidayCard({ multiplier }) {
     else groups.push({ state, branches: [branch] });
   });
 
-  const applied = regionalMap(records);
+  const applied = regionalMap(records, exclusions);
+
+  const removeHoliday = async (state, date) => {
+    if (!company || !canEdit) return;
+    const next = [
+      ...exclusions.filter(
+        (entry) => !(normalizeState(entry.state) === state && String(entry.date).slice(0, 10) === String(date).slice(0, 10))
+      ),
+      { state, date }
+    ];
+    await base44.entities.Company.update(company.id, { holiday_exclusions: next });
+    patchCompany({ holiday_exclusions: next });
+    toast({ title: t('settings.holidayRemoved') });
+  };
 
   return (
     <Card>
@@ -77,7 +108,20 @@ export default function PublicHolidayCard({ multiplier }) {
                   className="flex items-center justify-between gap-4 text-sm"
                 >
                   <span>{lang === 'ko' ? holiday.holiday.ko : holiday.holiday.en}</span>
-                  <span className="text-muted-foreground">{formatDay(holiday.date, lang)}</span>
+                  <span className="flex items-center gap-1">
+                    <span className="text-muted-foreground">{formatDay(holiday.date, lang)}</span>
+                    {canEdit && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                        title={t('settings.holidayRemove')}
+                        onClick={() => removeHoliday(group.state, holiday.date)}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
+                  </span>
                 </div>
               ))}
             </div>
@@ -86,7 +130,11 @@ export default function PublicHolidayCard({ multiplier }) {
               state={group.state}
               companyId={companyId}
               defaultRegion={group.branches.map((branch) => branch.suburb).filter(Boolean)[0] || ''}
-              records={records.filter((record) => normalizeState(record.state) === group.state)}
+              records={records.filter(
+                (record) =>
+                  normalizeState(record.state) === group.state &&
+                  !isHolidayExcluded(group.state, record.date, exclusions)
+              )}
               onChanged={load}
             />
           </div>

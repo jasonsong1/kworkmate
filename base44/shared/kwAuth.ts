@@ -7,7 +7,7 @@
 // keep working either way.
 
 import { mergePresets, presetFor, resolveAccess, resolvePresetKey } from './access.ts';
-import { ALL_MODULES, packageState } from './packages.ts';
+import { ALL_MODULES, applyModuleOverrides, loadModuleOverrides, packageState } from './packages.ts';
 
 const encoder = new TextEncoder();
 const ITERATIONS = 100000;
@@ -310,7 +310,11 @@ export async function accessFor(base44: any, me: any) {
   const branch = branchId
     ? await base44.asServiceRole.entities.Branch.get(branchId).catch(() => null)
     : null;
-  const modules = company ? packageState(company).modules : ALL_MODULES;
+  // The modules the company may open: its package, with any platform-wide edit on top, so a
+  // module the super admin added back is reachable here too and not only on the screen.
+  const modules = company
+    ? applyModuleOverrides(packageState(company), await loadModuleOverrides(base44)).modules
+    : ALL_MODULES;
   return resolveAccess({
     packageModules: isAdmin ? ALL_MODULES : modules,
     preset,

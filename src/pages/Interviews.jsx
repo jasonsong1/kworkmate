@@ -32,7 +32,8 @@ export default function Interviews() {
   const { toast } = useToast();
 
   const [jobs, setJobs] = useState([]);
-  const [jobId, setJobId] = useState('');
+  // The whole store's schedule is the default view; one ad can still be picked to narrow it.
+  const [jobId, setJobId] = useState('all');
   const [slots, setSlots] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -51,7 +52,7 @@ export default function Interviews() {
     const page = await base44.entities.Job.filter({ branch_id: activeBranch.id }, { sort: '-created_date', limit: 100 });
     const list = page.items || [];
     setJobs(list);
-    setJobId((prev) => (prev && list.some((j) => j.id === prev) ? prev : list[0] ? list[0].id : ''));
+    setJobId((prev) => (prev === 'all' || list.some((j) => j.id === prev) ? prev : 'all'));
   }, [activeBranch]);
 
   useEffect(() => {
@@ -82,7 +83,7 @@ export default function Interviews() {
   };
 
   const generate = async () => {
-    if (!jobId || !activeBranch) return;
+    if (!jobId || jobId === 'all' || !activeBranch) return;
     const times = slotTimes(form.from, form.to, Number(form.step) || 20);
     if (times.length === 0) {
       toast({ title: 'End time must be after start time', variant: 'destructive' });
@@ -137,7 +138,23 @@ export default function Interviews() {
     toast({ title: value ? t('interviews.rescheduleOn') : t('interviews.rescheduleOff') });
   };
 
-  const grouped = slots.reduce((acc, slot) => {
+  // A cancelled time is handed back to the pool: the employer reopens it and the next applicant
+  // — the same person or someone else — can book it again.
+  const reopenSlot = async (slot) => {
+    await base44.entities.InterviewSlot.update(slot.id, {
+      status: 'open',
+      booked_by_applicant_id: '',
+      booked_by_name: '',
+      booked_at: ''
+    });
+    toast({ title: t('interviews.reopened') });
+    await loadSlots();
+  };
+
+  // '전체' shows every ad's times together; picking one ad shows only that ad's times.
+  const visible = jobId === 'all' ? slots : slots.filter((slot) => slot.job_id === jobId);
+
+  const grouped = visible.reduce((acc, slot) => {
     acc[slot.date] = acc[slot.date] || [];
     acc[slot.date].push(slot);
     return acc;
@@ -163,6 +180,7 @@ export default function Interviews() {
                     <SelectValue placeholder={t('jobs.title')} />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="all">{t('common.all')}</SelectItem>
                     {jobs.map((j) => (
                       <SelectItem key={j.id} value={j.id}>
                         {j.title}
@@ -193,10 +211,11 @@ export default function Interviews() {
                   onChange={(e) => setForm({ ...form, step: e.target.value })}
                 />
               </div>
-              <Button className="w-full" onClick={generate} disabled={saving || !jobId}>
+              <Button className="w-full" onClick={generate} disabled={saving || jobId === 'all'}>
                 {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
                 {t('interviews.generate')}
               </Button>
+              {jobId === 'all' && <p className="text-xs text-muted-foreground">{t('interviews.pickJob')}</p>}
               <p className="text-xs text-muted-foreground">
                 Applicants booking the same time are resolved first-come-first-served — only one booking is accepted per slot.
               </p>
@@ -253,13 +272,19 @@ export default function Interviews() {
                           }`}
                         >
                           <span className="font-medium">{slot.start_time}</span>
-                          {jobLabel(slot) && <span className="text-xs text-muted-foreground">{jobLabel(slot)}</span>}
+                          {slot.status !== 'booked' && jobLabel(slot) && (
+                            <span className="text-xs text-muted-foreground">{jobLabel(slot)}</span>
+                          )}
                           {slot.status === 'booked' ? (
                             <Badge className="bg-emerald-600 text-white hover:bg-emerald-600">
-                              {slot.booked_by_name}
+                              {jobLabel(slot) ? `${slot.booked_by_name} · ${jobLabel(slot)}` : slot.booked_by_name}
                             </Badge>
                           ) : slot.status === 'cancelled' ? (
-                            <Badge variant="secondary">{t('interviews.cancelled')}</Badge>
+                            <button type="button" title={t('interviews.reopen')} onClick={() => reopenSlot(slot)}>
+                              <Badge variant="secondary" className="cursor-pointer hover:bg-accent">
+                                {t('interviews.cancelled')}
+                              </Badge>
+                            </button>
                           ) : (
                             <Badge variant="outline">{t('interviews.slots')}</Badge>
                           )}

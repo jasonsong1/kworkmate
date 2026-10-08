@@ -1,6 +1,14 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.52';
 import { resolveCaller } from '../../shared/kwAuth.ts';
-import { ALL_FEATURES, ALL_MODULES, packageState, resolveLimit, today } from '../../shared/packages.ts';
+import {
+  ALL_FEATURES,
+  ALL_MODULES,
+  applyModuleOverrides,
+  loadModuleOverrides,
+  packageState,
+  resolveLimit,
+  today
+} from '../../shared/packages.ts';
 import { mergePresets, presetFor, resolveAccess, resolvePresetKey } from '../../shared/access.ts';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -51,7 +59,9 @@ export default async function (req) {
       return Response.json({ error: 'You cannot view this company' }, { status: 403 });
     }
 
-    const state = packageState(company);
+    // The package's own table first, then whatever the platform admin switched on or off for
+    // that package: both the screen and the rule behind it read this one answer.
+    const state = applyModuleOverrides(packageState(company), await loadModuleOverrides(base44));
     // The package sets the ceilings; a super admin can pin this company's own numbers instead.
     const jobLimit = resolveLimit(company.job_limit_override, state.jobLimit);
     const employeeLimit = resolveLimit(company.employee_limit_override, state.employeeLimit);

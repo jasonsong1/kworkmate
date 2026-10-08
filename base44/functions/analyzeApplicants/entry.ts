@@ -18,6 +18,9 @@ const RESUME_SCHEMA = {
   required: ['unreadable', 'fit_score', 'summary']
 };
 
+// Anyone who has already been shortlisted, or has moved further along, is never picked again.
+const SHORTLISTED_STATUSES = ['top10', 'mini_interview', 'final_interview', 'interview_scheduled', 'hired'];
+
 function buildPrompt(job, branch, applicant, company) {
   return `You are the AI screening assistant for an Australian hospitality employer.
 
@@ -88,10 +91,9 @@ export default async function (req) {
       const guard = await managerFor(base44, req, job);
       if (guard.denied) return guard.denied;
       const all = await base44.asServiceRole.entities.Applicant.filter({ job_id: jobId });
-      const targets = all
-        .filter((a) => ['submitted', 'top10', 'mini_interview', 'final_interview'].includes(a.status))
-        .filter((a) => (a.rank || 9999) > limit)
-        .slice(0, 40);
+      // Only the people who were never shortlisted are written off, whatever their score rank:
+      // a candidate the employer added in a later batch is still selected.
+      const targets = all.filter((a) => a.status === 'submitted').slice(0, 40);
 
       let sent = 0;
       for (const a of targets) {
@@ -172,18 +174,37 @@ export default async function (req) {
       .filter((a) => typeof a.ai_score === 'number')
       .sort((x, y) => y.ai_score - x.ai_score);
 
-    const updates = scored.map((a, index) => {
-      const rank = index + 1;
-      const patch = { id: a.id, rank };
-      if (rank <= limit && ['submitted', 'top10'].includes(a.status)) patch.status = 'top10';
-      return patch;
-    });
+    // Every scored candidate keeps their place in the order, but the shortlist itself only grows
+    // on purpose: the button adds the next batch of the size the employer set.
+    const updates = scored.map((a, index) => ({ id: a.id, rank: index + 1 }));
     if (updates.length > 0) await base44.asServiceRole.entities.Applicant.bulkUpdate(updates);
+
+    let added = 0;
+    if (body.action === 'extend') {
+      // The next batch, taken from the people who are not shortlisted yet, biggest score first.
+      const waiting = scored.filter((a) => !SHORTLISTED_STATUSES.includes(a.status));
+      const batch = waiting.slice(0, limit);
+      if (batch.length > 0) {
+        await base44.asServiceRole.entities.Applicant.bulkUpdate(
+          batch.map((a) => ({ id: a.id, status: 'top10' }))
+        );
+        added = batch.length;
+      }
+    } else if (body.applicant_id) {
+      // A resume that has just arrived is placed by the first pass's own rule: the strongest
+      // candidates hold the shortlist, and nobody already shortlisted is dropped.
+      const promote = scored.filter((a, index) => index < limit && a.status === 'submitted');
+      if (promote.length > 0) {
+        await base44.asServiceRole.entities.Applicant.bulkUpdate(
+          promote.map((a) => ({ id: a.id, status: 'top10' }))
+        );
+      }
+    }
 
     // Nobody is emailed here: a candidate attaching a resume on the job page only fills the
     // shortlist in the back office, it does not mail the manager.
 
-    return Response.json({ ok: true, analysed, ranked: updates.length, pending_left: pendingLeft });
+    return Response.json({ ok: true, analysed, ranked: updates.length, added, pending_left: pendingLeft });
   } catch (error) {
     return Response.json({ error: error.message }, { status: 500 });
   }

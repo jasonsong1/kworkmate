@@ -132,6 +132,32 @@ function dayIso(time) {
 
 // Access runs for ACCESS_DAYS days, counting the start date as day one; the morning after
 // the last day every back office screen closes.
+export function rowsOf(result: any) {
+  return Array.isArray(result) ? result : (result && result.items) || [];
+}
+
+// A super admin can take a module out of a package or put one back in, platform-wide. The edit
+// is stored one row per package and wins over the built-in table above.
+export async function loadModuleOverrides(base44: any) {
+  const rows = rowsOf(await base44.asServiceRole.entities.PackageModule.list({ limit: 50 }).catch(() => []));
+  const out: any = {};
+  rows.forEach((row) => {
+    const key = normalizePackage(row && row.package);
+    if (!key) return;
+    const saved = Array.isArray(row.modules) ? row.modules : [];
+    out[key] = ALL_MODULES.filter((module) => saved.includes(module));
+  });
+  return out;
+}
+
+// The modules a company may open: the built-in package, with the platform's own edit on top.
+// A package with no stored edit keeps the table above untouched.
+export function applyModuleOverrides(state: any, overrides: any) {
+  const own = state && state.key && overrides ? overrides[state.key] : null;
+  if (!own) return state;
+  return { ...state, modules: own };
+}
+
 export function packageState(company, now = Date.now()) {
   const key = normalizePackage(company && company.package);
   if (!key) {

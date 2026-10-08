@@ -92,7 +92,7 @@ export default function AttendanceReportDialog({ open, onOpenChange, branch }) {
       fetchRegional(company ? company.id : '', state)
     ]);
     setRates(employeeRates);
-    setRegional(regionalMap(imported));
+    setRegional(regionalMap(imported, company ? company.holiday_exclusions : []));
     setRows(entries);
     setReady(true);
     setLoading(false);

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ArrowDown, ArrowUp, Plus, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, FileText, Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -9,6 +9,7 @@ import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/components/ui/use-toast';
 import { useI18n } from '@/lib/i18n';
 import { useWorkspace } from '@/lib/WorkspaceContext';
+import { DEFAULT_ONBOARDING_QUESTIONS } from '@/lib/onboardingDefaults';
 import { base44 } from '@/api/base44Client';
 
 const TYPE_KEYS = { text: 'onboardingQ.typeText', yes_no: 'onboardingQ.typeYesNo', select: 'onboardingQ.typeSelect' };
@@ -87,6 +88,13 @@ export default function OnboardingQuestionsCard() {
     setDraft((prev) => [...prev, blankQuestion(page)]);
   };
 
+  // The standard form, ready to review before it is saved: personal details, tax, super and
+  // bank, with the signature still coming last on the employee's own page.
+  const loadDefaults = () => {
+    setDraft(toDraft(DEFAULT_ONBOARDING_QUESTIONS));
+    toast({ title: t('onboardingQ.defaultsLoaded') });
+  };
+
   const save = async () => {
     if (!company) return;
     const cleaned = draft
@@ -114,9 +122,14 @@ export default function OnboardingQuestionsCard() {
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle className="text-base">{t('onboardingQ.title')}</CardTitle>
-        <p className="text-sm text-muted-foreground">{t('onboardingQ.hint')}</p>
+      <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0">
+        <div>
+          <CardTitle className="text-base">{t('onboardingQ.title')}</CardTitle>
+          <p className="mt-1 text-sm text-muted-foreground">{t('onboardingQ.hint')}</p>
+        </div>
+        <Button variant="outline" size="sm" disabled={!canEdit} onClick={loadDefaults}>
+          <FileText className="mr-2 h-4 w-4" /> {t('onboardingQ.makeDefault')}
+        </Button>
       </CardHeader>
       <CardContent className="space-y-4">
         {draft.length === 0 && <p className="text-sm text-muted-foreground">{t('onboardingQ.empty')}</p>}

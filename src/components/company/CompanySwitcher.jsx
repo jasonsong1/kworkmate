@@ -29,7 +29,11 @@ export default function CompanySwitcher() {
     setSearching(true);
     const timer = setTimeout(async () => {
       const term = query.trim();
-      const filter = term ? { name: { $regex: escapeRegex(term), $options: 'i' } } : {};
+      // A deactivated company is not offered: it comes back to the list the moment it is
+      // switched back on in platform management.
+      const filter = term
+        ? { name: { $regex: escapeRegex(term), $options: 'i' }, deactivated: { $ne: true } }
+        : { deactivated: { $ne: true } };
       const page = await base44.entities.Company.filter(filter, { sort: 'name', limit: 20 });
       if (cancelled) return;
       setResults(page.items || []);

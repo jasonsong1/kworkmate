@@ -11,6 +11,11 @@ export default async function (req) {
     if (found.length === 0) return Response.json({ ok: false, invalid: true });
     const employee = found[0];
 
+    // Onboarding that is already filed is a closed door: the link says so and hands over nothing.
+    if (employee.onboarding_status === 'completed') {
+      return Response.json({ ok: false, completed: true });
+    }
+
     const branch = employee.branch_id
       ? await base44.asServiceRole.entities.Branch.get(employee.branch_id).catch(() => null)
       : null;

@@ -314,17 +314,35 @@ function standardHoliday(dateIso, state) {
 function regionalHoliday(dateIso, state, regional) {
   const record = regional ? regional[`${normalizeState(state)}:${String(dateIso).slice(0, 10)}`] : null;
   if (!record) return null;
+  if (record.excluded) return { excluded: true };
   return { record, holiday: { en: record.name || '', ko: record.name_ko || record.name || '' } };
 }
 
+// A date the employer removed from the holiday list: it is carried in the same map as a delete
+// marker, so the date stops earning the holiday rate and drops out of the list.
+export function isHolidayExcluded(state, date, exclusions) {
+  const code = normalizeState(state);
+  const day = date ? String(date).slice(0, 10) : '';
+  if (!code || !day) return false;
+  return (exclusions || []).some(
+    (entry) => entry && normalizeState(entry.state) === code && String(entry.date).slice(0, 10) === day
+  );
+}
+
 // Holidays imported from the official state schedule, indexed by state and date. Only the
-// ones the employer applied earn the holiday rate.
-export function regionalMap(records) {
+// ones the employer applied earn the holiday rate; the ones they deleted are marked off.
+export function regionalMap(records, exclusions) {
   const map = {};
   (records || []).forEach((record) => {
     if (!record || !record.date || (record.status && record.status !== 'applied')) return;
     const day = String(record.date).slice(0, 10);
     map[`${normalizeState(record.state)}:${day}`] = record;
+  });
+  (exclusions || []).forEach((entry) => {
+    const code = normalizeState(entry && entry.state);
+    const day = entry && entry.date ? String(entry.date).slice(0, 10) : '';
+    if (!code || !day) return;
+    map[`${code}:${day}`] = { excluded: true };
   });
   return map;
 }
@@ -334,7 +352,8 @@ export function regionalMap(records) {
 export function dayTypeFor(dateIso, state, regional) {
   const day = dateIso ? String(dateIso).slice(0, 10) : '';
   const registered = day ? regionalHoliday(day, state, regional) : null;
-  if (registered) {
+  const removed = Boolean(registered && registered.excluded);
+  if (registered && !removed) {
     return {
       key: 'public_holiday',
       holidayKey: '',
@@ -342,7 +361,8 @@ export function dayTypeFor(dateIso, state, regional) {
       sourceUrl: registered.record.source_url || ''
     };
   }
-  const standard = day ? standardHoliday(day, state) : null;
+  // A date the employer deleted from the holiday list is not a public holiday here either.
+  const standard = !removed && day ? standardHoliday(day, state) : null;
   if (standard) return { key: 'public_holiday', holidayKey: standard.key, holiday: standard.holiday, sourceUrl: '' };
   const weekday = day ? weekdayOf(day) : 1;
   if (weekday === 6) return { key: 'saturday', holidayKey: '', holiday: null, sourceUrl: '' };
@@ -370,5 +390,12 @@ export function upcomingHolidays(state, fromIso, count = 4, regional) {
       sourceUrl: record.source_url || ''
     }));
   const merged = [...standard, ...registered].sort((a, b) => a.date.localeCompare(b.date));
-  return merged.filter((holiday) => holiday.date >= fromIso).slice(0, count);
+  return merged
+    .filter((holiday) => holiday.date >= fromIso)
+    // Deleted dates are marked off in the same map, so they never reach the list again.
+    .filter((holiday) => {
+      const entry = regional ? regional[`${code}:${holiday.date}`] : null;
+      return !(entry && entry.excluded);
+    })
+    .slice(0, count);
 }
