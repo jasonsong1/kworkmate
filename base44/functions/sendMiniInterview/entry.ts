@@ -54,11 +54,14 @@ export default async function (req: Request) {
     });
     const sent = result.ok;
 
+    // A fresh link starts a fresh conversation, so the applicant is never dropped back into the
+    // middle of the previous attempt.
     await base44.asServiceRole.entities.Applicant.update(applicant.id, {
       mini_interview_token: token,
       mini_interview_status: 'sent',
       mini_interview_sent_at: new Date().toISOString(),
-      mini_interview_responses: applicant.mini_interview_responses || []
+      mini_interview_completed_at: '',
+      mini_interview_responses: []
     });
 
     return Response.json({ ok: true, sent, link });
