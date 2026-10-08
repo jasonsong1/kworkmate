@@ -1,7 +1,15 @@
 import React, { useEffect, useState } from 'react';
-import { Loader2, LogIn, LogOut, ScanLine } from 'lucide-react';
+import { Check, ChevronDown, Loader2, LogIn, LogOut, ScanLine } from 'lucide-react';
 import QrScannerDialog from '@/components/attendance/QrScannerDialog';
 import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu';
 import { useToast } from '@/components/ui/use-toast';
 import { useI18n } from '@/lib/i18n';
 import { useWorkspace } from '@/lib/WorkspaceContext';
@@ -24,8 +32,8 @@ function currentPosition() {
   });
 }
 
-// 출근 and 퇴근 choose which punch the scan is for; the punch itself is recorded only when the
-// record button opens the camera and the store's code is read.
+// One button holds the whole attendance record: 출근 and 퇴근 choose which punch the scan is for,
+// and 기록 opens the camera. Nothing is recorded until the store's own code is read.
 export default function ClockScanButton({ onRecorded }) {
   const { t } = useI18n();
   const { me } = useWorkspace();
@@ -84,33 +92,41 @@ export default function ClockScanButton({ onRecorded }) {
   };
 
   return (
-    <div className="flex items-center gap-1.5">
-      <Button
-        size="sm"
-        variant={mode === 'in' ? 'default' : 'outline'}
-        aria-pressed={mode === 'in'}
-        onClick={() => setMode('in')}
-        disabled={busy || !me}
-      >
-        <LogIn className="mr-1.5 h-4 w-4" /> {t('attendance.clockIn')}
-      </Button>
-      <Button
-        size="sm"
-        variant={mode === 'out' ? 'default' : 'outline'}
-        aria-pressed={mode === 'out'}
-        onClick={() => setMode('out')}
-        disabled={busy || !me}
-      >
-        <LogOut className="mr-1.5 h-4 w-4" /> {t('attendance.clockOut')}
-      </Button>
-      <Button size="sm" onClick={() => setOpen(true)} disabled={busy || !me}>
-        {busy ? (
-          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-        ) : (
-          <ScanLine className="mr-2 h-4 w-4" />
-        )}
-        {t('clock.record')}
-      </Button>
+    <div className="flex items-center">
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button size="sm" variant="outline" disabled={busy || !me}>
+            {busy ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <ScanLine className="mr-2 h-4 w-4" />
+            )}
+            {t('clock.records')}
+            <span className="ml-1.5 text-muted-foreground">
+              · {mode === 'in' ? t('attendance.clockIn') : t('attendance.clockOut')}
+            </span>
+            <ChevronDown className="ml-1 h-3.5 w-3.5" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-52">
+          <DropdownMenuLabel>{t('clock.records')}</DropdownMenuLabel>
+          <DropdownMenuItem onSelect={() => setMode('in')}>
+            <LogIn className="mr-2 h-4 w-4" />
+            {t('attendance.clockIn')}
+            {mode === 'in' && <Check className="ml-auto h-3.5 w-3.5" />}
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => setMode('out')}>
+            <LogOut className="mr-2 h-4 w-4" />
+            {t('attendance.clockOut')}
+            {mode === 'out' && <Check className="ml-auto h-3.5 w-3.5" />}
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onSelect={() => setOpen(true)}>
+            <ScanLine className="mr-2 h-4 w-4" />
+            {t('clock.record')}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
       <QrScannerDialog open={open} onOpenChange={setOpen} onScan={record} />
     </div>
   );

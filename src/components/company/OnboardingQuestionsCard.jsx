@@ -14,6 +14,8 @@ import { base44 } from '@/api/base44Client';
 
 const TYPE_KEYS = {
   text: 'onboardingQ.typeText',
+  number: 'onboardingQ.typeNumber',
+  date: 'onboardingQ.typeDate',
   yes_no: 'onboardingQ.typeYesNo',
   select: 'onboardingQ.typeSelect',
   upload: 'onboardingQ.typeUpload'
@@ -25,6 +27,21 @@ const splitList = (value) =>
     .split(',')
     .map((item) => item.trim())
     .filter(Boolean);
+
+// The employer's own rule for one answer, kept beside the question: how many digits a number may
+// hold, whether a date is a whole day or only a year, and which file types may be attached.
+function validationOf(question) {
+  if (question.type === 'number') {
+    return { digits: Number(question.digits) > 0 ? Number(question.digits) : 0 };
+  }
+  if (question.type === 'date') {
+    return { format: question.dateFormat === 'year' ? 'year' : 'date' };
+  }
+  if (question.type === 'upload') {
+    return { file_types: splitList(question.fileTypesText) };
+  }
+  return null;
+}
 
 function blankQuestion(page) {
   return {
@@ -38,23 +55,32 @@ function blankQuestion(page) {
     when: 'no',
     // The comma-separated lists are held as the manager typed them, so a comma can be typed.
     optionsText: '',
-    fieldsText: ''
+    fieldsText: '',
+    digits: '',
+    dateFormat: 'date',
+    fileTypesText: ''
   };
 }
 
 function toDraft(questions) {
-  return (questions || []).map((question, index) => ({
-    id: question.id || `q_${Math.random().toString(36).slice(2, 9)}`,
-    label: question.label || '',
-    type: TYPES.includes(question.type) ? question.type : 'text',
-    required: question.required !== false,
-    visible: question.visible !== false,
-    page: Number(question.page) > 0 ? Number(question.page) : index + 1,
-    pageTitle: question.page_title || '',
-    when: question.follow_up && question.follow_up.when === 'yes' ? 'yes' : 'no',
-    optionsText: (question.options || []).join(', '),
-    fieldsText: ((question.follow_up && question.follow_up.fields) || []).join(', ')
-  }));
+  return (questions || []).map((question, index) => {
+    const validation = question.validation || {};
+    return {
+      id: question.id || `q_${Math.random().toString(36).slice(2, 9)}`,
+      label: question.label || '',
+      type: TYPES.includes(question.type) ? question.type : 'text',
+      required: question.required !== false,
+      visible: question.visible !== false,
+      page: Number(question.page) > 0 ? Number(question.page) : index + 1,
+      pageTitle: question.page_title || '',
+      when: question.follow_up && question.follow_up.when === 'yes' ? 'yes' : 'no',
+      optionsText: (question.options || []).join(', '),
+      fieldsText: ((question.follow_up && question.follow_up.fields) || []).join(', '),
+      digits: Number(validation.digits) > 0 ? String(validation.digits) : '',
+      dateFormat: validation.format === 'year' ? 'year' : 'date',
+      fileTypesText: (validation.file_types || []).join(', ')
+    };
+  });
 }
 
 // The employer's own questions for the onboarding form. Questions sharing a page number appear
@@ -117,7 +143,8 @@ export default function OnboardingQuestionsCard() {
         follow_up:
           question.type === 'yes_no'
             ? { when: question.when === 'yes' ? 'yes' : 'no', fields: splitList(question.fieldsText) }
-            : null
+            : null,
+        validation: validationOf(question)
       }));
     setSaving(true);
     await base44.entities.Company.update(company.id, { onboarding_questions: cleaned });
@@ -225,6 +252,53 @@ export default function OnboardingQuestionsCard() {
                     disabled={!canEdit}
                     onChange={(event) => set(index, { optionsText: event.target.value })}
                   />
+                </div>
+              )}
+
+              {question.type === 'number' && (
+                <div>
+                  <Label>{t('onboardingQ.digits')}</Label>
+                  <Input
+                    type="number"
+                    min="1"
+                    value={question.digits}
+                    disabled={!canEdit}
+                    placeholder="9"
+                    onChange={(event) => set(index, { digits: event.target.value })}
+                  />
+                  <p className="mt-1 text-xs text-muted-foreground">{t('onboardingQ.digitsHint')}</p>
+                </div>
+              )}
+
+              {question.type === 'date' && (
+                <div>
+                  <Label>{t('onboardingQ.dateFormat')}</Label>
+                  <Select
+                    value={question.dateFormat}
+                    onValueChange={(value) => set(index, { dateFormat: value })}
+                    disabled={!canEdit}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="date">{t('onboardingQ.dateFull')}</SelectItem>
+                      <SelectItem value="year">{t('onboardingQ.dateYear')}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              {question.type === 'upload' && (
+                <div>
+                  <Label>{t('onboardingQ.fileTypes')}</Label>
+                  <Input
+                    value={question.fileTypesText}
+                    disabled={!canEdit}
+                    placeholder="pdf, jpg, png"
+                    onChange={(event) => set(index, { fileTypesText: event.target.value })}
+                  />
+                  <p className="mt-1 text-xs text-muted-foreground">{t('onboardingQ.fileTypesHint')}</p>
                 </div>
               )}
 

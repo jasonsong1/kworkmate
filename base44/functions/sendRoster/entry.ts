@@ -2,6 +2,7 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.52';
 import { sendEmail, brandedEmail } from '../../shared/email.ts';
 import { employeeLanguage, rosterMail } from '../../shared/employeeMail.ts';
 import { pushStaff } from '../../shared/notify.ts';
+import { resolveCaller } from '../../shared/kwAuth.ts';
 
 function addDays(iso: string, days: number) {
   const d = new Date(`${iso}T00:00:00Z`);
@@ -21,8 +22,11 @@ function rowsOf(result: any) {
 export default async function (req: Request) {
   try {
     const base44 = createClientFromRequest(req);
-    const me = await base44.auth.me();
-    if (!me) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    // Either door the employer signed in through answers here: the ID their employer issued, or a
+    // platform account. Managers run the back office on the employee sign-in, so the platform's
+    // own session alone would refuse them.
+    const me = await resolveCaller(base44, req);
+    if (!me) return Response.json({ error: 'Sign-in required' }, { status: 401 });
 
     const body = await req.json();
     const branchId = body.branch_id;
@@ -116,7 +120,7 @@ export default async function (req: Request) {
       await base44.asServiceRole.entities.Notification.bulkCreate(notices).catch(() => null);
     }
     // The confirmed week also reaches the phone, for anyone using the installed app.
-    const pushed = await pushStaff(base44, { recipients: pushRecipients, link: '/roster' });
+    const pushed = await pushStaff(base44, { recipients: pushRecipients, link: '/roster' }).catch(() => 0);
 
     await base44.asServiceRole.entities.Shift.updateMany(
       { branch_id: branchId, date: { $gte: weekStart, $lte: weekEnd } },

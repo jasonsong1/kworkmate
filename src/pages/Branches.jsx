@@ -13,8 +13,6 @@ import {
 } from '@/components/ui/alert-dialog';
 import PageHeader from '@/components/PageHeader';
 import AddBranchDialog from '@/components/AddBranchDialog';
-import RosterScheduleCard from '@/components/RosterScheduleCard';
-import RosterAutomationCard from '@/components/roster/RosterAutomationCard';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -319,9 +317,6 @@ export default function Branches() {
               </CardContent>
             </Card>
 
-            <RosterScheduleCard branch={activeBranch} />
-
-            <RosterAutomationCard branch={activeBranch} />
           </div>
         ) : (
           <Card>

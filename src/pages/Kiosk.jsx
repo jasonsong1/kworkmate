@@ -41,9 +41,6 @@ export default function Kiosk() {
   const [result, setResult] = useState(null);
   const [error, setError] = useState('');
   const [me, setMe] = useState(null);
-  // Which punch the person is about to record. The buttons only choose it; the store code
-  // below is what records it.
-  const [intent, setIntent] = useState('');
 
   useEffect(() => {
     const load = async () => {
@@ -103,15 +100,6 @@ export default function Kiosk() {
     setPin('');
   };
 
-  // Clock in or clock out is chosen here, and nothing is recorded by choosing it: the store
-  // code below is what records the punch.
-  const chooseIntent = (action) => {
-    setIntent(action);
-    setMode('qr');
-    setError('');
-    setResult(null);
-  };
-
   const brand = (info && info.brand_color) || '#4338ca';
   const logoUrl = (info && info.qr_design && info.qr_design.logo_url) || '';
 
@@ -167,33 +155,8 @@ export default function Kiosk() {
               </div>
             </div>
 
-            <div className="mt-4 grid grid-cols-2 gap-1.5 rounded-2xl bg-[#f1f5f9] p-1.5">
-              <button
-                type="button"
-                onClick={() => chooseIntent('in')}
-                className={cn(
-                  'flex h-12 items-center justify-center gap-2 rounded-xl text-base font-semibold transition-colors',
-                  intent === 'in' ? 'bg-white text-[#0f172a] shadow-sm' : 'text-[#475569]'
-                )}
-              >
-                <LogIn className="h-4 w-4" /> Clock in
-              </button>
-              <button
-                type="button"
-                onClick={() => chooseIntent('out')}
-                className={cn(
-                  'flex h-12 items-center justify-center gap-2 rounded-xl text-base font-semibold transition-colors',
-                  intent === 'out' ? 'bg-white text-[#0f172a] shadow-sm' : 'text-[#475569]'
-                )}
-              >
-                <LogOut className="h-4 w-4" /> Clock out
-              </button>
-            </div>
-
             <p className="mt-3 text-xs text-[#64748b]">
-              {intent
-                ? `Clock ${intent === 'out' ? 'out' : 'in'} chosen — scan the store code below with your phone to record it.`
-                : 'Choose clock in or clock out first, then scan the store code below with your phone.'}
+              Scan the store code below with your phone, or switch to My number to record the punch here.
             </p>
           </div>
         ) : null}
@@ -270,7 +233,7 @@ export default function Kiosk() {
               url={kioskUrl(info.branch_id, info.date)}
               design={info.qr_design}
               noteClassName="text-[#475569]"
-              fallbackTitle={intent === 'out' ? 'Scan to clock out' : 'Scan to clock in'}
+              fallbackTitle="Scan the store code"
               fallbackNote={`Point a phone camera at this code to open today’s clock for ${info.branch_name}, then enter your employee number and PIN.`}
             />
           </div>

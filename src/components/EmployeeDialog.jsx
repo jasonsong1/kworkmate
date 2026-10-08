@@ -348,23 +348,6 @@ export default function EmployeeDialog({ open, onOpenChange, branch, employee, o
           }
         </div>
 
-        {employee && (employee.onboarding_answers || []).length > 0 &&
-        <div className="space-y-2 rounded-lg border px-4 py-3">
-            <p className="text-sm font-medium">{t('onboardingQ.answers')}</p>
-            {(employee.onboarding_answers || []).map((item) =>
-          <div key={item.id || item.label} className="text-sm">
-                <span className="text-muted-foreground">{item.label}</span>{' '}
-                <span>{item.answer || t('onboardingQ.noAnswer')}</span>
-                {item.follow_up && Object.keys(item.follow_up).length > 0 &&
-            <span className="block text-xs text-muted-foreground">
-                    {Object.entries(item.follow_up).map(([field, value]) => `${field}: ${value}`).join(' · ')}
-                  </span>
-            }
-              </div>
-          )}
-          </div>
-        }
-
         {error && <p className="text-sm text-destructive">{error}</p>}
 
         <DialogFooter>

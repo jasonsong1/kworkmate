@@ -10,7 +10,8 @@ import {
   passwordReused,
   randomSalt,
   resolveCaller,
-  sealRecord
+  sealRecord,
+  verifyPassword
 } from '../../shared/kwAuth.ts';
 
 // The employer's side of the sign-in: they hand the employee an ID and a password, and nothing
@@ -58,6 +59,19 @@ export default async function (req) {
       });
       await closeSessionsFor(base44, profile.id);
       return Response.json({ ok: true, password_set: false });
+    }
+
+    // Changing your own sign-in password means proving you know the one in force. An employer
+    // handing credentials to somebody else is a different act and is covered by mayManage above.
+    const isSelf =
+      profile.id === me.profile_id ||
+      (clean(profile.user_email) && lower(profile.user_email) === lower(me.email));
+    if (isSelf && profile.password_set && (body.self_service === true || body.current_password)) {
+      const current = String(body.current_password || '');
+      if (!current) return Response.json({ error: 'current_required' }, { status: 400 });
+      if (!(await verifyPassword(current, profile.password_salt, profile.password_hash))) {
+        return Response.json({ error: 'current_wrong' }, { status: 400 });
+      }
     }
 
     const password = String(body.password || '');

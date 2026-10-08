@@ -3,10 +3,13 @@ import { CalendarPlus, ChevronLeft, ChevronRight, Loader2, Plus, Send, Settings2
 import PageHeader from '@/components/PageHeader';
 import ShiftDialog from '@/components/ShiftDialog';
 import RosterSettingsDialog from '@/components/RosterSettingsDialog';
+import RosterScheduleCard from '@/components/RosterScheduleCard';
+import RosterAutomationCard from '@/components/roster/RosterAutomationCard';
 import AvailabilityBoard from '@/components/AvailabilityBoard';
 import CalendarSubscribeDialog from '@/components/roster/CalendarSubscribeDialog';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/components/ui/use-toast';
 import { useI18n } from '@/lib/i18n';
 import { useWorkspace } from '@/lib/WorkspaceContext';
@@ -20,13 +23,19 @@ export default function Roster() {
   const { canEdit } = usePermissions();
   // Building, saving and sending the roster needs update access; reading it does not.
   const canManageRoster = canEdit('roster');
+  // Asking the team for their hours and letting the draft build itself are store settings, so
+  // they belong to whoever runs the store.
+  const canManageAutomation = canEdit('branches');
   const { toast } = useToast();
 
+  const [tab, setTab] = useState('roster');
   const [weekStart, setWeekStart] = useState(startOfWeekIso(todayIso()));
   const [employees, setEmployees] = useState([]);
   const [shifts, setShifts] = useState([]);
   const [submissions, setSubmissions] = useState([]);
   const [approvedLeave, setApprovedLeave] = useState([]);
+  // Shifts the last build could not fill: they stay open on the screen instead of disappearing.
+  const [unassigned, setUnassigned] = useState([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogDate, setDialogDate] = useState('');
@@ -101,27 +110,38 @@ export default function Roster() {
   };
 
   const sendWeek = async () => {
+    if (!activeBranch) return;
     setSending(true);
-    const response = await base44.functions.invoke('sendRoster', {
-      branch_id: activeBranch.id,
-      week_start: weekStart
-    });
-    if (response.data?.error) {
+    try {
+      const response = await base44.functions.invoke('sendRoster', {
+        branch_id: activeBranch.id,
+        week_start: weekStart
+      });
+      const data = response.data || {};
+      if (data.error) {
+        toast({ title: data.error, variant: 'destructive' });
+        return;
+      }
+      // Sending the week to staff is what publishes it.
+      await base44.entities.Shift.updateMany(
+        { branch_id: activeBranch.id, date: { $gte: weekStart, $lte: weekEnd }, status: { $in: ['draft', 'saved'] } },
+        { $set: { status: 'published' } }
+      );
+      toast({ title: `${t('roster.sent')} · ${data.sent || 0}` });
+      await load();
+    } catch (error) {
+      const said =
+        (error && error.response && error.response.data && error.response.data.error) ||
+        (error && error.message) ||
+        t('roster.sendFailed');
+      toast({ title: said, variant: 'destructive' });
+    } finally {
       setSending(false);
-      toast({ title: response.data.error, variant: 'destructive' });
-      return;
     }
-    // Sending the week to staff is what publishes it.
-    await base44.entities.Shift.updateMany(
-      { branch_id: activeBranch.id, date: { $gte: weekStart, $lte: weekEnd }, status: { $in: ['draft', 'saved'] } },
-      { $set: { status: 'published' } }
-    );
-    setSending(false);
-    toast({ title: `${t('roster.sent')} · ${response.data.sent || 0}` });
-    await load();
   };
 
-  // Builds a draft from the saved shift patterns, submitted availability and work rules.
+  // Builds a draft from the store's demand, the people who are pinned to a day, the submitted
+  // availability and the work rules.
   const autoBuild = async () => {
     if (!activeBranch) return;
     setGenerating(true);
@@ -141,6 +161,7 @@ export default function Roster() {
         toast({ title: data.error, variant: 'destructive' });
         return;
       }
+      setUnassigned(data.unassigned || []);
       const unfilled = (data.unassigned || []).reduce((sum, item) => sum + (item.missing || 0), 0);
       toast({ title: t('roster.built').replace('{assigned}', data.assigned || 0).replace('{unfilled}', unfilled) });
       await load();
@@ -194,6 +215,9 @@ export default function Roster() {
 
   const shiftsFor = (email, date) => shifts.filter((s) => s.employee_email === email && s.date === date);
   const publishedCount = shifts.filter((s) => s.status === 'published').length;
+  // What the last build could not fill on one day, so the day itself carries the warning.
+  const missingOn = (date) =>
+    unassigned.filter((item) => item.date === date).reduce((sum, item) => sum + (Number(item.missing) || 0), 0);
 
   return (
     <div>
@@ -255,116 +279,137 @@ export default function Roster() {
         }
       />
 
-      <Card>
-        <CardContent className="p-4">
-          {loading ? (
-            <p className="py-10 text-center text-sm text-muted-foreground">
-              <Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin" />
-              {t('common.loading')}
-            </p>
-          ) : employees.length === 0 ? (
-            <p className="py-10 text-center text-sm text-muted-foreground">{t('common.none')}</p>
-          ) : (
-            <>
-              <p className="mb-4 text-xs text-muted-foreground">
-                {publishedCount} of {shifts.length} shifts published for this week
-              </p>
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[900px] border-separate border-spacing-0 text-sm">
-                  <thead>
-                    <tr>
-                      <th className="sticky left-0 z-10 w-44 bg-card px-3 py-2 text-left text-xs font-medium text-muted-foreground">
-                        {t('common.employee')}
-                      </th>
-                      {days.map((day) => (
-                        <th key={day.date} className="px-2 py-2 text-center text-xs font-medium text-muted-foreground">
-                          <div>{day.short}</div>
-                          <div className="font-normal text-[11px]">{day.date.slice(5)}</div>
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {employees.map((employee) => (
-                      <tr key={employee.id} className="align-top">
-                        <td className="sticky left-0 z-10 border-t bg-card px-3 py-3">
-                          <p className="text-sm font-medium">{employee.full_name}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {employee.position || '—'}
-                            {employee.secondary_position ? ` · ${employee.secondary_position}` : ''}
-                          </p>
-                        </td>
-                        {days.map((day) => (
-                          <td
-                            key={`${employee.id}-${day.date}`}
-                            className="border-t p-1"
-                            onDragOver={(event) => event.preventDefault()}
-                            onDrop={() => canManageRoster && moveShift(employee.user_email, day.date)}
-                          >
-                            <div className="space-y-1">
-                              {onLeaveFor(employee.user_email, day.date) ? (
-                                <div className="rounded-lg border border-amber-200 bg-amber-50 px-2 py-1.5 text-[11px] font-medium text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
-                                  {t('roster.onLeave')}
-                                </div>
-                              ) : null}
-                              {shiftsFor(employee.user_email, day.date).map((shift) => (
-                                <div
-                                  key={shift.id}
-                                  draggable={canManageRoster}
-                                  onDragStart={() => setDragId(shift.id)}
-                                  onDragEnd={() => setDragId('')}
-                                  className={`group cursor-grab rounded-lg border px-2 py-1.5 text-xs ${
-                                    shift.status === 'published'
-                                      ? 'border-emerald-200 bg-emerald-50 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-100'
-                                      : shift.status === 'saved'
-                                        ? 'border-sky-200 bg-sky-50 dark:border-sky-500/30 dark:bg-sky-500/10 dark:text-sky-100'
-                                        : 'bg-muted/40 dark:bg-muted/20'
-                                  }`}
-                                >
-                                  <div className="flex items-center justify-between gap-1">
-                                    <span className="font-medium">
-                                      {shift.start_time}–{shift.end_time}
-                                    </span>
-                                  </div>
-                                  {shift.position ? (
-                                    <p className="truncate text-[11px] text-muted-foreground">{shift.position}</p>
-                                  ) : null}
-                                </div>
-                              ))}
-                              {canManageRoster && !onLeaveFor(employee.user_email, day.date) && (
-                              <button
-                                onClick={() => {
-                                  setDialogDate(day.date);
-                                  setDialogEmployee(employee);
-                                  setDialogOpen(true);
-                                }}
-                                className="w-full rounded-lg border border-dashed px-2 py-1 text-[11px] text-muted-foreground hover:bg-muted"
-                              >
-                                +
-                              </button>
-                              )}
-                            </div>
-                          </td>
-                        ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </>
-          )}
-        </CardContent>
-      </Card>
+      <Tabs value={tab} onValueChange={setTab} className="mt-2">
+        <TabsList>
+          <TabsTrigger value="roster">{t('roster.tabRoster')}</TabsTrigger>
+          {canManageAutomation && <TabsTrigger value="automation">{t('roster.tabAutomation')}</TabsTrigger>}
+        </TabsList>
 
-      <AvailabilityBoard
-        employees={boardEmployees}
-        submissions={visibleSubmissions}
-        days={days}
-        branch={activeBranch}
-        weekStart={weekStart}
-        canEdit={canEditAvailability}
-        onSaved={load}
-      />
+        <TabsContent value="roster" className="mt-4 space-y-6">
+          <Card>
+            <CardContent className="p-4">
+              {loading ? (
+                <p className="py-10 text-center text-sm text-muted-foreground">
+                  <Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin" />
+                  {t('common.loading')}
+                </p>
+              ) : employees.length === 0 ? (
+                <p className="py-10 text-center text-sm text-muted-foreground">{t('common.none')}</p>
+              ) : (
+                <>
+                  <p className="mb-4 text-xs text-muted-foreground">
+                    {publishedCount} of {shifts.length} shifts published for this week
+                  </p>
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[900px] border-separate border-spacing-0 text-sm">
+                      <thead>
+                        <tr>
+                          <th className="sticky left-0 z-10 w-44 bg-card px-3 py-2 text-left text-xs font-medium text-muted-foreground">
+                            {t('common.employee')}
+                          </th>
+                          {days.map((day) => (
+                            <th key={day.date} className="px-2 py-2 text-center text-xs font-medium text-muted-foreground">
+                              <div>{day.short}</div>
+                              <div className="font-normal text-[11px]">{day.date.slice(5)}</div>
+                              {missingOn(day.date) > 0 && (
+                                <span className="mt-1 inline-block rounded-full bg-destructive/10 px-2 py-0.5 text-[10px] font-medium text-destructive">
+                                  {t('roster.unassigned')} {missingOn(day.date)}
+                                </span>
+                              )}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {employees.map((employee) => (
+                          <tr key={employee.id} className="align-top">
+                            <td className="sticky left-0 z-10 border-t bg-card px-3 py-3">
+                              <p className="text-sm font-medium">{employee.full_name}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {employee.position || '—'}
+                                {employee.secondary_position ? ` · ${employee.secondary_position}` : ''}
+                              </p>
+                            </td>
+                            {days.map((day) => (
+                              <td
+                                key={`${employee.id}-${day.date}`}
+                                className="border-t p-1"
+                                onDragOver={(event) => event.preventDefault()}
+                                onDrop={() => canManageRoster && moveShift(employee.user_email, day.date)}
+                              >
+                                <div className="space-y-1">
+                                  {onLeaveFor(employee.user_email, day.date) ? (
+                                    <div className="rounded-lg border border-amber-200 bg-amber-50 px-2 py-1.5 text-[11px] font-medium text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
+                                      {t('roster.onLeave')}
+                                    </div>
+                                  ) : null}
+                                  {shiftsFor(employee.user_email, day.date).map((shift) => (
+                                    <div
+                                      key={shift.id}
+                                      draggable={canManageRoster}
+                                      onDragStart={() => setDragId(shift.id)}
+                                      onDragEnd={() => setDragId('')}
+                                      className={`group cursor-grab rounded-lg border px-2 py-1.5 text-xs ${
+                                        shift.status === 'published'
+                                          ? 'border-emerald-200 bg-emerald-50 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-100'
+                                          : shift.status === 'saved'
+                                            ? 'border-sky-200 bg-sky-50 dark:border-sky-500/30 dark:bg-sky-500/10 dark:text-sky-100'
+                                            : 'bg-muted/40 dark:bg-muted/20'
+                                      }`}
+                                    >
+                                      <div className="flex items-center justify-between gap-1">
+                                        <span className="font-medium">
+                                          {shift.start_time}–{shift.end_time}
+                                        </span>
+                                      </div>
+                                      {shift.position ? (
+                                        <p className="truncate text-[11px] text-muted-foreground">{shift.position}</p>
+                                      ) : null}
+                                    </div>
+                                  ))}
+                                  {canManageRoster && !onLeaveFor(employee.user_email, day.date) && (
+                                  <button
+                                    onClick={() => {
+                                      setDialogDate(day.date);
+                                      setDialogEmployee(employee);
+                                      setDialogOpen(true);
+                                    }}
+                                    className="w-full rounded-lg border border-dashed px-2 py-1 text-[11px] text-muted-foreground hover:bg-muted"
+                                  >
+                                    +
+                                  </button>
+                                  )}
+                                </div>
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
+            </CardContent>
+          </Card>
+
+          <AvailabilityBoard
+            employees={boardEmployees}
+            submissions={visibleSubmissions}
+            days={days}
+            branch={activeBranch}
+            weekStart={weekStart}
+            canEdit={canEditAvailability}
+            onSaved={load}
+          />
+        </TabsContent>
+
+        {canManageAutomation && (
+          <TabsContent value="automation" className="mt-4 space-y-4">
+            <RosterScheduleCard branch={activeBranch} />
+            <RosterAutomationCard branch={activeBranch} />
+          </TabsContent>
+        )}
+      </Tabs>
 
       <ShiftDialog
         open={dialogOpen}

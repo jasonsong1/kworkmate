@@ -9,11 +9,13 @@ import { useI18n } from '@/lib/i18n';
 import { passwordProblem } from '@/lib/password';
 import { base44 } from '@/api/base44Client';
 
-// Your own sign-in password. Holding a session is enough to set a new one, so nothing has to be
-// emailed and nobody has to ask their manager.
+// Your own sign-in password. The one in force has to be given first: only then is a new one
+// accepted, so somebody who picks up an open phone cannot lock the owner out of their own
+// account.
 export default function SelfPasswordDialog({ open, onOpenChange, profile }) {
   const { t } = useI18n();
   const { toast } = useToast();
+  const [current, setCurrent] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [error, setError] = useState('');
@@ -21,13 +23,25 @@ export default function SelfPasswordDialog({ open, onOpenChange, profile }) {
 
   useEffect(() => {
     if (!open) return;
+    setCurrent('');
     setPassword('');
     setConfirm('');
     setError('');
   }, [open]);
 
+  const message = (code) => {
+    if (code === 'password_reused') return t('password.reused');
+    if (code === 'current_wrong') return t('password.currentWrong');
+    if (code === 'current_required') return t('password.currentRequired');
+    return code;
+  };
+
   const save = async () => {
     if (!profile) return;
+    if (!current) {
+      setError(t('password.currentRequired'));
+      return;
+    }
     const problem = passwordProblem(password);
     if (problem) {
       setError(t(`password.${problem}`));
@@ -43,18 +57,20 @@ export default function SelfPasswordDialog({ open, onOpenChange, profile }) {
       const response = await base44.functions.invoke('kwSetEmployeePassword', {
         profile_id: profile.id,
         login_id: profile.login_id || profile.user_email,
-        password
+        password,
+        current_password: current,
+        self_service: true
       });
       const data = response.data || {};
       if (data.error) {
-        setError(data.error === 'password_reused' ? t('password.reused') : data.error);
+        setError(message(data.error));
         return;
       }
       toast({ title: t('employees.passwordDone') });
       onOpenChange(false);
     } catch (err) {
       const said = (err && err.response && err.response.data && err.response.data.error) || (err && err.message) || '';
-      setError(said === 'password_reused' ? t('password.reused') : said || t('employees.passwordFailed'));
+      setError(said ? message(said) : t('employees.passwordFailed'));
     } finally {
       setBusy(false);
     }
@@ -69,6 +85,15 @@ export default function SelfPasswordDialog({ open, onOpenChange, profile }) {
         </DialogHeader>
 
         <div className="space-y-4">
+          <div>
+            <Label>{t('password.current')}</Label>
+            <Input
+              type="password"
+              autoComplete="current-password"
+              value={current}
+              onChange={(e) => setCurrent(e.target.value)}
+            />
+          </div>
           <div>
             <Label>{t('employees.password')}</Label>
             <Input type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} />
@@ -85,7 +110,7 @@ export default function SelfPasswordDialog({ open, onOpenChange, profile }) {
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             {t('common.cancel')}
           </Button>
-          <Button onClick={save} disabled={busy || !password || !confirm}>
+          <Button onClick={save} disabled={busy || !current || !password || !confirm}>
             {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             {t('common.save')}
           </Button>

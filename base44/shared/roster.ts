@@ -1,10 +1,23 @@
-// Building a week of shifts out of the store's own settings: the shift patterns it runs, how many
-// people it needs for each position, the team's submitted availability, visa work limits, the
-// people the employer pinned to a day, and the minimum rest between shifts. Open positions come
-// back as warnings instead of being silently dropped.
-import { weeklyHourCap } from './visa.ts';
+// Building a week of shifts out of the store's own settings, in the order a store thinks about it:
+//
+//  1. the store's own demand — its shift patterns and the headcount each day and position needs;
+//  2. the people the employer pinned to a weekday: they are nailed into the week first, and then
+//     left out of the rest of that day's sums so nobody is planned twice;
+//  3. the team's submitted availability for what is still open, with a full-time contract served
+//     before a part-time one and a part-time one before spare casual hours, visa limits respected,
+//     and the minimum rest between shifts never broken;
+//  4. whatever nobody can take comes back as an open shift instead of being quietly dropped, so
+//     the screen can mark it and the manager decides.
+import { visaKey } from './visa.ts';
 
 const DAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+
+// A full working week in Australia, and the hours a student visa allows across a fortnight.
+const FULL_TIME_WEEKLY_HOURS = 38;
+const STUDENT_FORTNIGHT_HOURS = 48;
+
+// A contract is served before spare hours are handed out.
+const EMPLOYMENT_RANK = { full_time: 0, part_time: 1, casual: 2 };
 
 export function rowsOf(result) {
   return Array.isArray(result) ? result : (result && result.items) || [];
@@ -53,31 +66,56 @@ function absMinutes(dateIso, minutes) {
 
 const lower = (value) => String(value === null || value === undefined ? '' : value).trim().toLowerCase();
 
+function lengthOf(shift) {
+  const start = toMin(shift && shift.start_time);
+  const end = toMin(shift && shift.end_time);
+  if (start === null || end === null || end <= start) return 0;
+  return end - start;
+}
+
+// How much of this person's allowance is still free in the week being built. A full-time
+// contract may not be planned past a 38 hour week, and a student visa may not be planned past
+// 48 hours across the fortnight — the week before this one is already part of that sum.
+function remainingMinutes(person, weekMinutes, earlierMinutes) {
+  let cap = lower(person.employment_type) === 'full_time' ? FULL_TIME_WEEKLY_HOURS * 60 : null;
+  if (visaKey(person.visa_type) === 'student') {
+    const fortnight = STUDENT_FORTNIGHT_HOURS * 60 - earlierMinutes;
+    cap = cap === null ? fortnight : Math.min(cap, fortnight);
+  }
+  return cap === null ? null : cap - weekMinutes;
+}
+
 // Builds one week's draft for a store and files it as draft shifts. The answer says what was
 // placed and what is still open, so the screen can say so. `{ error: 'no_settings' }` comes back
 // when the store has not set its shifts or headcount yet.
 export async function buildDraft(base44, branch, weekStart) {
   const weekEnd = addDays(weekStart, 6);
+  const fortnightStart = addDays(weekStart, -7);
 
-  const [settingPage, staffPage, subPage] = await Promise.all([
+  const [settingPage, staffPage, subPage, earlierPage, leavePage] = await Promise.all([
     base44.asServiceRole.entities.RosterSetting.filter({ branch_id: branch.id }, { limit: 1 }),
     base44.asServiceRole.entities.EmployeeProfile.filter({ branch_id: branch.id, status: 'active' }, { limit: 500 }),
     base44.asServiceRole.entities.AvailabilitySubmission.filter(
       { branch_id: branch.id },
       { sort: '-created_date', limit: 500 }
+    ),
+    // The week before this one: what a student visa holder was already given there is part of
+    // the fortnight's allowance.
+    base44.asServiceRole.entities.Shift
+      .filter({ branch_id: branch.id, date: { $gte: fortnightStart, $lte: addDays(weekStart, -1) } }, { limit: 500 })
+      .catch(() => []),
+    // Anyone with approved leave in this week is away, so the builder never plans them in.
+    base44.asServiceRole.entities.LeaveRequest.filter(
+      {
+        branch_id: branch.id,
+        status: 'approved',
+        start_date: { $lte: weekEnd },
+        end_date: { $gte: weekStart }
+      },
+      { limit: 500 }
     )
   ]);
 
-  // Anyone with approved leave in this week is away, so the builder never plans them in.
-  const leavePage = await base44.asServiceRole.entities.LeaveRequest.filter(
-    {
-      branch_id: branch.id,
-      status: 'approved',
-      start_date: { $lte: weekEnd },
-      end_date: { $gte: weekStart }
-    },
-    { limit: 500 }
-  );
   const leaveRanges = rowsOf(leavePage)
     .filter((row) => row && row.employee_email)
     .map((row) => ({
@@ -87,6 +125,12 @@ export async function buildDraft(base44, branch, weekStart) {
     }));
   const onLeave = (email, date) =>
     leaveRanges.some((range) => range.email === email && date >= range.start && date <= range.end);
+
+  const earlierMinutes = {};
+  rowsOf(earlierPage).forEach((shift) => {
+    if (!shift || !shift.employee_email) return;
+    earlierMinutes[shift.employee_email] = (earlierMinutes[shift.employee_email] || 0) + lengthOf(shift);
+  });
 
   const setting = rowsOf(settingPage)[0] || null;
   const staff = rowsOf(staffPage);
@@ -124,6 +168,8 @@ export async function buildDraft(base44, branch, weekStart) {
 
   const assignedMinutes = {};
   const intervals = {};
+  // A person the employer pinned to a day is not planned again on that day.
+  const pinnedPlaced = {};
   const draft = [];
   const unassigned = [];
   let leaveSkips = 0;
@@ -152,6 +198,8 @@ export async function buildDraft(base44, branch, weekStart) {
     for (const person of staff) {
       const email = person.user_email;
       if (!email) continue;
+      // The person's own position, or the one they can cover as well: the second is how a hole
+      // is filled when nobody in the first position is free.
       const positions = [person.position, person.secondary_position].filter(Boolean);
       if (!positions.includes(req.position)) continue;
 
@@ -159,6 +207,7 @@ export async function buildDraft(base44, branch, weekStart) {
         leaveSkips += 1;
         continue;
       }
+      if (pinnedPlaced[`${email}|${date}`]) continue;
 
       const fixedHere = Boolean(fixedByDay[dayIndex] && fixedByDay[dayIndex].has(lower(email)));
       // A fixed placement is the employer's own instruction, so it does not wait on a submitted
@@ -166,8 +215,8 @@ export async function buildDraft(base44, branch, weekStart) {
       const window = availableWindow(availByEmail[email], dayKey);
       if (!fixedHere && (!window || window.from > start || window.to < end)) continue;
 
-      const cap = weeklyHourCap(person.visa_type);
-      if (cap !== null && (assignedMinutes[email] || 0) + lengthMin > cap * 60) continue;
+      const room = remainingMinutes(person, assignedMinutes[email] || 0, earlierMinutes[email] || 0);
+      if (room !== null && lengthMin > room) continue;
 
       const newStart = absMinutes(date, start);
       const newEnd = absMinutes(date, end);
@@ -186,15 +235,18 @@ export async function buildDraft(base44, branch, weekStart) {
         email,
         name: person.full_name,
         used: assignedMinutes[email] || 0,
+        rank: EMPLOYMENT_RANK[lower(person.employment_type)] ?? EMPLOYMENT_RANK.casual,
         primary: person.position === req.position,
         fixed: fixedHere
       });
     }
 
-    // The pinned people come first, then fairness — fewest hours so far — and then main position.
+    // The pinned people come first, then a full-time contract before a part-time one and a
+    // part-time one before casual hours, then fairness — fewest hours so far — then main position.
     candidates.sort(
       (a, b) =>
         (b.fixed ? 1 : 0) - (a.fixed ? 1 : 0) ||
+        a.rank - b.rank ||
         a.used - b.used ||
         (b.primary ? 1 : 0) - (a.primary ? 1 : 0) ||
         a.email.localeCompare(b.email)
@@ -221,14 +273,19 @@ export async function buildDraft(base44, branch, weekStart) {
         ...(intervals[pick.email] || []),
         { start: absMinutes(date, start), end: absMinutes(date, end) }
       ];
+      if (pick.fixed) pinnedPlaced[`${pick.email}|${date}`] = true;
       filled += 1;
     }
 
+    // Nobody free: the shift stays open rather than being given to somebody who cannot take it.
     if (filled < need) {
       unassigned.push({
         date,
+        day: DAY_KEYS[dayIndex],
         shift: template.label || req.shift_key,
         position: req.position,
+        start_time: template.start_time,
+        end_time: template.end_time,
         missing: need - filled
       });
     }

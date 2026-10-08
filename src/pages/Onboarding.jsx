@@ -81,8 +81,28 @@ export default function Onboarding() {
 
   // A document the employer asked for is uploaded the moment it is chosen, so the answer is
   // settled long before the form is submitted.
+  // The employer's own rules for one answer: how many digits a number may hold, whether a date is
+  // a whole day or only a year, and which file types may be attached.
+  const validationOf = (question) => question.validation || {};
+
+  const allowedFileTypes = (question) =>
+    (validationOf(question).file_types || [])
+      .map((type) => String(type || '').replace(/^\./, '').trim().toLowerCase())
+      .filter(Boolean);
+
+  const digitsOnly = (value, limit) => {
+    const digits = String(value || '').replace(/\D/g, '');
+    return limit > 0 ? digits.slice(0, limit) : digits;
+  };
+
   const chooseFile = async (question, file) => {
     if (!file) return;
+    const types = allowedFileTypes(question);
+    const extension = String(file.name || '').split('.').pop().toLowerCase();
+    if (types.length > 0 && !types.includes(extension)) {
+      setError(`Only these file types are accepted here: ${types.join(', ')}.`);
+      return;
+    }
     setUploadingId(question.id);
     setError('');
     try {
@@ -98,7 +118,17 @@ export default function Onboarding() {
 
   const questionValid = (question) => {
     const value = answers[question.id] || {};
-    if (question.required !== false && !String(value.answer || '').trim()) return false;
+    const answer = String(value.answer || '').trim();
+    if (question.required !== false && !answer) return false;
+    if (answer && question.type === 'number') {
+      const limit = Number(validationOf(question).digits) || 0;
+      if (!/^\d+$/.test(answer)) return false;
+      if (limit > 0 && answer.length > limit) return false;
+    }
+    if (answer && question.type === 'date') {
+      const format = validationOf(question).format === 'year' ? 'year' : 'date';
+      if (format === 'year' ? !/^\d{4}$/.test(answer) : !/^\d{4}-\d{2}-\d{2}$/.test(answer)) return false;
+    }
     if (question.type === 'yes_no' && question.follow_up && question.follow_up.when === value.answer) {
       const fields = question.follow_up.fields || [];
       if (fields.some((field) => !String((value.follow_up || {})[field] || '').trim())) return false;
@@ -315,16 +345,56 @@ export default function Onboarding() {
                             : 'Choose a file'}
                       </span>
                     </span>
-                    <span className="shrink-0 text-xs font-medium text-primary">Browse</span>
+                    <span className="shrink-0 text-xs font-medium text-primary">
+                      {allowedFileTypes(question).length > 0
+                        ? allowedFileTypes(question).join(' / ').toUpperCase()
+                        : 'Browse'}
+                    </span>
                     <input
                       type="file"
                       className="hidden"
+                      accept={allowedFileTypes(question).map((type) => `.${type}`).join(',')}
                       onChange={(event) => chooseFile(question, event.target.files && event.target.files[0])}
                     />
                   </label>
                   )}
 
-                  {question.type !== 'yes_no' && question.type !== 'select' && question.type !== 'upload' && (
+                  {question.type === 'number' && (
+                  <Input
+                    inputMode="numeric"
+                    value={value.answer || ''}
+                    onChange={(event) =>
+                      setAnswer(question.id, digitsOnly(event.target.value, Number(validationOf(question).digits) || 0))
+                    }
+                    placeholder={
+                      Number(validationOf(question).digits) > 0
+                        ? `Up to ${validationOf(question).digits} digits`
+                        : 'Numbers only'
+                    }
+                  />
+                  )}
+
+                  {question.type === 'date' &&
+                  (validationOf(question).format === 'year' ? (
+                    <Input
+                      inputMode="numeric"
+                      value={value.answer || ''}
+                      onChange={(event) => setAnswer(question.id, digitsOnly(event.target.value, 4))}
+                      placeholder="YYYY"
+                    />
+                  ) : (
+                    <Input
+                      type="date"
+                      value={value.answer || ''}
+                      onChange={(event) => setAnswer(question.id, event.target.value)}
+                    />
+                  ))}
+
+                  {question.type !== 'yes_no' &&
+                  question.type !== 'select' &&
+                  question.type !== 'upload' &&
+                  question.type !== 'number' &&
+                  question.type !== 'date' && (
                   <Input
                     value={value.answer || ''}
                     onChange={(event) => setAnswer(question.id, event.target.value)}
