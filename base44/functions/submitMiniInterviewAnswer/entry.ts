@@ -1,20 +1,21 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.52';
 import { sendEmail, brandedEmail } from '../../shared/email.ts';
-
-const DEFAULT_QUESTIONS = [
-  { id: 'q1', question: 'Tell us about your hospitality experience and where you last worked.', seconds: 60 },
-  { id: 'q2', question: 'Describe a busy shift you handled and what you did.', seconds: 60 },
-  { id: 'q3', question: 'How do you handle an unhappy customer?', seconds: 45 },
-  { id: 'q4', question: 'Which days and shifts can you work each week?', seconds: 45 },
-  { id: 'q5', question: 'When can you start, and how long do you plan to stay with us?', seconds: 45 }
-];
+import {
+  appendAnswer,
+  followUpFor,
+  followUpNeeded,
+  followUpTurn,
+  plannedTopics,
+  resumePoint,
+  transcribeAnswer,
+  turnsOf
+} from '../../shared/interview.ts';
 
 export default async function (req: Request) {
   try {
     const base44 = createClientFromRequest(req);
     const body = await req.json();
     const token = String(body.token || '').trim();
-    const index = Number(body.index) || 0;
     const fileUri = String(body.file_uri || '');
     if (!token || !fileUri) {
       return Response.json({ error: 'token and file_uri are required' }, { status: 400 });
@@ -24,7 +25,7 @@ export default async function (req: Request) {
     const applicant = found[0];
     if (!applicant) return Response.json({ error: 'Interview link not found' }, { status: 404 });
     if (applicant.mini_interview_status === 'completed') {
-      return Response.json({ ok: true, completed: true });
+      return Response.json({ ok: true, completed: true, turns: turnsOf(applicant, 'mini') });
     }
 
     const company = applicant.company_id
@@ -37,39 +38,48 @@ export default async function (req: Request) {
       ? await base44.asServiceRole.entities.Branch.get(applicant.branch_id).catch(() => null)
       : null;
 
-    const source =
-      company && Array.isArray(company.interview_questions) && company.interview_questions.length > 0
-        ? company.interview_questions
-        : DEFAULT_QUESTIONS;
-    const total = source.filter((q: any) => q && q.question).length || 1;
+    const topics = plannedTopics(company, 'mini');
+    const before = turnsOf(applicant, 'mini');
+    const pending = resumePoint(topics, before);
 
-    let transcript = '';
-    try {
-      const signed = await base44.asServiceRole.integrations.Core.CreateFileSignedUrl({
-        file_uri: fileUri,
-        expires_in: 900
-      });
-      const result = await base44.asServiceRole.integrations.Core.TranscribeAudio({
-        audio_url: signed.signed_url
-      });
-      transcript = typeof result === 'string' ? result : '';
-    } catch (error: any) {
-      console.error('transcription failed', error && error.message);
-    }
-
-    const responses = Array.isArray(applicant.mini_interview_responses)
-      ? [...applicant.mini_interview_responses]
-      : [];
-    responses[index] = {
-      question: body.question || (source[index] ? source[index].question : ''),
-      file_uri: fileUri,
-      transcript,
-      answered_at: new Date().toISOString()
+    // The question being answered is the one the interviewer is waiting on, worked out from the
+    // conversation itself, so a reload or a double tap can never record an answer twice or skip a
+    // topic.
+    const asked = pending || {
+      question: String(body.question || ''),
+      topic_index: Number(body.index) || 0,
+      kind: 'planned',
+      seconds: 60
     };
 
-    const last = index >= total - 1;
+    const transcript = await transcribeAnswer(base44, fileUri);
+    let turns = appendAnswer(before, {
+      question: asked.question,
+      kind: asked.kind,
+      topicIndex: asked.topic_index,
+      seconds: asked.seconds,
+      fileUri,
+      transcript
+    });
+
+    const topic = topics[asked.topic_index];
+    if (topic && followUpNeeded(turns, asked.topic_index, asked.kind, transcript)) {
+      const question = await followUpFor({
+        base44,
+        topic,
+        transcript,
+        jobTitle: job ? job.title : '',
+        candidateName: applicant.full_name,
+        asked: turns.filter((turn: any) => turn.role === 'interviewer').map((turn: any) => turn.question)
+      });
+      if (question) turns = [...turns, followUpTurn(question, asked.topic_index, asked.seconds)];
+    }
+
+    const next = resumePoint(topics, turns);
+    const last = !next;
+
     await base44.asServiceRole.entities.Applicant.update(applicant.id, {
-      mini_interview_responses: responses,
+      mini_interview_responses: turns,
       mini_interview_status: last ? 'completed' : 'sent',
       mini_interview_completed_at: last ? new Date().toISOString() : applicant.mini_interview_completed_at,
       ...(last ? { status: 'mini_interview' } : {})
@@ -87,10 +97,10 @@ export default async function (req: Request) {
             heading: 'A candidate finished their voice interview',
             brandColor: job ? job.brand_color : undefined,
             lines: [
-              `<b>${applicant.full_name}</b> answered all ${total} voice questions for ${
+              `<b>${applicant.full_name}</b> talked through all ${topics.length} topics for ${
                 job ? job.title : 'your role'
               }.`,
-              'Open the applicant in kworkmate to read the transcript and listen to the recording.'
+              'Open the applicant in kworkmate to read the conversation and listen to the recording.'
             ],
             footer: `${company ? company.name : ''} · kworkmate`
           })
@@ -98,7 +108,7 @@ export default async function (req: Request) {
       }
     }
 
-    return Response.json({ ok: true, completed: last, index });
+    return Response.json({ ok: true, completed: last, turns, next: next || null, transcript });
   } catch (error: any) {
     return Response.json({ error: error.message }, { status: 500 });
   }
