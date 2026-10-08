@@ -54,6 +54,35 @@ export default async function (req) {
       ? await base44.asServiceRole.entities.Company.get(employee.company_id).catch(() => null)
       : null;
 
+    // The employer's own questions: what was asked of this employee has to be answered before
+    // the form can be filed.
+    const asked = ((company && company.onboarding_questions) || []).filter(
+      (question) => question && question.visible !== false && String(question.label || '').trim()
+    );
+    const incomingAnswers = Array.isArray(body.extra_answers) ? body.extra_answers.slice(0, 30) : [];
+    const onboardingAnswers = asked.map((question) => {
+      const given = incomingAnswers.find((entry) => entry && entry.id === question.id) || {};
+      const answer = String(given.answer || '').trim();
+      const followUp = {};
+      if (question.type === 'yes_no' && question.follow_up && question.follow_up.when === answer) {
+        (question.follow_up.fields || []).forEach((field) => {
+          followUp[field] = String((given.follow_up || {})[field] || '').trim();
+        });
+      }
+      return { id: question.id, label: question.label, type: question.type || 'text', answer, follow_up: followUp };
+    });
+
+    for (const entry of onboardingAnswers) {
+      const question = asked.find((item) => item.id === entry.id) || {};
+      if (question.required !== false && !entry.answer) {
+        return Response.json({ error: `Please answer: ${question.label}` }, { status: 400 });
+      }
+      if (question.type === 'yes_no' && question.follow_up && question.follow_up.when === entry.answer) {
+        const missing = (question.follow_up.fields || []).find((field) => !entry.follow_up[field]);
+        if (missing) return Response.json({ error: `Please complete: ${missing}` }, { status: 400 });
+      }
+    }
+
     const incomingDocs = Array.isArray(body.docs) ? body.docs.slice(0, 10) : [];
     const existingDocs = Array.isArray(employee.docs) ? employee.docs : [];
     const keep = existingDocs.filter((d) => d && (d.type === 'resume' || d.uploaded_by === 'self'));
@@ -78,6 +107,7 @@ export default async function (req) {
       signed_at: signedAt,
       onboarding_status: 'completed',
       onboarding_submitted_at: signedAt,
+      onboarding_answers: onboardingAnswers,
       docs: [...keep, ...incomingDocs]
     });
 

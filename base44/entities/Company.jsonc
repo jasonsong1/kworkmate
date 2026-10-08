@@ -97,6 +97,12 @@
         "type": "object"
       }
     },
+    "onboarding_questions": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
     "package": {
       "type": "string"
     },

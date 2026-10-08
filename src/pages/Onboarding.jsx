@@ -14,7 +14,10 @@ import { RESIDENCY_OPTIONS, isDigits } from '@/lib/bh';
 import { buildContractPdf, buildSuperPdf, buildTfnPdf } from '@/lib/onboardingPdf';
 import { base44 } from '@/api/base44Client';
 
-const STEPS = ['Tax file number', 'Superannuation', 'Bank account', 'Sign & submit'];
+// The employer can add questions of their own: each one switched on becomes a page of its own,
+// always ahead of the signature the employee signs last.
+const BASE_STEPS = ['Tax file number', 'Superannuation', 'Bank account', 'Sign & submit'];
+const FIRST_QUESTION_STEP = BASE_STEPS.length - 1;
 
 export default function Onboarding() {
   const { token } = useParams();
@@ -42,6 +45,7 @@ export default function Onboarding() {
   });
   const [signature, setSignature] = useState('');
   const [declaration, setDeclaration] = useState(false);
+  const [answers, setAnswers] = useState({});
 
   useEffect(() => {
     const load = async () => {
@@ -57,7 +61,43 @@ export default function Onboarding() {
     load();
   }, [token]);
 
+  const questions = (data && data.onboarding_questions) || [];
+  const steps = [
+    ...BASE_STEPS.slice(0, FIRST_QUESTION_STEP),
+    ...questions.map((question) => question.label),
+    BASE_STEPS[BASE_STEPS.length - 1]
+  ];
+  const signStep = steps.length - 1;
+  const questionAt = (index) =>
+    index >= FIRST_QUESTION_STEP && index < signStep ? questions[index - FIRST_QUESTION_STEP] : null;
+  const currentQuestion = questionAt(step);
+  const given = (currentQuestion && answers[currentQuestion.id]) || {};
+  // The extra fields a yes/no question asks for are only there on the answer it names.
+  const followUpFields =
+    currentQuestion &&
+    currentQuestion.type === 'yes_no' &&
+    currentQuestion.follow_up &&
+    currentQuestion.follow_up.when === (given.answer || '')
+      ? currentQuestion.follow_up.fields || []
+      : [];
+
   const set = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
+  const setAnswer = (id, value) => setAnswers((prev) => ({ ...prev, [id]: { ...(prev[id] || {}), answer: value } }));
+  const setFollowUp = (id, field, value) =>
+    setAnswers((prev) => ({
+      ...prev,
+      [id]: { ...(prev[id] || {}), follow_up: { ...((prev[id] || {}).follow_up || {}), [field]: value } }
+    }));
+
+  const answerValid = (question) => {
+    const value = answers[question.id] || {};
+    if (question.required !== false && !String(value.answer || '').trim()) return false;
+    if (question.type === 'yes_no' && question.follow_up && question.follow_up.when === value.answer) {
+      const fields = question.follow_up.fields || [];
+      if (fields.some((field) => !String((value.follow_up || {})[field] || '').trim())) return false;
+    }
+    return true;
+  };
 
   const stepValid = useMemo(() => {
     if (step === 0) return form.tfn_pending || isDigits(form.tfn_number, 9);
@@ -68,8 +108,10 @@ export default function Onboarding() {
     if (step === 2) {
       return isDigits(form.bank_bsb, 6) && /^\d{5,10}$/.test(form.bank_account_number) && form.bank_account_name.trim().length > 1;
     }
+    const question = questionAt(step);
+    if (question) return answerValid(question);
     return Boolean(signature) && declaration;
-  }, [step, form, signature, declaration]);
+  }, [step, form, signature, declaration, answers, questions]);
 
   const next = () => {
     if (!stepValid) {
@@ -80,6 +122,8 @@ export default function Onboarding() {
           ? 'Choose the employer default fund or enter your own fund USI.'
           : step === 2
           ? 'BSB must be 6 digits, account number 5–10 digits, and the account name is required.'
+          : currentQuestion
+          ? 'Please answer this question before continuing.'
           : 'Please sign and accept the declaration.'
       );
       return;
@@ -152,6 +196,11 @@ export default function Onboarding() {
         },
         signature_file_uri: signatureUpload.file_uri,
         docs,
+        extra_answers: questions.map((question) => ({
+          id: question.id,
+          answer: (answers[question.id] || {}).answer || '',
+          follow_up: (answers[question.id] || {}).follow_up || {}
+        })),
         declaration_accepted: true
       });
 
@@ -223,11 +272,11 @@ export default function Onboarding() {
         <div className="mx-auto max-w-xl px-4 py-3">
           <div className="mb-1 flex items-center justify-between text-xs text-slate-500">
             <span>
-              Step {step + 1} of {STEPS.length} · {STEPS[step]}
+              Step {step + 1} of {steps.length} · {steps[step]}
             </span>
-            <span>{Math.round(((step + 1) / STEPS.length) * 100)}%</span>
+            <span>{Math.round(((step + 1) / steps.length) * 100)}%</span>
           </div>
-          <Progress value={((step + 1) / STEPS.length) * 100} className="h-1.5" />
+          <Progress value={((step + 1) / steps.length) * 100} className="h-1.5" />
         </div>
       </div>
 
@@ -371,7 +420,63 @@ export default function Onboarding() {
           </section>
         )}
 
-        {step === 3 && (
+        {currentQuestion && (
+          <section className="space-y-4 rounded-2xl border bg-white p-5 shadow-sm">
+            <h2 className="text-sm font-semibold">{currentQuestion.label}</h2>
+            {currentQuestion.type === 'yes_no' && (
+              <RadioGroup
+                value={given.answer || ''}
+                onValueChange={(value) => setAnswer(currentQuestion.id, value)}
+                className="space-y-3"
+              >
+                <div className="flex items-center gap-3 rounded-xl border p-3">
+                  <RadioGroupItem value="yes" id={`${currentQuestion.id}-yes`} />
+                  <label htmlFor={`${currentQuestion.id}-yes`} className="text-sm leading-snug">
+                    Yes
+                  </label>
+                </div>
+                <div className="flex items-center gap-3 rounded-xl border p-3">
+                  <RadioGroupItem value="no" id={`${currentQuestion.id}-no`} />
+                  <label htmlFor={`${currentQuestion.id}-no`} className="text-sm leading-snug">
+                    No
+                  </label>
+                </div>
+              </RadioGroup>
+            )}
+            {currentQuestion.type === 'select' && (
+              <Select value={given.answer || ''} onValueChange={(value) => setAnswer(currentQuestion.id, value)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Choose one" />
+                </SelectTrigger>
+                <SelectContent>
+                  {(currentQuestion.options || []).map((option) => (
+                    <SelectItem key={option} value={option}>
+                      {option}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+            {currentQuestion.type !== 'yes_no' && currentQuestion.type !== 'select' && (
+              <Input
+                value={given.answer || ''}
+                onChange={(event) => setAnswer(currentQuestion.id, event.target.value)}
+                placeholder="Your answer"
+              />
+            )}
+            {followUpFields.map((field) => (
+              <div key={field}>
+                <Label>{field}</Label>
+                <Input
+                  value={(given.follow_up || {})[field] || ''}
+                  onChange={(event) => setFollowUp(currentQuestion.id, field, event.target.value)}
+                />
+              </div>
+            ))}
+          </section>
+        )}
+
+        {step === signStep && (
           <section className="space-y-4 rounded-2xl border bg-white p-5 shadow-sm">
             <h2 className="text-sm font-semibold">Signature & declaration</h2>
             <div className="rounded-xl bg-slate-50 p-3 text-xs leading-relaxed text-slate-600">
@@ -415,7 +520,7 @@ export default function Onboarding() {
               <ArrowLeft className="mr-2 h-4 w-4" /> Back
             </Button>
           )}
-          {step < STEPS.length - 1 ? (
+          {step < signStep ? (
             <Button className="flex-1" onClick={next}>
               Continue <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
@@ -428,7 +533,7 @@ export default function Onboarding() {
         </div>
 
         <div className="flex justify-center gap-1.5">
-          {STEPS.map((label, index) => (
+          {steps.map((label, index) => (
             <Badge
               key={label}
               variant={index === step ? 'default' : 'secondary'}

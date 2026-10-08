@@ -30,6 +30,10 @@ export default async function (req) {
         status: employee.onboarding_status || 'pending'
       },
       branch: branch ? { name: branch.name, logo_url: branch.logo_url || '', brand_color: branch.brand_color || '#4338ca', address: [branch.address, branch.suburb, branch.state, branch.postcode].filter(Boolean).join(', ') } : null,
+      // Only the questions the employer switched on: each one is a page of its own.
+      onboarding_questions: ((company && company.onboarding_questions) || []).filter(
+        (question) => question && question.visible !== false && String(question.label || '').trim()
+      ),
       company: company
         ? {
             name: company.name,

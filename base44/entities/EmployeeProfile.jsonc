@@ -97,6 +97,12 @@
         "type": "object"
       }
     },
+    "onboarding_answers": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
     "tfn_number": {
       "type": "string"
     },

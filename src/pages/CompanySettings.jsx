@@ -5,6 +5,7 @@ import PageHeader from '@/components/PageHeader';
 import CompanyAdminsCard from '@/components/CompanyAdminsCard';
 import PackageCard from '@/components/package/PackageCard';
 import OnboardingDocsCard from '@/components/company/OnboardingDocsCard';
+import OnboardingQuestionsCard from '@/components/company/OnboardingQuestionsCard';
 import PayMultipliersCard, { payMultipliers } from '@/components/company/PayMultipliersCard';
 import PublicHolidayCard from '@/components/company/PublicHolidayCard';
 import CompanyRolesManager from '@/components/CompanyRolesManager';
@@ -216,8 +217,9 @@ export default function CompanySettings() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="docs">
+        <TabsContent value="docs" className="space-y-6">
           <OnboardingDocsCard />
+          <OnboardingQuestionsCard />
         </TabsContent>
 
         <TabsContent value="screening">
