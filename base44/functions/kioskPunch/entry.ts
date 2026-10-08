@@ -57,7 +57,9 @@ export default async function (req) {
         // The company's own clock-in QR design, so the store screen shows the same card the
         // manager saved in Template design.
         qr_design: (company && company.qr_design) || {},
-        date: today
+        date: today,
+        // The store's own clock, so the screen knows when its day has ended and redraws.
+        timezone: timezoneForBranch(branch)
       });
     }
 

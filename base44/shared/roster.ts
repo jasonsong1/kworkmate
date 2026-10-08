@@ -8,6 +8,10 @@
 //     and the minimum rest between shifts never broken;
 //  4. whatever nobody can take comes back as an open shift instead of being quietly dropped, so
 //     the screen can mark it and the manager decides.
+//
+// Re-planning a week keeps that week's saved and sent shifts exactly where they are: they count
+// against the day's headcount, so pressing the AI roster button again fills the gaps without ever
+// planning more people on a day than the store asked for.
 import { visaKey } from './visa.ts';
 
 const DAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
@@ -92,7 +96,7 @@ export async function buildDraft(base44, branch, weekStart) {
   const weekEnd = addDays(weekStart, 6);
   const fortnightStart = addDays(weekStart, -7);
 
-  const [settingPage, staffPage, subPage, earlierPage, leavePage] = await Promise.all([
+  const [settingPage, staffPage, subPage, earlierPage, leavePage, weekPage] = await Promise.all([
     base44.asServiceRole.entities.RosterSetting.filter({ branch_id: branch.id }, { limit: 1 }),
     base44.asServiceRole.entities.EmployeeProfile.filter({ branch_id: branch.id, status: 'active' }, { limit: 500 }),
     base44.asServiceRole.entities.AvailabilitySubmission.filter(
@@ -113,7 +117,15 @@ export async function buildDraft(base44, branch, weekStart) {
         end_date: { $gte: weekStart }
       },
       { limit: 500 }
-    )
+    ),
+    // Shifts this week that were already saved or sent are the manager's own decisions: they are
+    // counted against the day's demand and left where they are.
+    base44.asServiceRole.entities.Shift
+      .filter(
+        { branch_id: branch.id, date: { $gte: weekStart, $lte: weekEnd }, status: { $in: ['saved', 'published'] } },
+        { limit: 500 }
+      )
+      .catch(() => [])
   ]);
 
   const leaveRanges = rowsOf(leavePage)
@@ -145,6 +157,14 @@ export async function buildDraft(base44, branch, weekStart) {
   }
   const minRest = Number(setting.min_rest_hours) >= 0 ? Number(setting.min_rest_hours) : 10;
 
+  // What the week already holds, counted per day and position.
+  const keptShifts = rowsOf(weekPage).filter((shift) => shift && shift.employee_email);
+  const keptByDayPosition = {};
+  for (const shift of keptShifts) {
+    const key = `${String(shift.date || '').slice(0, 10)}|${lower(shift.position)}`;
+    keptByDayPosition[key] = (keptByDayPosition[key] || 0) + 1;
+  }
+
   // The people the employer pinned to a weekday are placed first, whatever their submitted
   // availability says, and the rest of that day's headcount is filled around them.
   const fixedByDay = {};
@@ -170,6 +190,21 @@ export async function buildDraft(base44, branch, weekStart) {
   const intervals = {};
   // A person the employer pinned to a day is not planned again on that day.
   const pinnedPlaced = {};
+
+  // Somebody already on a saved or sent shift in this week is counted in, and is not planned
+  // again on that day.
+  for (const shift of keptShifts) {
+    const date = String(shift.date || '').slice(0, 10);
+    const start = toMin(shift.start_time);
+    const end = toMin(shift.end_time);
+    assignedMinutes[shift.employee_email] = (assignedMinutes[shift.employee_email] || 0) + lengthOf(shift);
+    pinnedPlaced[`${shift.employee_email}|${date}`] = true;
+    if (start === null || end === null || end <= start) continue;
+    intervals[shift.employee_email] = [
+      ...(intervals[shift.employee_email] || []),
+      { start: absMinutes(date, start), end: absMinutes(date, end) }
+    ];
+  }
   const draft = [];
   const unassigned = [];
   let leaveSkips = 0;
@@ -192,7 +227,9 @@ export async function buildDraft(base44, branch, weekStart) {
     const date = addDays(weekStart, dayIndex);
     const dayKey = DAY_KEYS[dayIndex];
     const lengthMin = end - start;
-    const need = Number(req.count) || 0;
+    // Saved and sent shifts already cover part of what this day and position needs.
+    const already = keptByDayPosition[`${date}|${lower(req.position)}`] || 0;
+    const need = Math.max(0, (Number(req.count) || 0) - already);
 
     const candidates = [];
     for (const person of staff) {

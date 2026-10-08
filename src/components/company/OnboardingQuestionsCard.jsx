@@ -10,6 +10,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { useI18n } from '@/lib/i18n';
 import { useWorkspace } from '@/lib/WorkspaceContext';
 import { DEFAULT_ONBOARDING_QUESTIONS } from '@/lib/onboardingDefaults';
+import { DATE_FORMATS } from '@/lib/onboardingDates';
 import { base44 } from '@/api/base44Client';
 
 const TYPE_KEYS = {
@@ -35,7 +36,7 @@ function validationOf(question) {
     return { digits: Number(question.digits) > 0 ? Number(question.digits) : 0 };
   }
   if (question.type === 'date') {
-    return { format: question.dateFormat === 'year' ? 'year' : 'date' };
+    return { format: DATE_FORMATS.includes(question.dateFormat) ? question.dateFormat : DATE_FORMATS[0] };
   }
   if (question.type === 'upload') {
     return { file_types: splitList(question.fileTypesText) };
@@ -57,7 +58,7 @@ function blankQuestion(page) {
     optionsText: '',
     fieldsText: '',
     digits: '',
-    dateFormat: 'date',
+    dateFormat: DATE_FORMATS[0],
     fileTypesText: ''
   };
 }
@@ -77,7 +78,7 @@ function toDraft(questions) {
       optionsText: (question.options || []).join(', '),
       fieldsText: ((question.follow_up && question.follow_up.fields) || []).join(', '),
       digits: Number(validation.digits) > 0 ? String(validation.digits) : '',
-      dateFormat: validation.format === 'year' ? 'year' : 'date',
+      dateFormat: DATE_FORMATS.includes(validation.format) ? validation.format : DATE_FORMATS[0],
       fileTypesText: (validation.file_types || []).join(', ')
     };
   });
@@ -282,8 +283,11 @@ export default function OnboardingQuestionsCard() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="date">{t('onboardingQ.dateFull')}</SelectItem>
-                      <SelectItem value="year">{t('onboardingQ.dateYear')}</SelectItem>
+                      {DATE_FORMATS.map((format) => (
+                        <SelectItem key={format} value={format}>
+                          {format}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>

@@ -14,7 +14,7 @@ import { useWorkspace } from '@/lib/WorkspaceContext';
 import { usePermissions } from '@/lib/permissions';
 import { todayIso } from '@/lib/bh';
 import { dayRangeForState, formatTimeInZone, stateFromBranch } from '@/lib/holidays';
-import { kioskUrl } from '@/lib/kioskLink';
+import { kioskUrl, todayFor } from '@/lib/kioskLink';
 import { base44 } from '@/api/base44Client';
 
 const ALL = 'all';
@@ -130,7 +130,7 @@ export default function Attendance() {
           
             <Button
               variant="outline"
-              onClick={() => window.open(kioskUrl(activeBranch.id, todayIso()), '_blank', 'noopener')}
+              onClick={() => window.open(kioskUrl(activeBranch.id, todayFor(activeBranch)), '_blank', 'noopener')}
               disabled={!activeBranch || !canEdit('attendance')}>
               <QrCode className="mr-2 h-4 w-4" /> {t('attendance.qrButton')}
             </Button>

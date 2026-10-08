@@ -13,7 +13,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { useI18n } from '@/lib/i18n';
 import { useWorkspace } from '@/lib/WorkspaceContext';
 import { emptyAvailability, money, todayIso } from '@/lib/bh';
-import { kioskUrl } from '@/lib/kioskLink';
+import { kioskUrl, todayFor } from '@/lib/kioskLink';
 import { base44 } from '@/api/base44Client';
 
 export default function StaffHome() {
@@ -78,9 +78,10 @@ export default function StaffHome() {
     toast({ title: t('staff.availabilitySaved') });
   };
 
-  // The store keeps this screen open on a device; the phone camera reads the code from it.
+  // The store keeps this screen open on a device; the phone camera reads the code from it. The
+  // day on the code is the store's own day, so it is right either side of midnight.
   const openQr = () => {
-    if (activeBranch) window.open(kioskUrl(activeBranch.id, todayIso()), '_blank', 'noopener');
+    if (activeBranch) window.open(kioskUrl(activeBranch.id, todayFor(activeBranch)), '_blank', 'noopener');
   };
 
   return (

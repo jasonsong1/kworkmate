@@ -109,6 +109,18 @@ export default function Roster() {
     await load();
   };
 
+  // A saved week is locked so a stray drag cannot change it. Cancel puts it back into draft,
+  // where it can be moved again.
+  const cancelSave = async () => {
+    if (!activeBranch) return;
+    await base44.entities.Shift.updateMany(
+      { branch_id: activeBranch.id, date: { $gte: weekStart, $lte: weekEnd }, status: 'saved' },
+      { $set: { status: 'draft' } }
+    );
+    toast({ title: t('roster.cancelled') });
+    await load();
+  };
+
   const sendWeek = async () => {
     if (!activeBranch) return;
     setSending(true);
@@ -175,7 +187,8 @@ export default function Roster() {
   const moveShift = async (email, date) => {
     const shift = shifts.find((s) => s.id === dragId);
     setDragId('');
-    if (!shift || (shift.employee_email === email && shift.date === date)) return;
+    // Only a draft moves: a saved or sent week stays as it was agreed.
+    if (!shift || shift.status !== 'draft' || (shift.employee_email === email && shift.date === date)) return;
     if (onLeaveFor(email, date)) {
       toast({ title: t('roster.onLeaveBlocked'), variant: 'destructive' });
       return;
@@ -215,6 +228,8 @@ export default function Roster() {
 
   const shiftsFor = (email, date) => shifts.filter((s) => s.employee_email === email && s.date === date);
   const publishedCount = shifts.filter((s) => s.status === 'published').length;
+  const draftCount = shifts.filter((s) => s.status === 'draft').length;
+  const savedCount = shifts.filter((s) => s.status === 'saved').length;
   // What the last build could not fill on one day, so the day itself carries the warning.
   const missingOn = (date) =>
     unassigned.filter((item) => item.date === date).reduce((sum, item) => sum + (Number(item.missing) || 0), 0);
@@ -268,9 +283,18 @@ export default function Roster() {
             >
               <Plus className="mr-2 h-4 w-4" /> {t('roster.addShift')}
             </Button>
-            <Button variant="outline" onClick={saveWeek} disabled={!activeBranch || shifts.length === 0 || !canManageRoster}>
+            <Button
+              variant="outline"
+              onClick={saveWeek}
+              disabled={!activeBranch || draftCount === 0 || !canManageRoster}
+            >
               {t('roster.save')}
             </Button>
+            {savedCount > 0 && (
+              <Button variant="outline" onClick={cancelSave} disabled={!activeBranch || !canManageRoster}>
+                {t('roster.cancelSaved')}
+              </Button>
+            )}
             <Button onClick={sendWeek} disabled={!activeBranch || shifts.length === 0 || sending || !canManageRoster}>
               {sending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
               {t('roster.send')}
@@ -299,6 +323,7 @@ export default function Roster() {
                 <>
                   <p className="mb-4 text-xs text-muted-foreground">
                     {publishedCount} of {shifts.length} shifts published for this week
+                    {draftCount > 0 ? ` · ${t('roster.dragHint')}` : ''}
                   </p>
                   <div className="overflow-x-auto">
                     <table className="w-full min-w-[900px] border-separate border-spacing-0 text-sm">
@@ -346,10 +371,13 @@ export default function Roster() {
                                   {shiftsFor(employee.user_email, day.date).map((shift) => (
                                     <div
                                       key={shift.id}
-                                      draggable={canManageRoster}
+                                      draggable={canManageRoster && shift.status === 'draft'}
                                       onDragStart={() => setDragId(shift.id)}
                                       onDragEnd={() => setDragId('')}
-                                      className={`group cursor-grab rounded-lg border px-2 py-1.5 text-xs ${
+                                      title={shift.status === 'draft' ? t('roster.dragHint') : undefined}
+                                      className={`group rounded-lg border px-2 py-1.5 text-xs ${
+                                        shift.status === 'draft' ? 'cursor-grab' : 'cursor-default'
+                                      } ${
                                         shift.status === 'published'
                                           ? 'border-emerald-200 bg-emerald-50 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-100'
                                           : shift.status === 'saved'

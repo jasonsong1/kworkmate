@@ -41,6 +41,8 @@ export default function Kiosk() {
   const [result, setResult] = useState(null);
   const [error, setError] = useState('');
   const [me, setMe] = useState(null);
+  // Bumped when the store's own day turns over, so the card is drawn again for the new day.
+  const [dayRef, setDayRef] = useState(0);
 
   useEffect(() => {
     const load = async () => {
@@ -57,7 +59,18 @@ export default function Kiosk() {
       if (authed) setMe(await base44.auth.me().catch(() => null));
     };
     load();
-  }, [token]);
+  }, [token, dayRef]);
+
+  // A tablet left on the counter runs for days: the code has to roll over by itself at the
+  // store's own midnight, so the day is checked against the store's clock, not the viewer's.
+  useEffect(() => {
+    if (!info || !info.timezone) return undefined;
+    const check = setInterval(() => {
+      const today = new Date().toLocaleDateString('en-CA', { timeZone: info.timezone });
+      if (today !== info.date) setDayRef((value) => value + 1);
+    }, 30000);
+    return () => clearInterval(check);
+  }, [info]);
 
   const changeNumber = (value) => {
     setResult(null);

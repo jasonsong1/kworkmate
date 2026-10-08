@@ -10,6 +10,7 @@ import { Progress } from '@/components/ui/progress';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { buildContractPdf } from '@/lib/onboardingPdf';
+import { dateFormatOf, maskDate, validDate } from '@/lib/onboardingDates';
 import { base44 } from '@/api/base44Client';
 
 // The onboarding form is the employer's own: their questions grouped into pages, then the
@@ -125,10 +126,7 @@ export default function Onboarding() {
       if (!/^\d+$/.test(answer)) return false;
       if (limit > 0 && answer.length > limit) return false;
     }
-    if (answer && question.type === 'date') {
-      const format = validationOf(question).format === 'year' ? 'year' : 'date';
-      if (format === 'year' ? !/^\d{4}$/.test(answer) : !/^\d{4}-\d{2}-\d{2}$/.test(answer)) return false;
-    }
+    if (answer && question.type === 'date' && !validDate(answer, dateFormatOf(question))) return false;
     if (question.type === 'yes_no' && question.follow_up && question.follow_up.when === value.answer) {
       const fields = question.follow_up.fields || [];
       if (fields.some((field) => !String((value.follow_up || {})[field] || '').trim())) return false;
@@ -375,18 +373,20 @@ export default function Onboarding() {
                   )}
 
                   {question.type === 'date' &&
-                  (validationOf(question).format === 'year' ? (
-                    <Input
-                      inputMode="numeric"
-                      value={value.answer || ''}
-                      onChange={(event) => setAnswer(question.id, digitsOnly(event.target.value, 4))}
-                      placeholder="YYYY"
-                    />
-                  ) : (
+                  (dateFormatOf(question) === 'YYYY-MM-DD' ? (
                     <Input
                       type="date"
                       value={value.answer || ''}
                       onChange={(event) => setAnswer(question.id, event.target.value)}
+                    />
+                  ) : (
+                    <Input
+                      inputMode="numeric"
+                      value={value.answer || ''}
+                      onChange={(event) =>
+                        setAnswer(question.id, maskDate(event.target.value, dateFormatOf(question)))
+                      }
+                      placeholder={dateFormatOf(question).toLowerCase()}
                     />
                   ))}
 

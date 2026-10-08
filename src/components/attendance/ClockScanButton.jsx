@@ -32,8 +32,9 @@ function currentPosition() {
   });
 }
 
-// One button holds the whole attendance record: 출근 and 퇴근 choose which punch the scan is for,
-// and 기록 opens the camera. Nothing is recorded until the store's own code is read.
+// One button holds the whole attendance record: 출근 and 퇴근 choose which punch the scan is for
+// and leave the menu open so the scan can follow straight after, and 스캔 opens the camera.
+// Nothing is recorded until the store's own code is read.
 export default function ClockScanButton({ onRecorded }) {
   const { t } = useI18n();
   const { me } = useWorkspace();
@@ -110,12 +111,24 @@ export default function ClockScanButton({ onRecorded }) {
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-52">
           <DropdownMenuLabel>{t('clock.records')}</DropdownMenuLabel>
-          <DropdownMenuItem onSelect={() => setMode('in')}>
+          {/* The choice stays on screen: picking a punch does not close the menu, so the scan
+              follows it in one go. */}
+          <DropdownMenuItem
+            onSelect={(event) => {
+              event.preventDefault();
+              setMode('in');
+            }}
+          >
             <LogIn className="mr-2 h-4 w-4" />
             {t('attendance.clockIn')}
             {mode === 'in' && <Check className="ml-auto h-3.5 w-3.5" />}
           </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => setMode('out')}>
+          <DropdownMenuItem
+            onSelect={(event) => {
+              event.preventDefault();
+              setMode('out');
+            }}
+          >
             <LogOut className="mr-2 h-4 w-4" />
             {t('attendance.clockOut')}
             {mode === 'out' && <Check className="ml-auto h-3.5 w-3.5" />}
@@ -123,7 +136,7 @@ export default function ClockScanButton({ onRecorded }) {
           <DropdownMenuSeparator />
           <DropdownMenuItem onSelect={() => setOpen(true)}>
             <ScanLine className="mr-2 h-4 w-4" />
-            {t('clock.record')}
+            {t('clock.scan')}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
