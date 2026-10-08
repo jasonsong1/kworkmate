@@ -144,5 +144,38 @@ export const DEFAULT_ONBOARDING_QUESTIONS = [
     page_title: '',
     options: [],
     follow_up: null
+  },
+  {
+    id: 'default_id_doc',
+    label: 'Photo ID (passport or driver licence)',
+    type: 'upload',
+    required: true,
+    visible: true,
+    page: 5,
+    page_title: 'Photo ID',
+    options: [],
+    follow_up: null
+  },
+  {
+    id: 'default_visa_doc',
+    label: 'Visa documents',
+    type: 'upload',
+    required: false,
+    visible: true,
+    page: 6,
+    page_title: 'Visa documents',
+    options: [],
+    follow_up: null
+  },
+  {
+    id: 'default_rsa_doc',
+    label: 'RSA certificate',
+    type: 'upload',
+    required: false,
+    visible: true,
+    page: 7,
+    page_title: 'RSA certificate',
+    options: [],
+    follow_up: null
   }
 ];

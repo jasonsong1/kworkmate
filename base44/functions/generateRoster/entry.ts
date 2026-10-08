@@ -1,6 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.52';
 import { weeklyHourCap } from '../../shared/visa.ts';
-import { resolveCaller } from '../../shared/kwAuth.ts';
+import { lower, resolveCaller } from '../../shared/kwAuth.ts';
 
 const DAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
 
@@ -100,6 +100,17 @@ export default async function (req) {
     }
     const minRest = Number(setting.min_rest_hours) >= 0 ? Number(setting.min_rest_hours) : 10;
 
+    // The people the employer pinned to a weekday are placed first, whatever their submitted
+    // availability says, and the rest of that day's headcount is filled around them.
+    const fixedByDay = {};
+    for (const row of setting && Array.isArray(setting.fixed_staff) ? setting.fixed_staff : []) {
+      const day = Number(row && row.day);
+      const email = lower(row && row.email);
+      if (!Number.isInteger(day) || day < 0 || day > 6 || !email) continue;
+      fixedByDay[day] = fixedByDay[day] || new Set();
+      fixedByDay[day].add(email);
+    }
+
     // Latest submitted availability per person wins.
     const availByEmail = {};
     for (const sub of rowsOf(subPage)) {
@@ -148,8 +159,11 @@ export default async function (req) {
           continue;
         }
 
+        const fixedHere = Boolean(fixedByDay[dayIndex] && fixedByDay[dayIndex].has(lower(email)));
+        // A fixed placement is the employer's own instruction, so it does not wait on a submitted
+        // availability window; everyone else has to be free for the whole shift.
         const window = availableWindow(availByEmail[email], dayKey);
-        if (!window || window.from > start || window.to < end) continue;
+        if (!fixedHere && (!window || window.from > start || window.to < end)) continue;
 
         const cap = weeklyHourCap(person.visa_type);
         if (cap !== null && (assignedMinutes[email] || 0) + lengthMin > cap * 60) continue;
@@ -167,12 +181,22 @@ export default async function (req) {
         }
         if (!allowed) continue;
 
-        candidates.push({ email, name: person.full_name, used: assignedMinutes[email] || 0, primary: person.position === req.position });
+        candidates.push({
+          email,
+          name: person.full_name,
+          used: assignedMinutes[email] || 0,
+          primary: person.position === req.position,
+          fixed: fixedHere
+        });
       }
 
-      // Fairness first: the people with the fewest hours so far, then their main position.
+      // The pinned people come first, then fairness — fewest hours so far — and then main position.
       candidates.sort(
-        (a, b) => a.used - b.used || (b.primary ? 1 : 0) - (a.primary ? 1 : 0) || a.email.localeCompare(b.email)
+        (a, b) =>
+          (b.fixed ? 1 : 0) - (a.fixed ? 1 : 0) ||
+          a.used - b.used ||
+          (b.primary ? 1 : 0) - (a.primary ? 1 : 0) ||
+          a.email.localeCompare(b.email)
       );
 
       let filled = 0;

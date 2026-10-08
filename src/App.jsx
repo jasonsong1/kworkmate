@@ -14,6 +14,7 @@ import Login from '@/pages/Login';
 import Register from '@/pages/Register';
 import ForgotPassword from '@/pages/ForgotPassword';
 import ResetPassword from '@/pages/ResetPassword';
+import PasswordReset from '@/pages/PasswordReset';
 import Home from '@/pages/Home';
 import Branches from '@/pages/Branches';
 import PropertySetup from '@/pages/PropertySetup';
@@ -42,7 +43,7 @@ import Kiosk from '@/pages/Kiosk';
 
 // Paths that render for a visitor who is not signed in: the applicant and onboarding surfaces,
 // plus this app's own sign-in pages, which must never be swapped for a platform redirect.
-const PUBLIC_PATHS = ['/apply/', '/interview/', '/onboarding/', '/mini-interview/', '/video-interview/', '/kiosk/', '/login', '/forgot-password', '/reset-password'];
+const PUBLIC_PATHS = ['/apply/', '/interview/', '/onboarding/', '/mini-interview/', '/video-interview/', '/kiosk/', '/login', '/forgot-password', '/reset-password', '/password-reset'];
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
@@ -84,6 +85,7 @@ const AuthenticatedApp = () => {
       <Route path="/register" element={<Register />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/reset-password" element={<ResetPassword />} />
+      <Route path="/password-reset" element={<PasswordReset />} />
 
       {/* Back office */}
       <Route element={<ProtectedRoute unauthenticatedElement={<Navigate to="/login" replace />} />}>

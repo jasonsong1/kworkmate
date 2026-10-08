@@ -125,23 +125,30 @@ export default function Roster() {
   const autoBuild = async () => {
     if (!activeBranch) return;
     setGenerating(true);
-    const response = await base44.functions.invoke('generateRoster', {
-      branch_id: activeBranch.id,
-      week_start: weekStart
-    });
-    setGenerating(false);
-    const data = response.data || {};
-    if (data.error === 'no_settings') {
-      toast({ title: t('roster.buildNoSettings'), variant: 'destructive' });
-      return;
+    // A refusal on the way — a failed request as much as an error in the answer — stops the
+    // button turning instead of leaving the screen saying "building" for ever.
+    try {
+      const response = await base44.functions.invoke('generateRoster', {
+        branch_id: activeBranch.id,
+        week_start: weekStart
+      });
+      const data = response.data || {};
+      if (data.error === 'no_settings') {
+        toast({ title: t('roster.buildNoSettings'), variant: 'destructive' });
+        return;
+      }
+      if (data.error) {
+        toast({ title: data.error, variant: 'destructive' });
+        return;
+      }
+      const unfilled = (data.unassigned || []).reduce((sum, item) => sum + (item.missing || 0), 0);
+      toast({ title: t('roster.built').replace('{assigned}', data.assigned || 0).replace('{unfilled}', unfilled) });
+      await load();
+    } catch (error) {
+      toast({ title: (error && error.message) || t('roster.buildFailed'), variant: 'destructive' });
+    } finally {
+      setGenerating(false);
     }
-    if (data.error) {
-      toast({ title: data.error, variant: 'destructive' });
-      return;
-    }
-    const unfilled = (data.unassigned || []).reduce((sum, item) => sum + (item.missing || 0), 0);
-    toast({ title: t('roster.built').replace('{assigned}', data.assigned || 0).replace('{unfilled}', unfilled) });
-    await load();
   };
 
   const moveShift = async (email, date) => {

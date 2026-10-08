@@ -20,6 +20,12 @@
         "type": "object"
       }
     },
+    "fixed_staff": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
     "min_rest_hours": {
       "type": "number",
       "default": 10

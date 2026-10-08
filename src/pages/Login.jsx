@@ -116,11 +116,10 @@ export default function Login() {
         <div className="space-y-2">
           <div className="flex items-center justify-between">
             <Label htmlFor="password">Password</Label>
-            {!employeeDoor && (
-              <Link to="/forgot-password" className="text-xs text-primary hover:underline">
-                Forgot password?
-              </Link>
-            )}
+            {/* Either door can be reset the same way: the address the employer has on file. */}
+            <Link to="/password-reset" className="text-xs text-primary hover:underline">
+              Forgot password?
+            </Link>
           </div>
           <div className="relative">
             <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" aria-hidden="true" />

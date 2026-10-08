@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { AlertCircle, ArrowLeft, ArrowRight, CheckCircle2, Loader2, ShieldCheck } from 'lucide-react';
+import { AlertCircle, ArrowLeft, ArrowRight, CheckCircle2, Loader2, Paperclip, ShieldCheck } from 'lucide-react';
 import SignaturePad from '@/components/onboarding/SignaturePad';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -27,6 +27,10 @@ export default function Onboarding() {
   const [signature, setSignature] = useState('');
   const [declaration, setDeclaration] = useState(false);
   const [answers, setAnswers] = useState({});
+  // Documents the employer asked for: each one is uploaded as soon as it is chosen and the
+  // answer holds the file's name, so a required upload is answered by attaching it.
+  const [uploads, setUploads] = useState({});
+  const [uploadingId, setUploadingId] = useState('');
 
   useEffect(() => {
     const load = async () => {
@@ -74,6 +78,23 @@ export default function Onboarding() {
       ...prev,
       [id]: { ...(prev[id] || {}), follow_up: { ...((prev[id] || {}).follow_up || {}), [field]: value } }
     }));
+
+  // A document the employer asked for is uploaded the moment it is chosen, so the answer is
+  // settled long before the form is submitted.
+  const chooseFile = async (question, file) => {
+    if (!file) return;
+    setUploadingId(question.id);
+    setError('');
+    try {
+      const { file_uri } = await base44.integrations.Core.UploadPrivateFile({ file });
+      setUploads((prev) => ({ ...prev, [question.id]: { file_uri, name: file.name } }));
+      setAnswer(question.id, file.name);
+    } catch (err) {
+      setError('The file could not be uploaded. Please try again.');
+    } finally {
+      setUploadingId('');
+    }
+  };
 
   const questionValid = (question) => {
     const value = answers[question.id] || {};
@@ -124,8 +145,20 @@ export default function Onboarding() {
       });
 
       const now = new Date().toISOString();
+      // The documents the employer asked for are filed beside the signed contract, so they land
+      // in the employee's own document folder.
+      const uploadedDocs = questions
+        .filter((question) => question.type === 'upload' && uploads[question.id])
+        .map((question) => ({
+          name: `${question.label} (${uploads[question.id].name})`,
+          type: 'onboarding',
+          file_uri: uploads[question.id].file_uri,
+          created_at: now,
+          uploaded_by: 'self'
+        }));
       const docs = [
-        { name: 'Employment contract', type: 'contract', file_uri: contractUpload.file_uri, created_at: now }
+        { name: 'Employment contract', type: 'contract', file_uri: contractUpload.file_uri, created_at: now },
+        ...uploadedDocs
       ];
 
       const response = await base44.functions.invoke('submitOnboarding', {
@@ -266,12 +299,37 @@ export default function Onboarding() {
                     </Select>
                   )}
 
-                  {question.type !== 'yes_no' && question.type !== 'select' && (
-                    <Input
-                      value={value.answer || ''}
-                      onChange={(event) => setAnswer(question.id, event.target.value)}
-                      placeholder="Your answer"
+                  {question.type === 'upload' && (
+                  <label className="flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-dashed border-slate-300 p-3 text-sm">
+                    <span className="flex min-w-0 items-center gap-2 text-slate-600">
+                      {uploadingId === question.id ? (
+                        <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
+                      ) : (
+                        <Paperclip className="h-4 w-4 shrink-0" />
+                      )}
+                      <span className="truncate">
+                        {uploadingId === question.id
+                          ? 'Uploading…'
+                          : uploads[question.id]
+                            ? uploads[question.id].name
+                            : 'Choose a file'}
+                      </span>
+                    </span>
+                    <span className="shrink-0 text-xs font-medium text-primary">Browse</span>
+                    <input
+                      type="file"
+                      className="hidden"
+                      onChange={(event) => chooseFile(question, event.target.files && event.target.files[0])}
                     />
+                  </label>
+                  )}
+
+                  {question.type !== 'yes_no' && question.type !== 'select' && question.type !== 'upload' && (
+                  <Input
+                    value={value.answer || ''}
+                    onChange={(event) => setAnswer(question.id, event.target.value)}
+                    placeholder="Your answer"
+                  />
                   )}
 
                   {fields.map((field) => (

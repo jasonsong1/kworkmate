@@ -16,9 +16,11 @@ const DEFAULT_SHIFTS = [
 ];
 
 const cellKey = (shiftKey, day, position) => `${shiftKey}::${day}::${position}`;
+// Monday is day 0 in the saved requirements, which is where the day keys start.
+const dayLabel = (dayIndex, t) => t(`day.${(dayIndex + 1) % 7}`);
 
-// The store's shift patterns and how many people it needs for each position, day by day.
-// The auto-builder reads this to place the week.
+// The store's shift patterns, how many people it needs for each position day by day, and the
+// people the employer always wants on a given day. The auto-builder reads all of it.
 export default function RosterSettingsDialog({ open, onOpenChange, branch, onSaved }) {
   const { t } = useI18n();
   const { company } = useWorkspace();
@@ -26,6 +28,8 @@ export default function RosterSettingsDialog({ open, onOpenChange, branch, onSav
   const [settingId, setSettingId] = useState('');
   const [shifts, setShifts] = useState(DEFAULT_SHIFTS);
   const [counts, setCounts] = useState({});
+  const [fixed, setFixed] = useState({});
+  const [staff, setStaff] = useState([]);
   const [minRest, setMinRest] = useState(10);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -37,8 +41,14 @@ export default function RosterSettingsDialog({ open, onOpenChange, branch, onSav
     let cancelled = false;
     setLoading(true);
     const load = async () => {
-      const page = await base44.entities.RosterSetting.filter({ branch_id: branch.id }, { limit: 1 });
+      const [page, staffPage] = await Promise.all([
+        base44.entities.RosterSetting.filter({ branch_id: branch.id }, { limit: 1 }),
+        base44.entities.EmployeeProfile
+          .filter({ branch_id: branch.id, status: 'active' }, { sort: 'full_name', limit: 200 })
+          .catch(() => ({ items: [] }))
+      ]);
       if (cancelled) return;
+      setStaff(staffPage.items || []);
       const found = (page.items || [])[0];
       if (found) {
         setSettingId(found.id);
@@ -49,10 +59,18 @@ export default function RosterSettingsDialog({ open, onOpenChange, branch, onSav
           next[cellKey(req.shift_key, req.day, req.position)] = req.count;
         });
         setCounts(next);
+        const pinned = {};
+        (found.fixed_staff || []).forEach((row) => {
+          const day = Number(row.day);
+          if (!Number.isInteger(day) || !row.email) return;
+          pinned[day] = [...(pinned[day] || []), row.email];
+        });
+        setFixed(pinned);
       } else {
         setSettingId('');
         setShifts(DEFAULT_SHIFTS);
         setCounts({});
+        setFixed({});
         setMinRest(10);
       }
       setLoading(false);
@@ -70,6 +88,13 @@ export default function RosterSettingsDialog({ open, onOpenChange, branch, onSav
   const setCount = (shiftKey, day, position, value) =>
     setCounts((prev) => ({ ...prev, [cellKey(shiftKey, day, position)]: value }));
 
+  const toggleFixed = (day, email) =>
+    setFixed((prev) => {
+      const chosen = prev[day] || [];
+      const next = chosen.includes(email) ? chosen.filter((item) => item !== email) : [...chosen, email];
+      return { ...prev, [day]: next };
+    });
+
   const save = async () => {
     if (!branch) return;
     setSaving(true);
@@ -82,11 +107,19 @@ export default function RosterSettingsDialog({ open, onOpenChange, branch, onSav
         });
       }
     });
+    const fixedStaff = [];
+    Object.entries(fixed).forEach(([day, emails]) => {
+      (emails || []).forEach((email) => {
+        const person = staff.find((row) => row.user_email === email);
+        fixedStaff.push({ day: Number(day), email, name: person ? person.full_name : '' });
+      });
+    });
     const payload = {
       company_id: branch.company_id,
       branch_id: branch.id,
       shifts,
       requirements,
+      fixed_staff: fixedStaff,
       min_rest_hours: Number(minRest) || 0
     };
     if (settingId) await base44.entities.RosterSetting.update(settingId, payload);
@@ -103,7 +136,6 @@ export default function RosterSettingsDialog({ open, onOpenChange, branch, onSav
         <DialogHeader>
           <DialogTitle>{t('roster.settings')}</DialogTitle>
         </DialogHeader>
-        <p className="text-sm text-muted-foreground">{t('roster.settingsHint')}</p>
 
         {loading ? (
           <p className="py-8 text-center text-sm text-muted-foreground">
@@ -160,7 +192,6 @@ export default function RosterSettingsDialog({ open, onOpenChange, branch, onSav
             <div className="space-y-4">
               <div>
                 <Label>{t('roster.headcount')}</Label>
-                <p className="mt-1 text-xs text-muted-foreground">{t('roster.headcountHint')}</p>
               </div>
               {positions.length === 0 ? (
                 <p className="rounded-lg border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
@@ -181,7 +212,7 @@ export default function RosterSettingsDialog({ open, onOpenChange, branch, onSav
                               key={day.key}
                               className="px-1 py-1.5 text-center text-xs font-medium text-muted-foreground"
                             >
-                              {t(`day.${dayIndex + 1}`)}
+                              {dayLabel(dayIndex, t)}
                             </th>
                           ))}
                         </tr>
@@ -205,6 +236,45 @@ export default function RosterSettingsDialog({ open, onOpenChange, branch, onSav
                         ))}
                       </tbody>
                     </table>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* The people who are always on a given day: the builder places them first and fills
+                the rest of that day's headcount around them. */}
+            <div className="space-y-3">
+              <div>
+                <Label>{t('roster.fixedTitle')}</Label>
+                <p className="mt-1 text-xs text-muted-foreground">{t('roster.fixedHint')}</p>
+              </div>
+              {staff.length === 0 ? (
+                <p className="rounded-lg border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
+                  {t('common.none')}
+                </p>
+              ) : (
+                DAYS.map((day, dayIndex) => (
+                  <div key={day.key} className="rounded-xl border p-3">
+                    <p className="mb-2 text-xs font-medium text-muted-foreground">{dayLabel(dayIndex, t)}</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {staff.map((person) => {
+                        const on = (fixed[dayIndex] || []).includes(person.user_email);
+                        return (
+                          <button
+                            key={person.id}
+                            type="button"
+                            onClick={() => toggleFixed(dayIndex, person.user_email)}
+                            className={
+                              on
+                                ? 'rounded-full border border-primary bg-primary/10 px-3 py-1 text-xs font-medium text-primary'
+                                : 'rounded-full border px-3 py-1 text-xs text-muted-foreground hover:bg-muted'
+                            }
+                          >
+                            {person.full_name}
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
                 ))
               )}

@@ -12,7 +12,13 @@ import { useWorkspace } from '@/lib/WorkspaceContext';
 import { DEFAULT_ONBOARDING_QUESTIONS } from '@/lib/onboardingDefaults';
 import { base44 } from '@/api/base44Client';
 
-const TYPE_KEYS = { text: 'onboardingQ.typeText', yes_no: 'onboardingQ.typeYesNo', select: 'onboardingQ.typeSelect' };
+const TYPE_KEYS = {
+  text: 'onboardingQ.typeText',
+  yes_no: 'onboardingQ.typeYesNo',
+  select: 'onboardingQ.typeSelect',
+  upload: 'onboardingQ.typeUpload'
+};
+const TYPES = Object.keys(TYPE_KEYS);
 
 const splitList = (value) =>
   String(value || '')
@@ -40,7 +46,7 @@ function toDraft(questions) {
   return (questions || []).map((question, index) => ({
     id: question.id || `q_${Math.random().toString(36).slice(2, 9)}`,
     label: question.label || '',
-    type: ['text', 'yes_no', 'select'].includes(question.type) ? question.type : 'text',
+    type: TYPES.includes(question.type) ? question.type : 'text',
     required: question.required !== false,
     visible: question.visible !== false,
     page: Number(question.page) > 0 ? Number(question.page) : index + 1,
@@ -102,7 +108,7 @@ export default function OnboardingQuestionsCard() {
       .map((question, index) => ({
         id: question.id,
         label: String(question.label).trim(),
-        type: ['text', 'yes_no', 'select'].includes(question.type) ? question.type : 'text',
+        type: TYPES.includes(question.type) ? question.type : 'text',
         required: question.required !== false,
         visible: question.visible !== false,
         page: Number(question.page) > 0 ? Number(question.page) : index + 1,
