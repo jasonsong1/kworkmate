@@ -42,6 +42,7 @@ export default async function (req) {
       branch: branch ? { name: branch.name, logo_url: branch.logo_url || '', brand_color: branch.brand_color || '#4338ca', phone: branch.phone || '' } : null,
       company: company ? { name: company.name } : null,
       location,
+      allow_reschedule: Boolean(company && company.allow_interview_reschedule),
       duration_min: openSlots.length > 0 ? Number(openSlots[0].duration_min) || 20 : 20,
       slots: openSlots
         .map((s) => ({ id: s.id, date: s.date, start_time: s.start_time, end_time: s.end_time, duration_min: Number(s.duration_min) || 20 }))

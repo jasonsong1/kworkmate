@@ -12,13 +12,18 @@ import { base44 } from '@/api/base44Client';
 // onboarding email when someone is hired.
 export default function OnboardingDocsCard() {
   const { t } = useI18n();
-  const { company, role, reload } = useWorkspace();
+  const { company, role, presetKey, isManager, levelOf, reload } = useWorkspace();
   const { toast } = useToast();
   const inputRef = useRef(null);
   const [busy, setBusy] = useState(false);
 
   const docs = (company && company.onboarding_docs) || [];
-  const canEdit = role === 'company_admin';
+  // The store's manager keeps these documents too, not only the company admin.
+  const canEdit =
+    role === 'company_admin' ||
+    isManager ||
+    ['manager', 'supervisor_manager'].includes(presetKey) ||
+    ['update', 'write'].includes(levelOf('settings'));
 
   const save = async (next) => {
     await base44.entities.Company.update(company.id, { onboarding_docs: next });

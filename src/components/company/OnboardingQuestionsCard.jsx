@@ -19,31 +19,53 @@ const splitList = (value) =>
     .map((item) => item.trim())
     .filter(Boolean);
 
-function blankQuestion() {
+function blankQuestion(page) {
   return {
     id: `q_${Math.random().toString(36).slice(2, 9)}`,
     label: '',
     type: 'text',
     required: true,
     visible: true,
-    options: [],
-    follow_up: { when: 'no', fields: [] }
+    page: page || 1,
+    pageTitle: '',
+    when: 'no',
+    // The comma-separated lists are held as the manager typed them, so a comma can be typed.
+    optionsText: '',
+    fieldsText: ''
   };
 }
 
-// The employer's own questions for the onboarding form. Every question switched on becomes a page
-// of its own, ahead of the signature the employee signs last; a yes/no question can ask for a few
-// detail fields on one of its two answers.
+function toDraft(questions) {
+  return (questions || []).map((question, index) => ({
+    id: question.id || `q_${Math.random().toString(36).slice(2, 9)}`,
+    label: question.label || '',
+    type: ['text', 'yes_no', 'select'].includes(question.type) ? question.type : 'text',
+    required: question.required !== false,
+    visible: question.visible !== false,
+    page: Number(question.page) > 0 ? Number(question.page) : index + 1,
+    pageTitle: question.page_title || '',
+    when: question.follow_up && question.follow_up.when === 'yes' ? 'yes' : 'no',
+    optionsText: (question.options || []).join(', '),
+    fieldsText: ((question.follow_up && question.follow_up.fields) || []).join(', ')
+  }));
+}
+
+// The employer's own questions for the onboarding form. Questions sharing a page number appear
+// together on one page, and the signature the employee signs comes last.
 export default function OnboardingQuestionsCard() {
   const { t } = useI18n();
-  const { company, role, levelOf, reload } = useWorkspace();
+  const { company, role, presetKey, isManager, levelOf, reload } = useWorkspace();
   const { toast } = useToast();
   const [draft, setDraft] = useState([]);
   const [saving, setSaving] = useState(false);
-  const canEdit = role === 'company_admin' || ['update', 'write'].includes(levelOf('settings'));
+  const canEdit =
+    role === 'company_admin' ||
+    isManager ||
+    ['manager', 'supervisor_manager'].includes(presetKey) ||
+    ['update', 'write'].includes(levelOf('settings'));
 
   useEffect(() => {
-    setDraft(((company && company.onboarding_questions) || []).map((question) => ({ ...blankQuestion(), ...question })));
+    setDraft(toDraft(company && company.onboarding_questions));
   }, [company]);
 
   const set = (index, patch) =>
@@ -58,20 +80,29 @@ export default function OnboardingQuestionsCard() {
       return next;
     });
 
+  // A new question continues on the current page; "New page" opens the next one.
+  const add = (newPage) => {
+    const last = draft[draft.length - 1];
+    const page = newPage ? (last ? Number(last.page) || 1 : 1) + 1 : last ? Number(last.page) || 1 : 1;
+    setDraft((prev) => [...prev, blankQuestion(page)]);
+  };
+
   const save = async () => {
     if (!company) return;
     const cleaned = draft
       .filter((question) => String(question.label || '').trim())
-      .map((question) => ({
+      .map((question, index) => ({
         id: question.id,
         label: String(question.label).trim(),
         type: ['text', 'yes_no', 'select'].includes(question.type) ? question.type : 'text',
         required: question.required !== false,
         visible: question.visible !== false,
-        options: question.type === 'select' ? question.options || [] : [],
+        page: Number(question.page) > 0 ? Number(question.page) : index + 1,
+        page_title: String(question.pageTitle || '').trim(),
+        options: question.type === 'select' ? splitList(question.optionsText) : [],
         follow_up:
           question.type === 'yes_no'
-            ? { when: question.follow_up && question.follow_up.when === 'yes' ? 'yes' : 'no', fields: (question.follow_up && question.follow_up.fields) || [] }
+            ? { when: question.when === 'yes' ? 'yes' : 'no', fields: splitList(question.fieldsText) }
             : null
       }));
     setSaving(true);
@@ -133,6 +164,25 @@ export default function OnboardingQuestionsCard() {
 
             <div className="grid gap-3 sm:grid-cols-2">
               <div>
+                <Label>{t('onboardingQ.page')}</Label>
+                <Input
+                  type="number"
+                  min="1"
+                  value={question.page}
+                  disabled={!canEdit}
+                  onChange={(event) => set(index, { page: event.target.value })}
+                />
+              </div>
+              <div>
+                <Label>{t('onboardingQ.pageTitle')}</Label>
+                <Input
+                  value={question.pageTitle}
+                  disabled={!canEdit}
+                  onChange={(event) => set(index, { pageTitle: event.target.value })}
+                />
+              </div>
+
+              <div>
                 <Label>{t('onboardingQ.type')}</Label>
                 <Select value={question.type} onValueChange={(value) => set(index, { type: value })} disabled={!canEdit}>
                   <SelectTrigger>
@@ -152,9 +202,9 @@ export default function OnboardingQuestionsCard() {
                 <div>
                   <Label>{t('onboardingQ.options')}</Label>
                   <Input
-                    value={(question.options || []).join(', ')}
+                    value={question.optionsText}
                     disabled={!canEdit}
-                    onChange={(event) => set(index, { options: splitList(event.target.value) })}
+                    onChange={(event) => set(index, { optionsText: event.target.value })}
                   />
                 </div>
               )}
@@ -164,8 +214,8 @@ export default function OnboardingQuestionsCard() {
                   <div>
                     <Label>{t('onboardingQ.followUpWhen')}</Label>
                     <Select
-                      value={(question.follow_up && question.follow_up.when) || 'no'}
-                      onValueChange={(value) => set(index, { follow_up: { ...(question.follow_up || {}), when: value } })}
+                      value={question.when}
+                      onValueChange={(value) => set(index, { when: value })}
                       disabled={!canEdit}
                     >
                       <SelectTrigger>
@@ -180,12 +230,10 @@ export default function OnboardingQuestionsCard() {
                   <div>
                     <Label>{t('onboardingQ.followUpFields')}</Label>
                     <Input
-                      value={((question.follow_up && question.follow_up.fields) || []).join(', ')}
+                      value={question.fieldsText}
                       disabled={!canEdit}
                       placeholder={t('onboardingQ.followUpPlaceholder')}
-                      onChange={(event) =>
-                        set(index, { follow_up: { ...(question.follow_up || {}), fields: splitList(event.target.value) } })
-                      }
+                      onChange={(event) => set(index, { fieldsText: event.target.value })}
                     />
                   </div>
                 </>
@@ -214,12 +262,11 @@ export default function OnboardingQuestionsCard() {
         ))}
 
         <div className="flex flex-wrap gap-2">
-          <Button
-            variant="outline"
-            disabled={!canEdit}
-            onClick={() => setDraft((prev) => [...prev, blankQuestion()])}
-          >
+          <Button variant="outline" disabled={!canEdit} onClick={() => add(false)}>
             <Plus className="mr-2 h-4 w-4" /> {t('onboardingQ.add')}
+          </Button>
+          <Button variant="outline" disabled={!canEdit} onClick={() => add(true)}>
+            <Plus className="mr-2 h-4 w-4" /> {t('onboardingQ.addPage')}
           </Button>
           <Button onClick={save} disabled={!canEdit || saving}>
             {t('common.save')}

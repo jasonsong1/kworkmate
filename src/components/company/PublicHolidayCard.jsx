@@ -71,7 +71,7 @@ export default function PublicHolidayCard({ multiplier }) {
 
             <p className="mt-2 text-xs text-muted-foreground">{t('settings.holidayNext')}</p>
             <div className="mt-1 space-y-1">
-              {upcomingHolidays(group.state, today, 4, applied).map((holiday) => (
+              {upcomingHolidays(group.state, today, 100, applied).map((holiday) => (
                 <div
                   key={`${group.state}-${holiday.date}`}
                   className="flex items-center justify-between gap-4 text-sm"

@@ -11,6 +11,8 @@ function weekday(dateStr) {
   return DAYS[(index + 6) % 7].label;
 }
 
+const wantsChange = () => new URLSearchParams(window.location.search).get('change') === '1';
+
 export default function InterviewBooking() {
   const { token } = useParams();
   const [state, setState] = useState('loading');
@@ -26,7 +28,9 @@ export default function InterviewBooking() {
       return;
     }
     setData(payload);
-    setState(payload.booked ? 'booked' : 'select');
+    // The "change my time" button in the confirmation email opens this page on the open times.
+    if (payload.booked && payload.allow_reschedule && wantsChange()) setState('select');
+    else setState(payload.booked ? 'booked' : 'select');
   };
 
   useEffect(() => {
@@ -34,9 +38,14 @@ export default function InterviewBooking() {
   }, [token]);
 
   const book = async (slot) => {
+    const changing = state === 'select' && Boolean(data && data.booked);
     setBooking(slot.id);
     setMessage('');
-    const response = await base44.functions.invoke('bookInterviewSlot', { token, slot_id: slot.id });
+    const response = await base44.functions.invoke('bookInterviewSlot', {
+      token,
+      slot_id: slot.id,
+      origin: window.location.origin
+    });
     const result = response.data || {};
     setBooking(null);
     if (result.taken) {
@@ -52,6 +61,11 @@ export default function InterviewBooking() {
     if (result.error) {
       setMessage(result.error);
       return;
+    }
+    // A change link is spent once used, so the page settles on the new booking.
+    if (changing) {
+      window.history.replaceState({}, '', window.location.pathname);
+      setMessage('Your interview time has been changed.');
     }
     await load();
   };
@@ -105,8 +119,8 @@ export default function InterviewBooking() {
 
       <main className="mx-auto max-w-xl space-y-5 px-4 py-6">
         {message && (
-          <p className="flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
-            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /> {message}
+          <p className="flex items-start gap-2 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+            <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" /> {message}
           </p>
         )}
 
@@ -128,11 +142,25 @@ export default function InterviewBooking() {
             <p className="mt-4 text-sm text-slate-500">
               A calendar invitation (.ics) was emailed to you. Please arrive 5 minutes early.
             </p>
+            {data.allow_reschedule && (
+              <Button variant="outline" className="mt-4" onClick={() => setState('select')}>
+                Change my interview time
+              </Button>
+            )}
           </div>
         )}
 
         {state === 'select' && (
           <>
+            {data.booked && data.allow_reschedule && (
+              <div className="rounded-2xl border border-sky-200 bg-sky-50 p-5 text-sm text-sky-900">
+                Your interview is currently booked for{' '}
+                <b>
+                  {weekday(data.booked.date)}, {data.booked.date} at {data.booked.start_time}
+                </b>
+                . Choose a new time below and it will replace it.
+              </div>
+            )}
             {(data.slots || []).length === 0 ? (
               <div className="rounded-2xl border bg-white p-8 text-center shadow-sm">
                 <p className="text-sm text-slate-500">

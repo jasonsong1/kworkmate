@@ -1,5 +1,4 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.52';
-import { isDigits } from '../../shared/util.ts';
 import { sendEmail, brandedEmail } from '../../shared/email.ts';
 import { sendAccountAccessEmail } from '../../shared/account.ts';
 
@@ -22,24 +21,6 @@ export default async function (req) {
     const bank = body.bank || {};
     const superChoice = body.super || {};
 
-    if (!tfn.pending && !isDigits(tfn.number, 9)) {
-      return Response.json({ error: 'Tax file number must be exactly 9 digits' }, { status: 400 });
-    }
-    if (!isDigits(bank.bsb, 6)) {
-      return Response.json({ error: 'BSB must be exactly 6 digits' }, { status: 400 });
-    }
-    if (!/^\d{5,10}$/.test(String(bank.account_number || '').trim())) {
-      return Response.json({ error: 'Account number must be 5 to 10 digits' }, { status: 400 });
-    }
-    if (!bank.account_name || !String(bank.account_name).trim()) {
-      return Response.json({ error: 'Account holder name is required' }, { status: 400 });
-    }
-    if (superChoice.choice === 'custom_fund' && !String(superChoice.usi || '').trim()) {
-      return Response.json({ error: 'A USI is required for your own super fund' }, { status: 400 });
-    }
-    if (!superChoice.choice) {
-      return Response.json({ error: 'Please choose a superannuation option' }, { status: 400 });
-    }
     if (!body.signature_file_uri) {
       return Response.json({ error: 'A signature is required' }, { status: 400 });
     }
@@ -89,20 +70,22 @@ export default async function (req) {
 
     const signedAt = new Date().toISOString();
 
+    // The declaration form is now the employer's own, so the payroll blocks are written only
+    // when their answers supplied them.
     await base44.asServiceRole.entities.EmployeeProfile.update(employee.id, {
-      tfn_number: tfn.pending ? '' : String(tfn.number).trim(),
+      tfn_number: tfn.pending ? '' : String(tfn.number || '').trim(),
       tfn_pending: tfn.pending === true,
       residency_status: tfn.residency_status || '',
       tax_free_threshold: tfn.tax_free_threshold !== false,
       hecs_help: tfn.hecs_help === true,
-      super_choice: superChoice.choice,
+      super_choice: superChoice.choice || '',
       super_fund_name: superChoice.choice === 'default_fund' ? (company ? company.default_super_fund_name : '') : (superChoice.fund_name || ''),
       super_usi: superChoice.choice === 'default_fund' ? (company ? company.default_super_fund_usi : '') : (superChoice.usi || ''),
       super_member_number: superChoice.member_number || '',
       super_fund_abn: superChoice.choice === 'default_fund' ? (company ? company.default_super_fund_abn : '') : (superChoice.fund_abn || ''),
-      bank_bsb: String(bank.bsb).trim(),
-      bank_account_number: String(bank.account_number).trim(),
-      bank_account_name: String(bank.account_name).trim(),
+      bank_bsb: String(bank.bsb || '').trim(),
+      bank_account_number: String(bank.account_number || '').trim(),
+      bank_account_name: String(bank.account_name || '').trim(),
       signature_file_uri: body.signature_file_uri,
       signed_at: signedAt,
       onboarding_status: 'completed',
@@ -115,11 +98,11 @@ export default async function (req) {
       to: employee.user_email,
       subject: 'Your onboarding documents are complete',
       html: brandedEmail({
-        heading: 'Onboarding complete — thank you',
+        heading: 'Onboarding complete, thank you',
         brandColor: (branch && branch.brand_color) || '#4338ca',
         lines: [
           `Hi ${employee.full_name},`,
-          `We have received and filed your TFN declaration, superannuation choice and bank details for <b>${branch ? branch.name : 'your store'}</b>.`,
+          `We have received and filed your onboarding documents for <b>${branch ? branch.name : 'your store'}</b>.`,
           'Your signed documents are stored securely on your employee profile. Nothing else is needed from you.'
         ],
         footer: `${company ? company.name : ''} · K-Workmate`
