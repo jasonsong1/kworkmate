@@ -79,39 +79,10 @@ export default async function (req) {
     const branch = job.branch_id
       ? await base44.asServiceRole.entities.Branch.get(job.branch_id).catch(() => null)
       : null;
+    // The employer sets how many candidates are recommended, and every screening run keeps the
+    // shortlist at exactly that size.
     const topN = Number(company && company.ai_top_n) || 10;
-    // Each "Run screening" press adds another batch of topN candidates to the shortlist.
-    const cycle = Number(job.top_n_cycle) || 1;
-    const limit = topN * cycle;
-
-    if (body.action === 'extend') {
-      const guard = await managerFor(base44, req, job);
-      if (guard.denied) return guard.denied;
-      const everyone = await base44.asServiceRole.entities.Applicant.filter({ job_id: jobId });
-      const ranked = everyone
-        .filter((a) => typeof a.ai_score === 'number')
-        .sort((x, y) => y.ai_score - x.ai_score);
-
-      const canExtend = limit < ranked.length;
-      const nextCycle = canExtend ? cycle + 1 : cycle;
-      const nextLimit = topN * nextCycle;
-      if (canExtend) await base44.asServiceRole.entities.Job.update(jobId, { top_n_cycle: nextCycle });
-
-      const changes = ranked.map((a, index) => {
-        const rank = index + 1;
-        const patch = { id: a.id, rank };
-        if (rank <= nextLimit && ['submitted', 'top10'].includes(a.status)) patch.status = 'top10';
-        return patch;
-      });
-      if (changes.length > 0) await base44.asServiceRole.entities.Applicant.bulkUpdate(changes);
-
-      return Response.json({
-        ok: true,
-        extended: canExtend,
-        selected: Math.min(nextLimit, ranked.length),
-        total: ranked.length
-      });
-    }
+    const limit = topN;
 
     if (body.action === 'send_rejections') {
       const guard = await managerFor(base44, req, job);

@@ -58,7 +58,7 @@ export const EMAIL_STAGES = [
   },
   {
     key: 'booked',
-    hasCta: false,
+    hasCta: true,
     vars: ['name', 'job_title', 'store', 'company', 'date', 'time', 'duration', 'location'],
     subject: 'Interview confirmed — {{date}} at {{time}}',
     heading: 'Your interview is confirmed',
@@ -66,9 +66,23 @@ export const EMAIL_STAGES = [
       'Hi {{name}},',
       'Your interview for **{{job_title}}** is confirmed for **{{date}} at {{time}}** ({{duration}} minutes).',
       'Location: {{location}}',
-      'A calendar invitation is attached. If you need to change your time, reply to this email.'
+      'A calendar invitation is attached. Please arrive five minutes early.'
     ].join('\n'),
-    cta: ''
+    cta: 'Change my interview time'
+  },
+  {
+    key: 'rescheduled',
+    hasCta: true,
+    vars: ['name', 'job_title', 'store', 'company', 'date', 'time', 'duration', 'location'],
+    subject: 'Interview time changed: {{job_title}}',
+    heading: 'Your interview time was changed',
+    body: [
+      'Hi {{name}},',
+      'Your interview for **{{job_title}}** at {{store}} has been moved to **{{date}} at {{time}}** ({{duration}} minutes).',
+      'Location: {{location}}',
+      'A calendar invitation is attached. If you need a different time, use the button below.'
+    ].join('\n'),
+    cta: 'Change my interview time'
   },
   {
     key: 'cancelled',

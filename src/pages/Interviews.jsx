@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/components/ui/use-toast';
 import { useI18n } from '@/lib/i18n';
 import { useWorkspace } from '@/lib/WorkspaceContext';
@@ -27,7 +28,7 @@ function slotTimes(from, to, step) {
 
 export default function Interviews() {
   const { t } = useI18n();
-  const { activeBranch } = useWorkspace();
+  const { company, activeBranch, role, isManager, levelOf, reload } = useWorkspace();
   const { toast } = useToast();
 
   const [jobs, setJobs] = useState([]);
@@ -35,7 +36,11 @@ export default function Interviews() {
   const [slots, setSlots] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [savingToggle, setSavingToggle] = useState(false);
   const [form, setForm] = useState({ date: todayIso(), from: '14:00', to: '17:00', step: 20 });
+
+  const canManage = role === 'company_admin' || isManager || ['update', 'write'].includes(levelOf('interviews'));
+  const allowReschedule = Boolean(company && company.allow_interview_reschedule);
 
   const loadJobs = useCallback(async () => {
     if (!activeBranch) return;
@@ -49,21 +54,28 @@ export default function Interviews() {
     loadJobs();
   }, [loadJobs]);
 
+  // The store's whole interview schedule is shown at once: every job ad in one list.
   const loadSlots = useCallback(async () => {
-    if (!jobId) {
+    if (!activeBranch) {
       setSlots([]);
       setLoading(false);
       return;
     }
     setLoading(true);
-    const page = await base44.entities.InterviewSlot.filter({ job_id: jobId }, { sort: 'date', limit: 200 });
+    const page = await base44.entities.InterviewSlot.filter({ branch_id: activeBranch.id }, { sort: 'date', limit: 500 });
     setSlots(page.items || []);
     setLoading(false);
-  }, [jobId]);
+  }, [activeBranch]);
 
   useEffect(() => {
     loadSlots();
   }, [loadSlots]);
+
+  // Which job ad a booked time belongs to, so a merged schedule still reads clearly.
+  const jobLabel = (slot) => {
+    const job = jobs.find((item) => item.id === slot.job_id);
+    return job ? job.title : '';
+  };
 
   const generate = async () => {
     if (!jobId || !activeBranch) return;
@@ -73,7 +85,7 @@ export default function Interviews() {
       return;
     }
     setSaving(true);
-    const existing = slots.filter((s) => s.date === form.date).map((s) => s.start_time);
+    const existing = slots.filter((s) => s.job_id === jobId && s.date === form.date).map((s) => s.start_time);
     const rows = times
       .filter((start) => !existing.includes(start))
       .map((start) => ({
@@ -112,6 +124,15 @@ export default function Interviews() {
     await loadSlots();
   };
 
+  const toggleReschedule = async (value) => {
+    if (!company) return;
+    setSavingToggle(true);
+    await base44.entities.Company.update(company.id, { allow_interview_reschedule: value });
+    await reload();
+    setSavingToggle(false);
+    toast({ title: value ? t('interviews.rescheduleOn') : t('interviews.rescheduleOff') });
+  };
+
   const grouped = slots.reduce((acc, slot) => {
     acc[slot.date] = acc[slot.date] || [];
     acc[slot.date].push(slot);
@@ -120,64 +141,78 @@ export default function Interviews() {
 
   return (
     <div>
-      <PageHeader
-        title={t('interviews.title')}
-        subtitle={activeBranch ? activeBranch.name : t('interviews.subtitle')}
-        actions={
-          <Select value={jobId} onValueChange={setJobId}>
-            <SelectTrigger className="w-64">
-              <SelectValue placeholder={t('jobs.title')} />
-            </SelectTrigger>
-            <SelectContent>
-              {jobs.map((j) => (
-                <SelectItem key={j.id} value={j.id}>
-                  {j.title}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        }
-      />
+      <PageHeader title={t('interviews.title')} subtitle={activeBranch ? activeBranch.name : t('interviews.subtitle')} />
 
       <div className="grid gap-6 lg:grid-cols-[340px_1fr]">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base">
-              <CalendarClock className="h-4 w-4" /> {t('interviews.open')}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <Label>{t('common.date')}</Label>
-              <Input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <CalendarClock className="h-4 w-4" /> {t('interviews.open')}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
               <div>
-                <Label>{t('interviews.from')}</Label>
-                <Input type="time" value={form.from} onChange={(e) => setForm({ ...form, from: e.target.value })} />
+                <Label>{t('interviews.job')}</Label>
+                <Select value={jobId} onValueChange={setJobId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder={t('jobs.title')} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {jobs.map((j) => (
+                      <SelectItem key={j.id} value={j.id}>
+                        {j.title}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div>
-                <Label>{t('interviews.to')}</Label>
-                <Input type="time" value={form.to} onChange={(e) => setForm({ ...form, to: e.target.value })} />
+                <Label>{t('common.date')}</Label>
+                <Input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />
               </div>
-            </div>
-            <div>
-              <Label>{t('interviews.slotLength')}</Label>
-              <Input
-                type="number"
-                value={form.step}
-                onChange={(e) => setForm({ ...form, step: e.target.value })}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label>{t('interviews.from')}</Label>
+                  <Input type="time" value={form.from} onChange={(e) => setForm({ ...form, from: e.target.value })} />
+                </div>
+                <div>
+                  <Label>{t('interviews.to')}</Label>
+                  <Input type="time" value={form.to} onChange={(e) => setForm({ ...form, to: e.target.value })} />
+                </div>
+              </div>
+              <div>
+                <Label>{t('interviews.slotLength')}</Label>
+                <Input
+                  type="number"
+                  value={form.step}
+                  onChange={(e) => setForm({ ...form, step: e.target.value })}
+                />
+              </div>
+              <Button className="w-full" onClick={generate} disabled={saving || !jobId}>
+                {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
+                {t('interviews.generate')}
+              </Button>
+              <p className="text-xs text-muted-foreground">
+                Applicants booking the same time are resolved first-come-first-served — only one booking is accepted per slot.
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="flex items-start justify-between gap-4 pt-6">
+              <div>
+                <p className="text-sm font-medium">{t('interviews.rescheduleToggle')}</p>
+                <p className="mt-1 text-xs text-muted-foreground">{t('interviews.rescheduleHint')}</p>
+              </div>
+              <Switch
+                checked={allowReschedule}
+                disabled={!canManage || savingToggle}
+                onCheckedChange={toggleReschedule}
               />
-            </div>
-            <Button className="w-full" onClick={generate} disabled={saving || !jobId}>
-              {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
-              {t('interviews.generate')}
-            </Button>
-            <p className="text-xs text-muted-foreground">
-              Applicants booking the same time are resolved first-come-first-served — only one booking is accepted per slot.
-            </p>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        </div>
 
         <div className="space-y-4">
           {loading ? (
@@ -214,6 +249,7 @@ export default function Interviews() {
                           }`}
                         >
                           <span className="font-medium">{slot.start_time}</span>
+                          {jobLabel(slot) && <span className="text-xs text-muted-foreground">{jobLabel(slot)}</span>}
                           {slot.status === 'booked' ? (
                             <Badge className="bg-emerald-600 text-white hover:bg-emerald-600">
                               {slot.booked_by_name}

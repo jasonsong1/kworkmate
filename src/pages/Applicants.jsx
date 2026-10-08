@@ -140,7 +140,6 @@ export default function Applicants() {
     if (!job) return;
     setScreening(true);
     try {
-      const hadScores = applicants.some((a) => typeof a.ai_score === 'number');
       let analysed = 0;
       for (let round = 0; round < 15; round += 1) {
         const response = await base44.functions.invoke('analyzeApplicants', { job_id: job.id });
@@ -148,16 +147,8 @@ export default function Applicants() {
         analysed += response.data.analysed || 0;
         if (!response.data.pending_left) break;
       }
-
-      let message = `${analysed} resume(s) screened`;
-      if (hadScores) {
-        const extend = await base44.functions.invoke('analyzeApplicants', { job_id: job.id, action: 'extend' });
-        if (extend.data?.error) throw new Error(extend.data.error);
-        message = extend.data.extended
-          ? `Shortlist extended to ${extend.data.selected} of ${extend.data.total} candidates`
-          : 'No more scored candidates to add';
-      }
-      toast({ title: message });
+      // The shortlist is exactly the size set in company settings: no more, no less.
+      toast({ title: `${analysed} resume(s) screened · top ${topN} shortlisted` });
       await loadApplicants();
     } catch (error) {
       toast({ title: error.message, variant: 'destructive' });
@@ -181,8 +172,7 @@ export default function Applicants() {
   };
 
   const ranked = applicants.filter((a) => typeof a.ai_score === 'number');
-  const cycle = (job && job.top_n_cycle) || 1;
-  const shortlist = ranked.slice(0, cycle * topN);
+  const shortlist = ranked.slice(0, topN);
   const interviewList = applicants.filter((a) => INTERVIEW_STATUSES.includes(a.status));
 
   const actionButtons = (applicant) => (
@@ -285,8 +275,8 @@ export default function Applicants() {
           <TabsContent value="shortlist" className="mt-6">
             <div className="mb-4 rounded-xl border bg-muted/30 px-4 py-3">
               <p className="text-sm text-muted-foreground">
-                Showing the top {shortlist.length} of {ranked.length} scored candidates · each screening run adds{' '}
-                {topN} more
+                Showing the top {shortlist.length} of {ranked.length} scored candidates · the shortlist size ({topN})
+                is set in company settings
               </p>
             </div>
 

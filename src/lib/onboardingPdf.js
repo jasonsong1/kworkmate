@@ -115,9 +115,6 @@ export function buildContractPdf({ employee, branch, company, form, signatureDat
     ['Position', employee.position || 'Team member'],
     ['Employment type', employee.employment_type || 'casual'],
     ['Commencement', employee.start_date || ''],
-    ['Bank BSB', form.bank_bsb],
-    ['Bank account', form.bank_account_number],
-    ['Account name', form.bank_account_name],
     ['Declaration', 'I accept the terms of employment and the information I have provided is accurate.']
   ];
   const y = rows(doc, items, 40);

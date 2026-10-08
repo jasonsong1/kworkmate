@@ -51,6 +51,10 @@
       "type": "boolean",
       "default": false
     },
+    "allow_interview_reschedule": {
+      "type": "boolean",
+      "default": false
+    },
     "interview_questions": {
       "type": "array",
       "items": {
