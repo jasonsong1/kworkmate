@@ -1,3 +1,11 @@
+// The app's own mail (applicants and team members) is delivered through the app's Resend
+// account, which carries its own sending limits instead of the platform mail service's daily
+// recipient cap.
+import { secrets } from 'base44:runtime';
+
+const RESEND_ENDPOINT = 'https://api.resend.com/emails';
+const RESEND_FROM = 'K-Workmate <noreply@kworkmate.com>';
+
 export function brandedEmail({ heading, lines, ctaText, ctaUrl, brandColor, footer, logoUrl }) {
   const color = brandColor || '#4338ca';
   const logo = logoUrl
@@ -22,13 +30,65 @@ export function brandedEmail({ heading, lines, ctaText, ctaUrl, brandColor, foot
 </div>`;
 }
 
+function base64FromBytes(bytes) {
+  let binary = '';
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+  }
+  return btoa(binary);
+}
+
+// Resend takes attachments as base64 content, so a stored file URL is fetched and encoded.
+async function resendAttachment(attachment) {
+  if (!attachment || !attachment.filename) return null;
+  if (attachment.content) return { filename: attachment.filename, content: attachment.content };
+  if (!attachment.file_url) return null;
+  const res = await fetch(attachment.file_url, { signal: AbortSignal.timeout(15000) });
+  if (!res.ok) {
+    console.error('Attachment fetch failed:', attachment.file_url, res.status);
+    return null;
+  }
+  return { filename: attachment.filename, content: base64FromBytes(new Uint8Array(await res.arrayBuffer())) };
+}
+
+async function sendViaResend(key, { to, subject, html, attachments }) {
+  const files = [];
+  for (const attachment of attachments || []) {
+    const file = await resendAttachment(attachment);
+    if (file) files.push(file);
+  }
+  const body = { from: RESEND_FROM, to: [to], subject, html };
+  if (files.length > 0) body.attachments = files;
+  const res = await fetch(RESEND_ENDPOINT, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(20000)
+  });
+  if (!res.ok) {
+    const detail = await res.text();
+    console.error('Resend refused the message:', res.status, detail.slice(0, 200));
+    // A 4xx is a configuration refusal (unverified domain, revoked key): report it, so the
+    // message goes out through the platform mail service instead of being lost.
+    if (res.status >= 400 && res.status < 500) return false;
+    throw new Error(`Resend refused the message (${res.status})`);
+  }
+  return true;
+}
+
 // Returns the outcome instead of only a true/false, so the caller can record why a
 // message did not arrive.
 export async function sendEmailDetailed(base44, { to, subject, html, attachments }) {
   try {
-    const payload = { to, subject, html };
-    if (Array.isArray(attachments) && attachments.length > 0) payload.attachments = attachments;
-    await base44.asServiceRole.integrations.Core.SendEmail(payload);
+    const key = secrets.get('RESEND_API_KEY');
+    // Resend carries the message; anything it will not take (no key, or a configuration
+    // refusal) is handed to the platform mail service, so mail is never silently dropped.
+    if (!key || !(await sendViaResend(key, { to, subject, html, attachments }))) {
+      const payload = { to, subject, html };
+      if (Array.isArray(attachments) && attachments.length > 0) payload.attachments = attachments;
+      await base44.asServiceRole.integrations.Core.SendEmail(payload);
+    }
     return { ok: true, error: '' };
   } catch (error) {
     console.error('SendEmail failed:', error && error.message);
