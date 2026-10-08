@@ -93,7 +93,7 @@ export default async function (req) {
             lines: copy.lines,
             ctaText: copy.cta,
             ctaUrl: link,
-            footer: `${company ? company.name : branch.name} · K-Workmate`
+            footer: `${company ? company.name : branch.name} · kworkmate`
           })
         });
         if (ok) sent += 1;

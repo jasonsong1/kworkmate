@@ -105,7 +105,7 @@ export default async function (req) {
           `We have received and filed your onboarding documents for <b>${branch ? branch.name : 'your store'}</b>.`,
           'Your signed documents are stored securely on your employee profile. Nothing else is needed from you.'
         ],
-        footer: `${company ? company.name : ''} · K-Workmate`
+        footer: `${company ? company.name : ''} · kworkmate`
       })
     });
 

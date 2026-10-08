@@ -35,7 +35,7 @@ export default function InterviewSettings() {
         ? company.video_interview_questions
         : DEFAULT_INTERVIEW_QUESTIONS
     );
-    setVideoEnabled(company.video_interview_enabled === true);
+    setVideoEnabled(company.video_interview_enabled !== false);
     setReady(true);
   }, [company]);
 

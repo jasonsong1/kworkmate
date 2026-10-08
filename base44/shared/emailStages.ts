@@ -173,7 +173,7 @@ export function renderStageEmail(company, stageKey, vars, options = {}) {
     ctaText: stage.hasCta && options.ctaUrl ? fillHtml(pick('cta'), allVars) : '',
     ctaUrl: options.ctaUrl,
     brandColor: (company && company.email_brand_color) || options.brandColor,
-    footer: company && company.email_footer ? esc(company.email_footer) : `${esc(companyName)} · K-Workmate`,
+    footer: company && company.email_footer ? esc(company.email_footer) : `${esc(companyName)} · kworkmate`,
     logoUrl: company && company.logo_url ? esc(company.logo_url) : ''
   });
 

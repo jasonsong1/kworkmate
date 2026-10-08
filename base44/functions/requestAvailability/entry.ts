@@ -52,7 +52,7 @@ export default async function (req) {
         ctaText: copy.cta,
         ctaUrl: portalLink(body.origin, '/'),
         brandColor: branch.brand_color || (company && company.brand_color),
-        footer: `${company ? company.name : branch.name} · K-Workmate`
+        footer: `${company ? company.name : branch.name} · kworkmate`
       })
     });
 

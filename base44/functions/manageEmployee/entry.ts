@@ -192,7 +192,7 @@ export default async function (req) {
             lines: mail.lines,
             ctaText: mail.cta,
             ctaUrl: link,
-            footer: `${store} · K-Workmate`
+            footer: `${store} · kworkmate`
           })
         });
       }

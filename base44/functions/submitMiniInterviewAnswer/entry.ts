@@ -90,9 +90,9 @@ export default async function (req: Request) {
               `<b>${applicant.full_name}</b> answered all ${total} voice questions for ${
                 job ? job.title : 'your role'
               }.`,
-              'Open the applicant in K-Workmate to read the transcript and listen to the recording.'
+              'Open the applicant in kworkmate to read the transcript and listen to the recording.'
             ],
-            footer: `${company ? company.name : ''} · K-Workmate`
+            footer: `${company ? company.name : ''} · kworkmate`
           })
         });
       }

@@ -29,10 +29,18 @@ export default function StaffHome() {
   const isFloorStaff = presetKey === 'floor_staff';
   // A package that does not include attendance has nothing to clock with.
   const attendance = hasModule('attendance');
+  // Shifts and the calendar feed both come out of the roster: a package without one carries
+  // neither of them, so nothing is shown and nothing is fetched.
+  const roster = hasModule('roster');
 
   const load = useCallback(async () => {
     if (!me) return;
     setLoading(true);
+    if (!roster) {
+      setShifts([]);
+      setLoading(false);
+      return;
+    }
     const [shiftList, submissions] = await Promise.all([
       base44.entities.Shift
         .filter({ employee_email: me.email, status: 'published', date: { $gte: todayIso() } }, { sort: 'date', limit: 30 })
@@ -46,7 +54,7 @@ export default function StaffHome() {
     setShifts(shiftList);
     if (submissions.length > 0 && submissions[0].availability) setAvailability(submissions[0].availability);
     setLoading(false);
-  }, [me]);
+  }, [me, roster]);
 
   useEffect(() => {
     load();
@@ -160,6 +168,7 @@ export default function StaffHome() {
           </CardContent>
         </Card>
 
+        {roster && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
@@ -187,11 +196,11 @@ export default function StaffHome() {
               ))
             )}
           </CardContent>
-        </Card>
+        </Card>)}
 
         {/* Availability is what a roster is built from, so a package without a roster keeps
             none of it. */}
-        {hasModule('roster') && (
+        {roster && (
         <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle className="text-base">{t('staff.availability')}</CardTitle>
@@ -205,9 +214,10 @@ export default function StaffHome() {
           </CardContent>
         </Card>)}
 
+        {roster && (
         <div className="lg:col-span-2">
           <CalendarSubscribeCard />
-        </div>
+        </div>)}
       </div>
 
       <EmployeeDocumentsDialog open={docsOpen} onOpenChange={setDocsOpen} employee={employeeProfile} />

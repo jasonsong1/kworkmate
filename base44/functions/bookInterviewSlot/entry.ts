@@ -164,7 +164,7 @@ export default async function (req) {
               `<b>${applicant.full_name}</b> (${applicant.email}) booked <b>${claimed.date} at ${claimed.start_time}</b> for ${job ? job.title : 'the role'}.`,
               applicant.phone ? `Phone: ${applicant.phone}` : ''
             ].filter(Boolean),
-            footer: `${branch ? branch.name : ''} · K-Workmate`
+            footer: `${branch ? branch.name : ''} · kworkmate`
           }),
           attachments
         });

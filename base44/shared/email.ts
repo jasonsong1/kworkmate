@@ -4,7 +4,7 @@
 import { secrets } from 'base44:runtime';
 
 const RESEND_ENDPOINT = 'https://api.resend.com/emails';
-const RESEND_FROM = 'K-Workmate <noreply@kworkmate.com>';
+const RESEND_FROM = 'kworkmate <noreply@kworkmate.com>';
 
 export function brandedEmail({ heading, lines, ctaText, ctaUrl, brandColor, footer, logoUrl }) {
   const color = brandColor || '#4338ca';
@@ -25,7 +25,7 @@ export function brandedEmail({ heading, lines, ctaText, ctaUrl, brandColor, foot
     ${body}
     ${cta}
     <hr style="margin:24px 0;border:none;border-top:1px solid #e2e8f0" />
-    <p style="margin:0;font-size:12px;color:#94a3b8">${footer || 'Sent by K-Workmate'}</p>
+    <p style="margin:0;font-size:12px;color:#94a3b8">${footer || 'Sent by kworkmate'}</p>
   </div>
 </div>`;
 }

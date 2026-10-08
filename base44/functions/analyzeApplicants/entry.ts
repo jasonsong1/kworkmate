@@ -18,8 +18,25 @@ const RESUME_SCHEMA = {
   required: ['unreadable', 'fit_score', 'summary']
 };
 
-// Anyone who has already been shortlisted, or has moved further along, is never picked again.
-const SHORTLISTED_STATUSES = ['top10', 'mini_interview', 'final_interview', 'interview_scheduled', 'hired'];
+// A candidate the employer has already invited on keeps their place whatever the size is set to.
+const PROGRESSED_STATUSES = ['mini_interview', 'final_interview', 'interview_scheduled', 'hired'];
+
+// The shortlist is exactly the size the employer set in company settings: the strongest
+// candidates hold it, anyone a better resume pushes out returns to the pool, and nobody already
+// moved on to an interview is touched.
+async function holdShortlist(base44: any, scored: any[], limit: number) {
+  const progressed = scored.filter((a) => PROGRESSED_STATUSES.includes(a.status)).length;
+  const room = Math.max(0, limit - progressed);
+  const pool = scored.filter((a) => a.status === 'submitted' || a.status === 'top10');
+  const keep = new Set(pool.slice(0, room).map((a) => a.id));
+  const changes: any[] = [];
+  pool.forEach((a) => {
+    if (keep.has(a.id) && a.status !== 'top10') changes.push({ id: a.id, status: 'top10' });
+    if (!keep.has(a.id) && a.status === 'top10') changes.push({ id: a.id, status: 'submitted' });
+  });
+  if (changes.length > 0) await base44.asServiceRole.entities.Applicant.bulkUpdate(changes);
+  return changes.filter((change) => change.status === 'top10').length;
+}
 
 function buildPrompt(job, branch, applicant, company) {
   return `You are the AI screening assistant for an Australian hospitality employer.
@@ -179,26 +196,11 @@ export default async function (req) {
     const updates = scored.map((a, index) => ({ id: a.id, rank: index + 1 }));
     if (updates.length > 0) await base44.asServiceRole.entities.Applicant.bulkUpdate(updates);
 
+    // Every screening run — the button in the back office or a resume that has just arrived —
+    // leaves the shortlist at the size the employer set.
     let added = 0;
-    if (body.action === 'extend') {
-      // The next batch, taken from the people who are not shortlisted yet, biggest score first.
-      const waiting = scored.filter((a) => !SHORTLISTED_STATUSES.includes(a.status));
-      const batch = waiting.slice(0, limit);
-      if (batch.length > 0) {
-        await base44.asServiceRole.entities.Applicant.bulkUpdate(
-          batch.map((a) => ({ id: a.id, status: 'top10' }))
-        );
-        added = batch.length;
-      }
-    } else if (body.applicant_id) {
-      // A resume that has just arrived is placed by the first pass's own rule: the strongest
-      // candidates hold the shortlist, and nobody already shortlisted is dropped.
-      const promote = scored.filter((a, index) => index < limit && a.status === 'submitted');
-      if (promote.length > 0) {
-        await base44.asServiceRole.entities.Applicant.bulkUpdate(
-          promote.map((a) => ({ id: a.id, status: 'top10' }))
-        );
-      }
+    if (body.action === 'extend' || body.applicant_id) {
+      added = await holdShortlist(base44, scored, limit);
     }
 
     // Nobody is emailed here: a candidate attaching a resume on the job page only fills the

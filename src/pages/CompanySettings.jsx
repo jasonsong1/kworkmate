@@ -35,7 +35,7 @@ const PANEL_MODULES = {
 
 export default function CompanySettings() {
   const { t } = useI18n();
-  const { company, reload, role, isPlatformAdmin, pkg, presets, feature, hasModule, levelOf } = useWorkspace();
+  const { company, role, isPlatformAdmin, pkg, presets, feature, hasModule, levelOf, patchCompany } = useWorkspace();
   const videoAllowed = videoInterviewAllowed(pkg);
   const miniAllowed = feature('mini_interview');
   // Saving follows what this person's company settings area allows, not the title on their
@@ -65,7 +65,7 @@ export default function CompanySettings() {
       ai_top_n: company.ai_top_n || 10,
       auto_reject_email: company.auto_reject_email !== false,
       mini_interview_enabled: company.mini_interview_enabled !== false,
-      video_interview_enabled: company.video_interview_enabled === true,
+      video_interview_enabled: company.video_interview_enabled !== false,
       screening_criteria: company.screening_criteria || '',
       pay_multipliers: payMultipliers(company.pay_multipliers),
       // A grant saved before an area stopped offering create-and-delete is pulled back to
@@ -127,14 +127,17 @@ export default function CompanySettings() {
   const save = async () => {
     if (!company || !form) return;
     setSaving(true);
-    await base44.entities.Company.update(company.id, {
+    const payload = {
       ...form,
       ai_top_n: Number(form.ai_top_n) || 10,
       pay_multipliers: Object.fromEntries(
         Object.entries(payMultipliers(form.pay_multipliers)).map(([key, value]) => [key, Number(value) || 1])
       )
-    });
-    await reload();
+    };
+    await base44.entities.Company.update(company.id, payload);
+    // Saving keeps the screen where it is: the workspace copy of the company is updated in
+    // place instead of reloading the whole back office, so the open tab stays open.
+    patchCompany(payload);
     setSaving(false);
     toast({ title: t('settings.saved') });
   };

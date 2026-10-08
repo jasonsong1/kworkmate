@@ -91,9 +91,9 @@ export default async function (req: Request) {
               `<b>${applicant.full_name}</b> recorded all ${total} video answers for ${
                 job ? job.title : 'your role'
               }.`,
-              'Open the applicant in K-Workmate to watch the recordings and read the transcripts.'
+              'Open the applicant in kworkmate to watch the recordings and read the transcripts.'
             ],
-            footer: `${company ? company.name : ''} · K-Workmate`
+            footer: `${company ? company.name : ''} · kworkmate`
           })
         });
       }

@@ -89,7 +89,7 @@ export default async function (req: Request) {
           heading: copy.heading,
           brandColor: branch.brand_color || (company && company.brand_color),
           lines: [copy.greeting, copy.lead, ...lines],
-          footer: `${company ? company.name : branch.name} · K-Workmate`
+          footer: `${company ? company.name : branch.name} · kworkmate`
         })
       });
       if (ok) sent += 1;

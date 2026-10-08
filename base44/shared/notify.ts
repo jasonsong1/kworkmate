@@ -93,7 +93,7 @@ export async function notifyStaff(
         heading: copy.heading,
         lines: copy.lines,
         brandColor: (branch && branch.brand_color) || (company && company.brand_color),
-        footer: `${(company && company.name) || (branch && branch.name) || 'K-Workmate'} · K-Workmate`
+        footer: `${(company && company.name) || (branch && branch.name) || 'kworkmate'} · kworkmate`
       })
     });
     if (ok) emailed += 1;

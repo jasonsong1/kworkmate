@@ -1,11 +1,14 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.52';
+import { resolveCaller } from '../../shared/kwAuth.ts';
 import { sendApplicantEmail, cleanOrigin } from '../../shared/email.ts';
 import { renderStageEmail } from '../../shared/emailStages.ts';
 
 export default async function (req: Request) {
   try {
     const base44 = createClientFromRequest(req);
-    const me = await base44.auth.me();
+    // Either door the employer signed in through answers here, so the button works for a
+    // manager holding the ID their employer issued as well as for a platform account.
+    const me = await resolveCaller(base44, req);
     if (!me) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
     const body = await req.json();
@@ -16,6 +19,7 @@ export default async function (req: Request) {
     if (!applicant) return Response.json({ error: 'Applicant not found' }, { status: 404 });
 
     const allowed =
+      me.role === 'admin' ||
       (me.company_id && me.company_id === applicant.company_id) ||
       (me.branch_ids || []).includes(applicant.branch_id);
     if (!allowed) return Response.json({ error: 'You cannot manage this applicant' }, { status: 403 });
