@@ -1,30 +1,65 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.52';
 import { buildDraft, comingMondayIso, rowsOf } from '../../shared/roster.ts';
 
-// Runs on the schedule, not on anybody's button: every store that has its shift settings in place
-// gets next week's draft built, and the people who run the store are told it is waiting for them
-// to check and send.
+const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+// Store hours are Australian, and the employer picks the day and time on the branch's own screen,
+// so the clock the schedule is compared against is Sydney's.
+function sydneyClock() {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Australia/Sydney',
+    weekday: 'short',
+    hour: '2-digit',
+    hourCycle: 'h23',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).formatToParts(new Date());
+  const read = (type) => (parts.find((part) => part.type === type) || {}).value || '';
+  return {
+    day: WEEKDAYS.indexOf(read('weekday')),
+    hour: Number(read('hour')),
+    date: `${read('year')}-${read('month')}-${read('day')}`
+  };
+}
+
+// Runs every hour. Each branch is only built at the day and time its employer chose, once for that
+// week, and the people who run the store are told the draft is waiting for them to check and send.
 export default async function (req) {
   try {
     const base44 = createClientFromRequest(req);
-    const settings = rowsOf(await base44.asServiceRole.entities.RosterSetting.list({ limit: 500 }));
-    const weekStart = comingMondayIso();
+    const clock = sydneyClock();
+    const weekStart = comingMondayIso(clock.date);
+    const branches = rowsOf(
+      await base44.asServiceRole.entities.Branch.filter({ roster_auto_enabled: true }, { limit: 200 })
+    );
     const stores = [];
 
-    for (const setting of settings) {
-      const branch = await base44.asServiceRole.entities.Branch
-        .get(setting.branch_id)
-        .catch(() => null);
+    for (const branch of branches) {
       if (!branch || branch.is_active === false) continue;
+      const day = Number(branch.roster_auto_day ?? 4);
+      const hour = Number(branch.roster_auto_hour ?? 20);
+      if (clock.day !== day || clock.hour !== hour) continue;
+      // One draft per branch per week, however often the check runs.
+      if (branch.roster_auto_last_week === weekStart) continue;
 
       const result = await buildDraft(base44, branch, weekStart);
+      await base44.asServiceRole.entities.Branch
+        .update(branch.id, {
+          roster_auto_last_at: new Date().toISOString(),
+          roster_auto_last_week: weekStart
+        })
+        .catch(() => null);
+
       if (result.error) {
         stores.push({ branch: branch.name, error: result.error });
         continue;
       }
 
       const managers = [
-        ...new Set((branch.manager_emails || []).map((email) => String(email || '').trim().toLowerCase()).filter(Boolean))
+        ...new Set(
+          (branch.manager_emails || []).map((email) => String(email || '').trim().toLowerCase()).filter(Boolean)
+        )
       ];
       for (const email of managers) {
         await base44.asServiceRole.entities.Notification
@@ -43,7 +78,7 @@ export default async function (req) {
       stores.push({ branch: branch.name, assigned: result.assigned, notified: managers.length });
     }
 
-    return Response.json({ ok: true, week_start: weekStart, stores });
+    return Response.json({ ok: true, week_start: weekStart, checked_day: clock.day, checked_hour: clock.hour, stores });
   } catch (error) {
     return Response.json({ error: error.message }, { status: 500 });
   }

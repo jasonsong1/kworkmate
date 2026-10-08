@@ -83,6 +83,24 @@
     "roster_email_last_sent": {
       "type": "string"
     },
+    "roster_auto_enabled": {
+      "type": "boolean",
+      "default": false
+    },
+    "roster_auto_day": {
+      "type": "number",
+      "default": 4
+    },
+    "roster_auto_hour": {
+      "type": "number",
+      "default": 20
+    },
+    "roster_auto_last_at": {
+      "type": "string"
+    },
+    "roster_auto_last_week": {
+      "type": "string"
+    },
     "is_active": {
       "type": "boolean",
       "default": true

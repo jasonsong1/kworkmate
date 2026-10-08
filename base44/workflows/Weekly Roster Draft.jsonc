@@ -1,23 +1,6 @@
 {
+  "description": "Checks every hour, and at the day and time each store has set for itself, builds that store's next week's roster draft for the manager to check and send.",
   "name": "Weekly Roster Draft",
-  "trigger": {
-    "condition": null,
-    "config": {
-      "trigger_type": "scheduled",
-      "events": [],
-      "schedule_mode": "recurring",
-      "cron_expression": "0 20 * * 4",
-      "one_time_date": null,
-      "timezone": "Australia/Sydney",
-      "interval_value": null,
-      "interval_unit": null,
-      "interval_anchor": null,
-      "ends_type": "never",
-      "ends_on_date": null,
-      "ends_after_count": null
-    }
-  },
-  "description": "Builds next week's roster draft at every store on the schedule, so the manager only has to check it and send it out.",
   "definition": {
     "document": {
       "dsl": "1.0.0",
@@ -35,11 +18,28 @@
           },
           "then": "end",
           "x-base44": {
-            "title": "\uc8fc\uac04 \ub85c\uc2a4\ud130 \ucd08\uc548 \uc790\ub3d9 \uc0dd\uc131",
-            "description": "\uc124\uc815\uc774 \uc788\ub294 \ubaa8\ub4e0 \uc9c0\uc810"
+            "title": "\uc9c0\uc810\ubcc4 \uc124\uc815 \uc2dc\uac01 \ub85c\uc2a4\ud130 \ucd08\uc548 \uc0dd\uc131",
+            "description": "\ub9e4\uc2dc\uac04 \ud655\uc778"
           }
         }
       }
     ]
+  },
+  "trigger": {
+    "condition": null,
+    "config": {
+      "trigger_type": "scheduled",
+      "events": [],
+      "schedule_mode": "recurring",
+      "cron_expression": "0 * * * *",
+      "one_time_date": null,
+      "timezone": "Australia/Sydney",
+      "interval_value": null,
+      "interval_unit": null,
+      "interval_anchor": null,
+      "ends_type": "never",
+      "ends_on_date": null,
+      "ends_after_count": null
+    }
   }
 }
