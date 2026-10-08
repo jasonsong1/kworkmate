@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Building2, Loader2, Plus, Power, RotateCcw, Search } from 'lucide-react';
+import { Building2, Loader2, Pencil, Plus, Power, RotateCcw, Search } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -11,6 +11,7 @@ import {
   AlertDialogTitle
 } from '@/components/ui/alert-dialog';
 import AddCompanyDialog from '@/components/company/AddCompanyDialog';
+import EditCompanyDialog from '@/components/platform/EditCompanyDialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -34,6 +35,7 @@ export default function CompanyManager() {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [addOpen, setAddOpen] = useState(false);
+  const [editRow, setEditRow] = useState(null);
   const [confirm, setConfirm] = useState(null);
   const [busyId, setBusyId] = useState('');
 
@@ -80,6 +82,13 @@ export default function CompanyManager() {
     setRows((prev) => prev.filter((row) => row.id !== item.id));
     toast({ title: next === 'deactivated' ? t('company.deactivated') : t('company.reactivated') });
     if (company && company.id === item.id) await reload();
+  };
+
+  // The corrected name and ABN show straight away, and the back office follows when the company
+  // being edited is the one currently open.
+  const saved = async (next) => {
+    setRows((prev) => prev.map((row) => (row.id === next.id ? { ...row, name: next.name, abn: next.abn } : row)));
+    if (company && company.id === next.id) await reload();
   };
 
   const closing = Boolean(confirm && !confirm.deactivated);
@@ -147,6 +156,9 @@ export default function CompanyManager() {
                       {busyId === item.id ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : null}
                       {t('company.open')}
                     </Button>
+                    <Button size="sm" variant="ghost" disabled={busyId === item.id} onClick={() => setEditRow(item)}>
+                      <Pencil className="mr-1.5 h-3.5 w-3.5" /> {t('company.edit')}
+                    </Button>
                     <Button
                       size="sm"
                       variant="ghost"
@@ -172,6 +184,13 @@ export default function CompanyManager() {
       </Card>
 
       <AddCompanyDialog open={addOpen} onOpenChange={setAddOpen} />
+
+      <EditCompanyDialog
+        company={editRow}
+        open={Boolean(editRow)}
+        onOpenChange={(next) => !next && setEditRow(null)}
+        onSaved={saved}
+      />
 
       <AlertDialog open={Boolean(confirm)} onOpenChange={(next) => !next && setConfirm(null)}>
         <AlertDialogContent>

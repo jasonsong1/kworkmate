@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Loader2, MailWarning, Sparkles, UserCheck, UserPlus, UserX, Video } from 'lucide-react';
+import { Check, Loader2, MailWarning, Sparkles, UserCheck, UserPlus, UserX, Video } from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
 import ApplicantCard from '@/components/ApplicantCard';
 import ApplicantDetailDialog from '@/components/ApplicantDetailDialog';
@@ -191,16 +191,29 @@ export default function Applicants() {
     <>
       {miniAllowed && job && job.mini_interview_enabled !== false && applicant.status === 'top10' && (
         <Button size="sm" variant="secondary" disabled={busyId === applicant.id} onClick={() => act(applicant, 'mini')}>
-          <UserPlus className="mr-1.5 h-3.5 w-3.5" /> {t('applicants.miniInterview')}
+          {applicant.mini_interview_status === 'sent' ? (
+            <Check className="mr-1.5 h-3.5 w-3.5" />
+          ) : (
+            <UserPlus className="mr-1.5 h-3.5 w-3.5" />
+          )}
+          {applicant.mini_interview_status === 'sent' ? t('applicants.miniInterviewSent') : t('applicants.miniInterview')}
         </Button>
       )}
       {videoAllowed &&
         job &&
         job.video_interview_enabled !== false &&
+        (!company || company.video_interview_enabled !== false) &&
         ['top10', 'mini_interview'].includes(applicant.status) &&
         applicant.video_interview_status !== 'completed' && (
           <Button size="sm" variant="secondary" disabled={busyId === applicant.id} onClick={() => act(applicant, 'video')}>
-            <Video className="mr-1.5 h-3.5 w-3.5" /> {t('applicants.videoInterview')}
+            {applicant.video_interview_status === 'sent' ? (
+              <Check className="mr-1.5 h-3.5 w-3.5" />
+            ) : (
+              <Video className="mr-1.5 h-3.5 w-3.5" />
+            )}
+            {applicant.video_interview_status === 'sent'
+              ? t('applicants.videoInterviewSent')
+              : t('applicants.videoInterview')}
           </Button>
         )}
       {['top10', 'mini_interview', 'final_interview'].includes(applicant.status) && (

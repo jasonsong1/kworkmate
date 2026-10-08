@@ -8,6 +8,7 @@ import {
   passwordProblem,
   passwordReused,
   randomSalt,
+  resolveCaller,
   sealRecord
 } from '../../shared/kwAuth.ts';
 
@@ -27,7 +28,9 @@ function mayManage(me, profile) {
 export default async function (req) {
   try {
     const base44 = createClientFromRequest(req);
-    const me = await base44.auth.me().catch(() => null);
+    // Either door the employer signed in through answers here: the ID their employer issued, or a
+    // platform account. Nobody is asked for a second sign-in before handing credentials over.
+    const me = await resolveCaller(base44, req);
     if (!me) return Response.json({ error: 'Sign-in required' }, { status: 401 });
 
     const body = await req.json().catch(() => ({}));

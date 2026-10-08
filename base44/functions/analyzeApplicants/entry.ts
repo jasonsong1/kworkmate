@@ -20,13 +20,15 @@ const RESUME_SCHEMA = {
 
 // A candidate the employer has already invited on keeps their place whatever the size is set to.
 const PROGRESSED_STATUSES = ['mini_interview', 'final_interview', 'interview_scheduled', 'hired'];
+// Everyone the screening has recommended, together with anybody it has already moved on.
+const SHORTLISTED_STATUSES = [...PROGRESSED_STATUSES, 'top10'];
 
-// The shortlist is exactly the size the employer set in company settings: the strongest
-// candidates hold it, anyone a better resume pushes out returns to the pool, and nobody already
-// moved on to an interview is touched.
-async function holdShortlist(base44: any, scored: any[], limit: number) {
+// The shortlist is held at the size the caller asks for: the strongest candidates fill it, anyone
+// a better resume pushes out returns to the pool, and nobody already moved on to an interview is
+// touched.
+async function holdShortlist(base44: any, scored: any[], target: number) {
   const progressed = scored.filter((a) => PROGRESSED_STATUSES.includes(a.status)).length;
-  const room = Math.max(0, limit - progressed);
+  const room = Math.max(0, target - progressed);
   const pool = scored.filter((a) => a.status === 'submitted' || a.status === 'top10');
   const keep = new Set(pool.slice(0, room).map((a) => a.id));
   const changes: any[] = [];
@@ -99,8 +101,8 @@ export default async function (req) {
     const branch = job.branch_id
       ? await base44.asServiceRole.entities.Branch.get(job.branch_id).catch(() => null)
       : null;
-    // The employer sets how many candidates are recommended, and every screening run keeps the
-    // shortlist at exactly that size.
+    // The employer sets how many candidates are recommended: that number is the list a job opens
+    // with, and the size of every further batch the button asks for.
     const topN = Number(company && company.ai_top_n) || 10;
     const limit = topN;
 
@@ -196,10 +198,14 @@ export default async function (req) {
     const updates = scored.map((a, index) => ({ id: a.id, rank: index + 1 }));
     if (updates.length > 0) await base44.asServiceRole.entities.Applicant.bulkUpdate(updates);
 
-    // Every screening run — the button in the back office or a resume that has just arrived —
-    // leaves the shortlist at the size the employer set.
+    // A resume that has just arrived leaves the list at the size the employer set. The button in
+    // the back office adds one further batch of that same size on top of what is already listed,
+    // so pressing it from a setting of one leaves two candidates, and then three.
     let added = 0;
-    if (body.action === 'extend' || body.applicant_id) {
+    if (body.action === 'extend') {
+      const listed = scored.filter((a) => SHORTLISTED_STATUSES.includes(a.status)).length;
+      added = await holdShortlist(base44, scored, listed + limit);
+    } else if (body.applicant_id) {
       added = await holdShortlist(base44, scored, limit);
     }
 

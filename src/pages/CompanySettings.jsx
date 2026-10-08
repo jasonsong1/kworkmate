@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
-import CompanyAdminsCard from '@/components/CompanyAdminsCard';
 import PackageCard from '@/components/package/PackageCard';
 import OnboardingDocsCard from '@/components/company/OnboardingDocsCard';
 import OnboardingQuestionsCard from '@/components/company/OnboardingQuestionsCard';
@@ -25,10 +24,9 @@ import { MODULES, clampAccess, grantedModules, levelRank, moduleLabelKey, normal
 import CompanyPicker from '@/components/platform/CompanyPicker';
 import { base44 } from '@/api/base44Client';
 
-// Some settings panels only make sense with the modules behind them: issuing other accounts and
-// the permission table belong to a staff list, penalty rates to a roster.
+// Some settings panels only make sense with the modules behind them: the permission table belongs
+// to a staff list, penalty rates to a roster.
 const PANEL_MODULES = {
-  admins: ['employees'],
   permissions: ['employees'],
   pay: ['roster']
 };
@@ -164,7 +162,6 @@ export default function CompanySettings() {
     { key: 'company', label: t('settings.cat.company') },
     { key: 'docs', label: t('settings.cat.docs') },
     { key: 'screening', label: t('settings.cat.screening') },
-    { key: 'admins', label: t('settings.cat.admins') },
     { key: 'permissions', label: t('settings.cat.permissions') },
     { key: 'pay', label: t('settings.cat.pay') }
   ].filter((category) => (PANEL_MODULES[category.key] || []).every((module) => hasModule(module)));
@@ -276,10 +273,6 @@ export default function CompanySettings() {
               </div>
             </CardContent>
           </Card>
-        </TabsContent>
-
-        <TabsContent value="admins">
-          <CompanyAdminsCard />
         </TabsContent>
 
         <TabsContent value="permissions">
