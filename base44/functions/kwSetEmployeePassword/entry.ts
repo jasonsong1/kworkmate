@@ -19,6 +19,10 @@ import {
 // counts exactly like a built-in manager.
 async function mayManage(base44, me, profile) {
   if (!me) return false;
+  // Your own sign-in is always yours to reset, whatever position you hold.
+  if (profile.id === me.profile_id || (clean(profile.user_email) && lower(profile.user_email) === lower(me.email))) {
+    return true;
+  }
   if (me.role === 'admin') return true;
   if (!profile.company_id || me.company_id !== profile.company_id) return false;
   if (clean(me.app_role) === 'company_admin') return true;

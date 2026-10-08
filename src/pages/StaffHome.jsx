@@ -1,11 +1,11 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { CalendarDays, CalendarPlus, FolderOpen, Loader2, QrCode, Timer, UserCircle2 } from 'lucide-react';
+import { CalendarDays, Eye, EyeOff, FolderOpen, KeyRound, Loader2, QrCode, UserCircle2 } from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
 import AvailabilityMatrix from '@/components/AvailabilityMatrix';
 import CalendarSubscribeCard from '@/components/CalendarSubscribeCard';
 import ClockScanButton from '@/components/attendance/ClockScanButton';
 import EmployeeDocumentsDialog from '@/components/EmployeeDocumentsDialog';
+import SelfPasswordDialog from '@/components/staff/SelfPasswordDialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -25,6 +25,9 @@ export default function StaffHome() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [docsOpen, setDocsOpen] = useState(false);
+  const [resetOpen, setResetOpen] = useState(false);
+  // The pay rate is hidden until the person asks to see it.
+  const [showRate, setShowRate] = useState(false);
   // The floor position holds no store code of its own; a supervisor or a manager does.
   const isFloorStaff = presetKey === 'floor_staff';
   // A package that does not include attendance has nothing to clock with.
@@ -95,20 +98,11 @@ export default function StaffHome() {
               </Button>
             )}
             {attendance && <ClockScanButton onRecorded={load} />}
-            {/* Their own attendance records, when their position holds the area. */}
-            {attendance && (
-              <Button variant="outline" asChild>
-                <Link to="/attendance">
-                  <Timer className="mr-2 h-4 w-4" /> {t('nav.attendance')}
-                </Link>
-              </Button>
-            )}
-            {/* A package without leave offers no leave button. */}
-            {hasModule('leave') && (
-              <Button variant="outline" asChild>
-                <Link to="/leave">
-                  <CalendarPlus className="mr-2 h-4 w-4" /> {t('leave.title')}
-                </Link>
+            {/* Attendance and leave sit in the left navigation, so no button repeats them here.
+                Their own sign-in password, though, has nowhere else to be reset. */}
+            {employeeProfile && (
+              <Button variant="outline" onClick={() => setResetOpen(true)}>
+                <KeyRound className="mr-2 h-4 w-4" /> {t('staff.resetPassword')}
               </Button>
             )}
             {/* The documents their employer keeps on their own staff record. */}
@@ -146,7 +140,19 @@ export default function StaffHome() {
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground">{t('common.rate')}</p>
-                    <p className="text-sm">{employeeProfile.hourly_rate ? money(employeeProfile.hourly_rate) : '—'}</p>
+                    <div className="flex items-center gap-2">
+                      <p className={`text-sm ${showRate ? '' : 'blur-sm select-none'}`}>
+                        {employeeProfile.hourly_rate ? money(employeeProfile.hourly_rate) : '—'}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setShowRate((value) => !value)}
+                        title={showRate ? t('staff.hideRate') : t('staff.showRate')}
+                        className="text-muted-foreground transition-colors hover:text-foreground"
+                      >
+                        {showRate ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                      </button>
+                    </div>
                   </div>
                 </div>
                 <div>
@@ -221,6 +227,7 @@ export default function StaffHome() {
       </div>
 
       <EmployeeDocumentsDialog open={docsOpen} onOpenChange={setDocsOpen} employee={employeeProfile} />
+      <SelfPasswordDialog open={resetOpen} onOpenChange={setResetOpen} profile={employeeProfile} />
     </div>
   );
 }

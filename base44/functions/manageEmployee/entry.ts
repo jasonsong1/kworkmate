@@ -5,6 +5,7 @@ import { sendEmail, brandedEmail, portalLink } from '../../shared/email.ts';
 import { sendAccountAccessEmail, releaseAppAccess } from '../../shared/account.ts';
 import { employeeLanguage, onboardingMail, onboardingReminderMail } from '../../shared/employeeMail.ts';
 import { packageState, resolveLimit } from '../../shared/packages.ts';
+import { clean, lower, resolveCaller } from '../../shared/kwAuth.ts';
 
 // Applies a role chosen by a company admin to the person's app user record.
 async function applyRole(base44, company, branch, email, roleKey) {
@@ -32,8 +33,10 @@ async function applyRole(base44, company, branch, email, roleKey) {
 export default async function (req) {
   try {
     const base44 = createClientFromRequest(req);
-    const me = await base44.auth.me();
-    if (!me) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    // Either door the employer signed in through answers here: the ID their employer issued, or a
+    // platform account.
+    const me = await resolveCaller(base44, req);
+    if (!me) return Response.json({ error: 'Sign-in required' }, { status: 401 });
 
     const body = await req.json();
     const action = body.action || 'create';
@@ -244,9 +247,29 @@ export default async function (req) {
           { status: 400 }
         );
       }
+      // The address on the record is what the employer keeps up to date, so it may be corrected
+      // here; the ID the person signs in with follows the address when that was the address.
+      const nextEmail = lower(input.user_email);
+      const patch = {};
+      if (nextEmail && nextEmail !== lower(profile.user_email)) {
+        const taken = await base44.asServiceRole.entities.EmployeeProfile.filter({
+          user_email: nextEmail,
+          company_id: me.company_id
+        });
+        if (taken.some((row) => row.id !== profile.id)) {
+          return Response.json({ error: 'This person is already an employee' }, { status: 400 });
+        }
+        patch.user_email = nextEmail;
+        if (!clean(profile.login_id) || lower(profile.login_id) === lower(profile.user_email)) {
+          patch.login_id = nextEmail;
+        }
+      }
+
       const updated = await base44.asServiceRole.entities.EmployeeProfile.update(profile.id, {
+        ...patch,
         full_name: input.full_name || profile.full_name,
-        position: input.position || '',
+        // An edit that does not touch the position leaves the one already stored in place.
+        position: clean(input.position) || clean(profile.position) || '',
         secondary_position: input.secondary_position || '',
         visa_type: input.visa_type || profile.visa_type || '',
         hourly_rate: Number(input.hourly_rate) || 0,
@@ -262,7 +285,7 @@ export default async function (req) {
         ...pinPatch
       });
 
-      if (roleKey) await applyRole(base44, company, branch, profile.user_email, roleKey);
+      if (roleKey) await applyRole(base44, company, branch, patch.user_email || profile.user_email, roleKey);
 
       return Response.json({ ok: true, employee: updated });
     }

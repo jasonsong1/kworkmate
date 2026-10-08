@@ -10,6 +10,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { useI18n } from '@/lib/i18n';
 import { EMPLOYMENT_TYPES, VISA_TYPES } from '@/lib/bh';
 import { useWorkspace } from '@/lib/WorkspaceContext';
+import { usePermissions } from '@/lib/permissions';
 import { base44 } from '@/api/base44Client';
 
 const empty = {
@@ -36,6 +37,7 @@ export default function EmployeeDialog({ open, onOpenChange, branch, employee, o
   const { t } = useI18n();
   const { toast } = useToast();
   const { company, role: myRole } = useWorkspace();
+  const { canEdit } = usePermissions();
   const [form, setForm] = useState(empty);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -43,17 +45,19 @@ export default function EmployeeDialog({ open, onOpenChange, branch, employee, o
   const canAssignRole = myRole === 'company_admin';
   // Completion is only reachable once the employee has actually submitted their onboarding.
   const onboardingSubmitted = Boolean(employee && employee.onboarding_submitted_at);
-  // Positions come from company settings. Company admins are appointed there too, and a
-  // branch manager keeps the role they were assigned, so both stay listed when already held.
-  const roleOptions = [
-  ...(form.app_role === 'company_admin' ? [{ key: 'company_admin', label: t('perm.role.company_admin') }] : []),
-  ...(form.app_role === 'branch_manager' ? [{ key: 'branch_manager', label: t('perm.role.branch_manager') }] : []),
-  ...(company && company.custom_roles || []).map((item) => ({ key: item.key, label: item.label }))];
-
-  const chosen = roleOptions.find((option) => option.key === form.app_role);
-  const hasPositions = (company && company.custom_roles || []).length > 0;
-  // The secondary position offers the same list as the position itself.
+  // The position on the record is the employer's own list from company settings — the same list
+  // the roster plans with. Whoever the employer gave the staff list to may set it, while the role
+  // key behind a position is still only handed out by a company admin. A position already stored
+  // stays listed even when it is no longer in the company's list, so nothing is lost on a save.
+  const canEditEmployees = canEdit('employees') || canAssignRole;
   const positionLabels = (company && company.custom_roles || []).map((item) => item.label);
+  const positionOptions =
+  form.position && !positionLabels.includes(form.position) ? [...positionLabels, form.position] : positionLabels;
+  const hasPositions = positionLabels.length > 0;
+  const pickPosition = (label) => {
+    const match = (company && company.custom_roles || []).find((item) => item.label === label);
+    setForm((prev) => ({ ...prev, position: label, ...(match && canAssignRole ? { app_role: match.key } : {}) }));
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -109,7 +113,8 @@ export default function EmployeeDialog({ open, onOpenChange, branch, employee, o
         origin: window.location.origin,
         employee: {
           ...form,
-          position: chosen ? chosen.label : employee && employee.position || '',
+          user_email: form.user_email.trim().toLowerCase(),
+          position: form.position || (employee && employee.position) || '',
           ...(employee ? { id: employee.id } : {})
         }
       });
@@ -167,25 +172,21 @@ export default function EmployeeDialog({ open, onOpenChange, branch, employee, o
             <Label>{t('common.email')} *</Label>
             <Input
               value={form.user_email}
-              disabled={Boolean(employee)}
               onChange={(e) => set('user_email', e.target.value)}
               placeholder="staff@email.com" />
+            <p className="mt-1 text-xs text-muted-foreground">{t('employees.emailHint')}</p>
             
           </div>
           <div>
             <Label>{t('common.position')}</Label>
-            <Select
-              value={chosen ? form.app_role : ''}
-              onValueChange={(v) => set('app_role', v)}
-              disabled={!canAssignRole}>
-              
+            <Select value={form.position || ''} onValueChange={pickPosition} disabled={!canEditEmployees}>
               <SelectTrigger>
                 <SelectValue placeholder={t('role.select')} />
               </SelectTrigger>
               <SelectContent>
-                {roleOptions.map((option) =>
-                <SelectItem key={option.key} value={option.key}>
-                    {option.label}
+                {positionOptions.map((label) =>
+                <SelectItem key={label} value={label}>
+                    {label}
                   </SelectItem>
                 )}
               </SelectContent>

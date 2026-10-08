@@ -22,6 +22,9 @@ export default function Clock() {
   const [shift, setShift] = useState(null);
   const [busy, setBusy] = useState(false);
   const [scanOpen, setScanOpen] = useState(false);
+  // 출근 / 퇴근 only says which punch is about to be recorded. Nothing is recorded until the
+  // person presses the record button and scans the store's code.
+  const [mode, setMode] = useState('in');
 
   const load = useCallback(async () => {
     if (!me) return;
@@ -41,6 +44,12 @@ export default function Clock() {
   useEffect(() => {
     load();
   }, [load]);
+
+  // While a shift is open the sensible next punch is the way out, and after it is closed the way
+  // back in — the person can still change the choice before scanning.
+  useEffect(() => {
+    setMode(entry ? 'out' : 'in');
+  }, [entry]);
 
   const currentPosition = () =>
     new Promise((resolve, reject) => {
@@ -68,7 +77,7 @@ export default function Clock() {
     locate();
   }, []);
 
-  const punch = async (action, branchId = activeBranch ? activeBranch.id : '', point = coords) => {
+  const punch = async (action, branchId, point) => {
     if (!branchId || !point) return;
     setBusy(true);
     const response = await base44.functions.invoke('attendancePunch', {
@@ -91,8 +100,8 @@ export default function Clock() {
     await load();
   };
 
-  // The store screen shows a QR code for the branch and today: scanning it records this signed-in
-  // employee at that store at this moment, so we always know who recorded and when.
+  // The store screen shows a QR code for the branch and today: scanning it records the punch the
+  // person chose at that store at this moment.
   const recordByScan = async (text) => {
     const link = parseKioskLink(text);
     if (!link) {
@@ -110,8 +119,19 @@ export default function Clock() {
     }
     setCoords(point);
     setScanOpen(false);
-    await punch(entry ? 'out' : 'in', link.branchId, point);
+    await punch(mode, link.branchId, point);
   };
+
+  const modeButton = (value, label, Icon) => (
+    <Button
+      variant={mode === value ? 'default' : 'outline'}
+      aria-pressed={mode === value}
+      onClick={() => setMode(value)}
+      disabled={busy}
+    >
+      <Icon className="mr-2 h-4 w-4" /> {label}
+    </Button>
+  );
 
   return (
     <div className="mx-auto max-w-lg">
@@ -149,17 +169,18 @@ export default function Clock() {
                 </Badge>
               </div>
             ) : (
-              <Badge variant="secondary">Not clocked in</Badge>
+              <Badge variant="secondary">{t('clock.notClockedIn')}</Badge>
             )}
           </div>
 
-          <div className="grid gap-2 sm:grid-cols-2">
-            <Button onClick={() => punch('in')} disabled={busy || !coords || Boolean(entry)}>
-              <LogIn className="mr-2 h-4 w-4" /> {t('attendance.clockIn')}
-            </Button>
-            <Button variant="outline" onClick={() => punch('out')} disabled={busy || !coords || !entry}>
-              <LogOut className="mr-2 h-4 w-4" /> {t('attendance.clockOut')}
-            </Button>
+          {/* Choosing one of these does not record anything: it tells the record button which
+              punch the scan is for. */}
+          <div className="space-y-2">
+            <p className="text-xs text-muted-foreground">{t('clock.pickPunch')}</p>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {modeButton('in', t('attendance.clockIn'), LogIn)}
+              {modeButton('out', t('attendance.clockOut'), LogOut)}
+            </div>
           </div>
 
           <Button className="w-full" size="lg" variant="secondary" onClick={() => setScanOpen(true)} disabled={busy}>

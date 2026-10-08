@@ -1,5 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.52';
 import { weeklyHourCap } from '../../shared/visa.ts';
+import { resolveCaller } from '../../shared/kwAuth.ts';
 
 const DAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
 
@@ -46,8 +47,10 @@ function absMinutes(dateIso, minutes) {
 export default async function (req) {
   try {
     const base44 = createClientFromRequest(req);
-    const me = await base44.auth.me();
-    if (!me) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    // Either door the employer signed in through answers here: the ID their employer issued, or a
+    // platform account.
+    const me = await resolveCaller(base44, req);
+    if (!me) return Response.json({ error: 'Sign-in required' }, { status: 401 });
 
     const body = await req.json();
     const weekStart = startOfWeekIso(body.week_start);

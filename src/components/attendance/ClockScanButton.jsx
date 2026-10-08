@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Loader2, ScanLine } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Loader2, LogIn, LogOut, ScanLine } from 'lucide-react';
 import QrScannerDialog from '@/components/attendance/QrScannerDialog';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
@@ -24,14 +24,24 @@ function currentPosition() {
   });
 }
 
-// Opens the phone camera, reads the store's clock-in QR code and records the punch for the
-// signed-in person at that store, at this moment.
+// 출근 and 퇴근 choose which punch the scan is for; the punch itself is recorded only when the
+// record button opens the camera and the store's code is read.
 export default function ClockScanButton({ onRecorded }) {
   const { t } = useI18n();
   const { me } = useWorkspace();
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [mode, setMode] = useState('in');
+
+  // An open entry means this person is on shift, so the way out is the one they most likely need.
+  useEffect(() => {
+    if (!me) return;
+    base44.entities.TimeEntry.
+    filter({ employee_email: me.email, status: 'active' }, { limit: 1 }).
+    then((page) => setMode((page.items || []).length > 0 ? 'out' : 'in')).
+    catch(() => {});
+  }, [me]);
 
   const record = async (text) => {
     const link = parseKioskLink(text);
@@ -53,16 +63,9 @@ export default function ClockScanButton({ onRecorded }) {
       return;
     }
 
-    // An entry that is still open means this person is on shift, so the scan closes it.
-    const active = await base44.entities.TimeEntry
-      .filter({ employee_email: me.email, status: 'active' }, { limit: 1 })
-      .then((page) => page.items || [])
-      .catch(() => []);
-    const action = active.length > 0 ? 'out' : 'in';
-
     const response = await base44.functions.invoke('attendancePunch', {
       branch_id: link.branchId,
-      action,
+      action: mode,
       lat: point.lat,
       lng: point.lng
     });
@@ -76,21 +79,39 @@ export default function ClockScanButton({ onRecorded }) {
       toast({ title: data.error, variant: 'destructive' });
       return;
     }
-    toast({ title: action === 'in' ? t('clock.inDone') : t('clock.outDone') });
+    toast({ title: mode === 'in' ? t('clock.inDone') : t('clock.outDone') });
     if (onRecorded) onRecorded();
   };
 
   return (
-    <>
-      <Button onClick={() => setOpen(true)} disabled={busy || !me}>
+    <div className="flex items-center gap-1.5">
+      <Button
+        size="sm"
+        variant={mode === 'in' ? 'default' : 'outline'}
+        aria-pressed={mode === 'in'}
+        onClick={() => setMode('in')}
+        disabled={busy || !me}
+      >
+        <LogIn className="mr-1.5 h-4 w-4" /> {t('attendance.clockIn')}
+      </Button>
+      <Button
+        size="sm"
+        variant={mode === 'out' ? 'default' : 'outline'}
+        aria-pressed={mode === 'out'}
+        onClick={() => setMode('out')}
+        disabled={busy || !me}
+      >
+        <LogOut className="mr-1.5 h-4 w-4" /> {t('attendance.clockOut')}
+      </Button>
+      <Button size="sm" onClick={() => setOpen(true)} disabled={busy || !me}>
         {busy ? (
           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
         ) : (
           <ScanLine className="mr-2 h-4 w-4" />
         )}
-        {t('clock.scanButton')}
+        {t('clock.record')}
       </Button>
       <QrScannerDialog open={open} onOpenChange={setOpen} onScan={record} />
-    </>
+    </div>
   );
 }

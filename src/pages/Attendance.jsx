@@ -208,11 +208,8 @@ export default function Attendance() {
                       </TableCell>
                       <TableCell className="text-sm">{formatTimeInZone(row.clock_in_at, branchState)}</TableCell>
                       <TableCell className="text-sm">
-                        {row.clock_out_at ? (
-                          formatTimeInZone(row.clock_out_at, branchState)
-                        ) : (
-                          <Badge variant="secondary">Active</Badge>
-                        )}
+                        {/* Nobody has clocked out yet, so the column simply stays empty. */}
+                        {row.clock_out_at ? formatTimeInZone(row.clock_out_at, branchState) : null}
                       </TableCell>
                       <TableCell className="text-sm">
                         {row.minutes ? `${Math.floor(row.minutes / 60)}h ${row.minutes % 60}m` : '—'}
