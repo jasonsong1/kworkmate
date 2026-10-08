@@ -1,5 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.52';
 import {
+  accessFor,
   clean,
   closeSessionsFor,
   hashPassword,
@@ -13,16 +14,18 @@ import {
 } from '../../shared/kwAuth.ts';
 
 // The employer's side of the sign-in: they hand the employee an ID and a password, and nothing
-// has to be emailed anywhere. Only the company the employee belongs to may issue it.
-function mayManage(me, profile) {
+// has to be emailed anywhere. Whoever the employer gave the staff list to may issue it, resolved
+// through the same three layers every screen reads, so a role the employer set up themselves
+// counts exactly like a built-in manager.
+async function mayManage(base44, me, profile) {
   if (!me) return false;
   if (me.role === 'admin') return true;
   if (!profile.company_id || me.company_id !== profile.company_id) return false;
   if (clean(me.app_role) === 'company_admin') return true;
-  if (clean(me.app_role) === 'branch_manager') {
-    return (me.branch_ids || []).includes(profile.branch_id);
-  }
-  return false;
+  const cell = (await accessFor(base44, me, true)).employees;
+  if (!cell || cell.level === 'read') return false;
+  if (cell.scope === 'company') return true;
+  return (me.branch_ids || []).includes(profile.branch_id);
 }
 
 export default async function (req) {
@@ -38,7 +41,7 @@ export default async function (req) {
       .get(String(body.profile_id || ''))
       .catch(() => null);
     if (!profile) return Response.json({ error: 'Employee not found' }, { status: 404 });
-    if (!mayManage(me, profile)) {
+    if (!(await mayManage(base44, me, profile))) {
       return Response.json({ error: 'You cannot issue sign-in for this employee' }, { status: 403 });
     }
 

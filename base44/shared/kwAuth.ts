@@ -294,7 +294,10 @@ export const NO_ROWS = { none: true };
 // The employer's own answer to "what may this person do", resolved from the same three layers
 // every screen reads: the package the company paid for, the position preset their role holds,
 // and the grant saved for that role on the company and on the branch they work in.
-export async function accessFor(base44: any, me: any) {
+// everyModule asks for the rights the person's own role carries, before the package the company
+// paid for takes a module away: the back office uses it where an action belongs to the role
+// itself (handing an employee their sign-in) rather than to a screen the package includes.
+export async function accessFor(base44: any, me: any, everyModule = false) {
   const roleKey = clean(me && me.app_role) || 'staff';
   const isAdmin = Boolean(me && me.role === 'admin');
   const isCompanyAdmin = isAdmin || roleKey === 'company_admin';
@@ -316,7 +319,7 @@ export async function accessFor(base44: any, me: any) {
     ? applyModuleOverrides(packageState(company), await loadModuleOverrides(base44)).modules
     : ALL_MODULES;
   return resolveAccess({
-    packageModules: isAdmin ? ALL_MODULES : modules,
+    packageModules: isAdmin || everyModule ? ALL_MODULES : modules,
     preset,
     companyGrant: company && company.role_permissions ? company.role_permissions[roleKey] : null,
     branchGrant: branch && branch.role_permissions ? branch.role_permissions[roleKey] : null,
