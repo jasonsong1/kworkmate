@@ -3,6 +3,7 @@ import PageHeader from '@/components/PageHeader';
 import CompanyManager from '@/components/platform/CompanyManager';
 import PlatformAdminManager from '@/components/platform/PlatformAdminManager';
 import PresetManager from '@/components/platform/PresetManager';
+import ModuleAccessManager from '@/components/platform/ModuleAccessManager';
 import { Card, CardContent } from '@/components/ui/card';
 import { useI18n } from '@/lib/i18n';
 import { useWorkspace } from '@/lib/WorkspaceContext';
@@ -28,6 +29,7 @@ export default function PlatformAdmin() {
       <PageHeader title={t('platform.title')} subtitle={t('platform.subtitle')} />
       <div className="space-y-6">
         <CompanyManager />
+        <ModuleAccessManager />
         <PlatformAdminManager />
         <PresetManager />
       </div>

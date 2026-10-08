@@ -17,6 +17,10 @@ import { base44 } from '@/api/base44Client';
 // with the invite button and nothing before it.
 const INTERVIEW_STATUSES = ['final_interview', 'interview_scheduled', 'hired'];
 
+// Anyone the screening has recommended — and anyone who has moved further along — is on the
+// shortlist, so a second screening run adds to the list instead of replacing it.
+const SHORTLIST_STATUSES = ['top10', 'mini_interview', 'final_interview', 'interview_scheduled', 'hired'];
+
 export default function Applicants() {
   const { t } = useI18n();
   const { company, activeBranch, pkg } = useWorkspace();
@@ -135,7 +139,8 @@ export default function Applicants() {
     }
   };
 
-  // Scores any unscored resumes, then adds the next batch (shortlist size setting) to the shortlist.
+  // Scores every resume that has not been read yet, then adds one more batch to the shortlist.
+  // The batch is the size set in company settings, and it never re-picks anyone already picked.
   const runScreening = async () => {
     if (!job) return;
     setScreening(true);
@@ -147,8 +152,16 @@ export default function Applicants() {
         analysed += response.data.analysed || 0;
         if (!response.data.pending_left) break;
       }
-      // The shortlist is exactly the size set in company settings: no more, no less.
-      toast({ title: `${analysed} resume(s) screened · top ${topN} shortlisted` });
+      const extended = await base44.functions.invoke('analyzeApplicants', {
+        job_id: job.id,
+        action: 'extend'
+      });
+      if (extended.data?.error) throw new Error(extended.data.error);
+      toast({
+        title: t('applicants.screened')
+          .replace('{count}', String(analysed))
+          .replace('{added}', String(extended.data.added || 0))
+      });
       await loadApplicants();
     } catch (error) {
       toast({ title: error.message, variant: 'destructive' });
@@ -171,8 +184,7 @@ export default function Applicants() {
     await loadApplicants();
   };
 
-  const ranked = applicants.filter((a) => typeof a.ai_score === 'number');
-  const shortlist = ranked.slice(0, topN);
+  const shortlist = applicants.filter((a) => SHORTLIST_STATUSES.includes(a.status));
   const interviewList = applicants.filter((a) => INTERVIEW_STATUSES.includes(a.status));
 
   const actionButtons = (applicant) => (
@@ -238,7 +250,7 @@ export default function Applicants() {
               <>
                 <Button variant="outline" onClick={runScreening} disabled={screening}>
                   {screening ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
-                  {screening ? t('jobs.aiRunning') : t('jobs.runAi')}
+                  {screening ? t('jobs.aiRunning') : t('applicants.addScreening')}
                 </Button>
                 <Button variant="outline" onClick={rejectUnselected}>
                   <MailWarning className="mr-2 h-4 w-4" /> {t('applicants.rejectAll')}
@@ -275,8 +287,9 @@ export default function Applicants() {
           <TabsContent value="shortlist" className="mt-6">
             <div className="mb-4 rounded-xl border bg-muted/30 px-4 py-3">
               <p className="text-sm text-muted-foreground">
-                Showing the top {shortlist.length} of {ranked.length} scored candidates · the shortlist size ({topN})
-                is set in company settings
+                {t('applicants.shortlistHint')
+                  .replace('{count}', String(shortlist.length))
+                  .replace('{size}', String(topN))}
               </p>
             </div>
 
