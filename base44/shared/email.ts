@@ -66,3 +66,22 @@ export function portalLink(origin, path) {
   const base = cleanOrigin(origin);
   return base ? `${base}${path}` : path;
 }
+
+// The company's onboarding documents ride along with the onboarding email. One email can carry
+// five files and 10MB in total, so anything past that is named in the body instead.
+export function onboardingAttachments(company) {
+  const docs = (company && company.onboarding_docs) || [];
+  const attachments = [];
+  const skipped = [];
+  let bytes = 0;
+  for (const doc of docs) {
+    const size = Number(doc.size) || 0;
+    if (!doc.file_url || attachments.length >= 5 || bytes + size > 10 * 1024 * 1024) {
+      skipped.push(doc.name || 'document');
+      continue;
+    }
+    attachments.push({ filename: doc.name || 'document', file_url: doc.file_url });
+    bytes += size;
+  }
+  return { attachments, skipped };
+}

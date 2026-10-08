@@ -1,4 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.52';
+import { resolveCaller } from '../../shared/kwAuth.ts';
 import { sendEmail } from '../../shared/email.ts';
 import { renderStageEmail } from '../../shared/emailStages.ts';
 
@@ -49,6 +50,19 @@ Read the attached resume and return:
 Score fairly and consistently. Reply with the JSON object only.`;
 }
 
+// Whoever pressed the button in the back office: a KWorkMate session or a platform sign-in, and
+// only for a job their own company or branch covers.
+async function managerFor(base44: any, req: Request, job: any): Promise<any> {
+  const me = await resolveCaller(base44, req);
+  if (!me) return { denied: Response.json({ error: 'Unauthorized' }, { status: 401 }) };
+  const sameCompany = Boolean(me.company_id && job.company_id && me.company_id === job.company_id);
+  const sameBranch = (me.branch_ids || []).includes(job.branch_id);
+  if (!(me.role === 'admin' || sameCompany || sameBranch)) {
+    return { denied: Response.json({ error: 'Forbidden' }, { status: 403 }) };
+  }
+  return { me };
+}
+
 export default async function (req) {
   try {
     const base44 = createClientFromRequest(req);
@@ -71,11 +85,8 @@ export default async function (req) {
     const limit = topN * cycle;
 
     if (body.action === 'extend') {
-      const me = await base44.auth.me();
-      if (!me) return Response.json({ error: 'Unauthorized' }, { status: 401 });
-      if (me.company_id && job.company_id && me.company_id !== job.company_id) {
-        return Response.json({ error: 'Forbidden' }, { status: 403 });
-      }
+      const guard = await managerFor(base44, req, job);
+      if (guard.denied) return guard.denied;
       const everyone = await base44.asServiceRole.entities.Applicant.filter({ job_id: jobId });
       const ranked = everyone
         .filter((a) => typeof a.ai_score === 'number')
@@ -103,11 +114,8 @@ export default async function (req) {
     }
 
     if (body.action === 'send_rejections') {
-      const me = await base44.auth.me();
-      if (!me) return Response.json({ error: 'Unauthorized' }, { status: 401 });
-      if (me.company_id && job.company_id && me.company_id !== job.company_id) {
-        return Response.json({ error: 'Forbidden' }, { status: 403 });
-      }
+      const guard = await managerFor(base44, req, job);
+      if (guard.denied) return guard.denied;
       const all = await base44.asServiceRole.entities.Applicant.filter({ job_id: jobId });
       const targets = all
         .filter((a) => ['submitted', 'top10', 'mini_interview', 'final_interview'].includes(a.status))
@@ -140,8 +148,8 @@ export default async function (req) {
       const one = await base44.asServiceRole.entities.Applicant.get(body.applicant_id).catch(() => null);
       if (one) targets = [one];
     } else {
-      const me = await base44.auth.me();
-      if (!me) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+      const guard = await managerFor(base44, req, job);
+      if (guard.denied) return guard.denied;
       const pending = await base44.asServiceRole.entities.Applicant.filter({ job_id: jobId, analysis_status: 'pending' });
       targets = pending.slice(0, 8);
       pendingLeft = Math.max(0, pending.length - targets.length);

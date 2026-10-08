@@ -5,7 +5,7 @@ import MiniInterviewPanel from '@/components/MiniInterviewPanel';
 import VideoInterviewPanel from '@/components/VideoInterviewPanel';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { APPLICANT_STATUS, coverageDays, formatDateTime, visaLabel } from '@/lib/bh';
+import { APPLICANT_STATUS, coverageDays, formatDateTime, noticePeriodLabel, visaLabel } from '@/lib/bh';
 import { useWorkspace } from '@/lib/WorkspaceContext';
 import { videoInterviewAllowed } from '@/lib/packages';
 
@@ -74,7 +74,7 @@ export default function ApplicantCard({ applicant, actions, onOpen, onViewResume
           )}
 
           <div className="grid gap-1 text-xs text-muted-foreground sm:grid-cols-2">
-            <span>Starts immediately: {applicant.available_immediately ? 'yes' : 'no'}</span>
+            <span>Notice period: {noticePeriodLabel(applicant.notice_period)}</span>
             <span>Visa expiry: {applicant.visa_expiry || '—'}</span>
             <span>Applied: {formatDateTime(applicant.created_date)}</span>
           </div>

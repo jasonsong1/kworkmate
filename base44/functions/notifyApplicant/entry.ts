@@ -1,6 +1,7 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.52';
+import { resolveCaller } from '../../shared/kwAuth.ts';
 import { randomToken } from '../../shared/util.ts';
-import { sendApplicantEmail, portalLink } from '../../shared/email.ts';
+import { onboardingAttachments, sendApplicantEmail, portalLink } from '../../shared/email.ts';
 import { renderStageEmail } from '../../shared/emailStages.ts';
 
 // Sends the emails a hiring team triggers by hand. The same endpoint re-sends the last
@@ -8,7 +9,7 @@ import { renderStageEmail } from '../../shared/emailStages.ts';
 export default async function (req) {
   try {
     const base44 = createClientFromRequest(req);
-    const me = await base44.auth.me();
+    const me = await resolveCaller(base44, req);
     if (!me) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
     const body = await req.json();
@@ -71,10 +72,37 @@ export default async function (req) {
         { ...vars, employee_number: profiles.length > 0 ? profiles[0].employee_number : '' },
         { brandColor: brand, ctaUrl: link }
       );
+      const { attachments } = onboardingAttachments(company);
       const result = await sendApplicantEmail(base44, applicant, {
         type: 'hired',
         subject: mail.subject,
+        html: mail.html,
+        attachments
+      });
+      return Response.json({ ok: true, sent: result.ok, error: result.error });
+    }
+
+    if (type === 'interview_cancelled') {
+      // The employer cancelled a booked time: the applicant is told straight away and handed a
+      // fresh booking link, and their record goes back to "invited" so they can choose again.
+      const token = applicant.interview_token || randomToken(24);
+      const link = portalLink(body.origin, `/interview/${token}`);
+      const mail = renderStageEmail(
+        company,
+        'cancelled',
+        { ...vars, date: body.slot_date || '', time: body.slot_time || '' },
+        { brandColor: brand, ctaUrl: link }
+      );
+      const result = await sendApplicantEmail(base44, applicant, {
+        type: 'cancelled',
+        subject: mail.subject,
         html: mail.html
+      });
+      await base44.asServiceRole.entities.Applicant.update(applicant.id, {
+        interview_token: token,
+        interview_slot_id: '',
+        interview_confirmed_at: '',
+        status: applicant.status === 'hired' ? 'hired' : 'final_interview'
       });
       return Response.json({ ok: true, sent: result.ok, error: result.error });
     }

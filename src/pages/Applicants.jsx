@@ -13,7 +13,9 @@ import { useWorkspace } from '@/lib/WorkspaceContext';
 import { featureAllowed, videoInterviewAllowed } from '@/lib/packages';
 import { base44 } from '@/api/base44Client';
 
-const INTERVIEW_STATUSES = ['mini_interview', 'final_interview', 'interview_scheduled', 'hired'];
+// The final-interview tab lists the people the employer has actually invited on, so it opens
+// with the invite button and nothing before it.
+const INTERVIEW_STATUSES = ['final_interview', 'interview_scheduled', 'hired'];
 
 export default function Applicants() {
   const { t } = useI18n();

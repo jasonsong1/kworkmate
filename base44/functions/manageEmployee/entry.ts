@@ -157,15 +157,30 @@ export default async function (req) {
       // the platform already knows has its access restored rather than re-invited.
       const access = await sendAccountAccessEmail(base44, profile.user_email, body.send_invite !== false);
 
-      if (body.send_onboarding_email && profile.onboarding_token) {
-        const link = portalLink(body.origin, `/onboarding/${profile.onboarding_token}`);
+      if (body.send_onboarding_email) {
+        // A form already sent back cannot be reopened with the old link, so asking for it again
+        // issues a fresh one and the next submission starts from an empty form.
+        const reopened =
+          !profile.onboarding_token ||
+          Boolean(profile.onboarding_submitted_at) ||
+          profile.onboarding_status === 'completed';
+        let onboardingToken = profile.onboarding_token;
+        if (reopened) {
+          onboardingToken = randomToken(24);
+          await base44.asServiceRole.entities.EmployeeProfile.update(profile.id, {
+            onboarding_token: onboardingToken,
+            onboarding_status: 'pending',
+            onboarding_submitted_at: ''
+          });
+        }
+        const link = portalLink(body.origin, `/onboarding/${onboardingToken}`);
         const details = {
           name: profile.full_name || 'team member',
           store,
           employeeNumber: profile.employee_number
         };
         // The first send welcomes them; a later one nudges the form they have not sent back yet.
-        const mail = profile.onboarding_submitted_at
+        const mail = !reopened && profile.onboarding_submitted_at
           ? onboardingReminderMail(employeeLanguage(profile.language), details)
           : onboardingMail(employeeLanguage(profile.language), details);
         await sendEmail(base44, {

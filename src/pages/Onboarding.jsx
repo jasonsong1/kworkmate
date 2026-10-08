@@ -193,11 +193,11 @@ export default function Onboarding() {
             <AlertCircle className="mx-auto mb-4 h-8 w-8 text-slate-400" />
           )}
           <h1 className="text-lg font-semibold">
-            {isDone ? 'Onboarding complete' : 'Link not recognised'}
+            {isDone ? 'Onboarding submitted' : 'Link not recognised'}
           </h1>
           <p className="mt-2 text-sm text-slate-500">
             {isDone
-              ? 'Your TFN declaration, superannuation choice and bank details have been filed securely. This link can no longer be used.'
+              ? 'Your onboarding has been received. Your TFN declaration, superannuation choice and bank details are filed securely, and this link can no longer be used.'
               : 'This onboarding link is invalid or has already been completed. Please contact your manager.'}
           </p>
         </div>

@@ -1,6 +1,7 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.52';
+import { resolveCaller } from '../../shared/kwAuth.ts';
 import { formatEmployeeNumber, randomToken } from '../../shared/util.ts';
-import { sendApplicantEmail, portalLink } from '../../shared/email.ts';
+import { onboardingAttachments, sendApplicantEmail, portalLink } from '../../shared/email.ts';
 import { renderStageEmail } from '../../shared/emailStages.ts';
 import { sendAccountAccessEmail } from '../../shared/account.ts';
 import { packageState, resolveLimit } from '../../shared/packages.ts';
@@ -8,7 +9,7 @@ import { packageState, resolveLimit } from '../../shared/packages.ts';
 export default async function (req) {
   try {
     const base44 = createClientFromRequest(req);
-    const me = await base44.auth.me();
+    const me = await resolveCaller(base44, req);
     if (!me) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
     const body = await req.json();
@@ -90,21 +91,8 @@ export default async function (req) {
 
     const link = portalLink(body.origin, `/onboarding/${token}`);
 
-    // The company's onboarding documents ride along with the hired email. One email can carry
-    // five files and 10MB in total, so anything past that is named in the body instead.
-    const onboardingDocs = (company && company.onboarding_docs) || [];
-    const attachments = [];
-    const skippedDocs = [];
-    let attachedBytes = 0;
-    for (const doc of onboardingDocs) {
-      const size = Number(doc.size) || 0;
-      if (!doc.file_url || attachments.length >= 5 || attachedBytes + size > 10 * 1024 * 1024) {
-        skippedDocs.push(doc.name || 'document');
-        continue;
-      }
-      attachments.push({ filename: doc.name || 'document', file_url: doc.file_url });
-      attachedBytes += size;
-    }
+    // The company's onboarding documents ride along with the hired email.
+    const { attachments, skipped: skippedDocs } = onboardingAttachments(company);
 
     const mail = renderStageEmail(
       company,

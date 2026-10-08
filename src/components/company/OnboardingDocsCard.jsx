@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { FileText, Loader2, Upload } from 'lucide-react';
+import { FileText, Loader2, Trash2, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/components/ui/use-toast';
@@ -45,6 +45,13 @@ export default function OnboardingDocsCard() {
     toast({ title: t('settings.docUploaded') });
   };
 
+  const remove = async (doc) => {
+    setBusy(true);
+    await save(docs.filter((item) => item.file_url !== doc.file_url));
+    setBusy(false);
+    toast({ title: t('settings.docDeleted') });
+  };
+
   return (
     <Card>
       <CardHeader>
@@ -84,6 +91,18 @@ export default function OnboardingDocsCard() {
                     {doc.uploaded_at ? ` · ${doc.uploaded_at.slice(0, 10)}` : ''}
                   </p>
                 </div>
+                {canEdit && (
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
+                    disabled={busy}
+                    title={t('common.delete')}
+                    onClick={() => remove(doc)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                )}
               </li>
             ))}
           </ul>

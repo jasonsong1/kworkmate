@@ -94,21 +94,21 @@ export default function Interviews() {
   const cancelSlot = async (slot) => {
     await base44.entities.InterviewSlot.update(slot.id, { status: 'cancelled' });
     if (slot.booked_by_applicant_id) {
-      const applicant = await base44.entities.Applicant.get(slot.booked_by_applicant_id).catch(() => null);
-      if (applicant) {
-        await base44.entities.Applicant.update(applicant.id, {
-          status: 'final_interview',
-          interview_slot_id: '',
-          interview_confirmed_at: ''
-        });
-        await base44.functions.invoke('notifyApplicant', {
-          applicant_id: applicant.id,
-          type: 'interview_invite',
-          origin: window.location.origin
-        });
+      // The applicant hears about it directly: the cancellation email carries a fresh booking link.
+      const response = await base44.functions.invoke('notifyApplicant', {
+        applicant_id: slot.booked_by_applicant_id,
+        type: 'interview_cancelled',
+        slot_date: slot.date,
+        slot_time: slot.start_time,
+        origin: window.location.origin
+      });
+      if (response.data?.error) {
+        toast({ title: response.data.error, variant: 'destructive' });
+        await loadSlots();
+        return;
       }
     }
-    toast({ title: 'Slot cancelled — the applicant has been asked to rebook' });
+    toast({ title: 'Slot cancelled — the applicant has been emailed to rebook' });
     await loadSlots();
   };
 

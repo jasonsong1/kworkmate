@@ -71,6 +71,19 @@ export const EMAIL_STAGES = [
     cta: ''
   },
   {
+    key: 'cancelled',
+    hasCta: true,
+    vars: ['name', 'job_title', 'store', 'company', 'date', 'time'],
+    subject: 'Your interview has been cancelled — {{job_title}}',
+    heading: 'Your interview was cancelled',
+    body: [
+      'Hi {{name}},',
+      'We are sorry, but your interview for **{{job_title}}** at {{store}} on **{{date}} at {{time}}** has been cancelled.',
+      'Please choose a new time using the link below and we will confirm it straight away.'
+    ].join('\n'),
+    cta: 'Choose a new time'
+  },
+  {
     key: 'hired',
     hasCta: true,
     vars: ['name', 'job_title', 'store', 'company', 'employee_number'],
