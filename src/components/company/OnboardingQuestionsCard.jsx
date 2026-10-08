@@ -54,11 +54,15 @@ function toDraft(questions) {
 // together on one page, and the signature the employee signs comes last.
 export default function OnboardingQuestionsCard() {
   const { t } = useI18n();
-  const { company, role, isManager, levelOf, reload } = useWorkspace();
+  const { company, role, presetKey, isManager, levelOf, reload } = useWorkspace();
   const { toast } = useToast();
   const [draft, setDraft] = useState([]);
   const [saving, setSaving] = useState(false);
-  const canEdit = role === 'company_admin' || isManager || ['update', 'write'].includes(levelOf('settings'));
+  const canEdit =
+    role === 'company_admin' ||
+    isManager ||
+    ['manager', 'supervisor_manager'].includes(presetKey) ||
+    ['update', 'write'].includes(levelOf('settings'));
 
   useEffect(() => {
     setDraft(toDraft(company && company.onboarding_questions));

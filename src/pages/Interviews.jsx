@@ -28,7 +28,7 @@ function slotTimes(from, to, step) {
 
 export default function Interviews() {
   const { t } = useI18n();
-  const { company, activeBranch, role, isManager, levelOf, reload } = useWorkspace();
+  const { company, activeBranch, role, presetKey, isManager, levelOf, reload } = useWorkspace();
   const { toast } = useToast();
 
   const [jobs, setJobs] = useState([]);
@@ -39,7 +39,11 @@ export default function Interviews() {
   const [savingToggle, setSavingToggle] = useState(false);
   const [form, setForm] = useState({ date: todayIso(), from: '14:00', to: '17:00', step: 20 });
 
-  const canManage = role === 'company_admin' || isManager || ['update', 'write'].includes(levelOf('interviews'));
+  const canManage =
+    role === 'company_admin' ||
+    isManager ||
+    ['manager', 'supervisor_manager'].includes(presetKey) ||
+    ['update', 'write'].includes(levelOf('interviews'));
   const allowReschedule = Boolean(company && company.allow_interview_reschedule);
 
   const loadJobs = useCallback(async () => {
@@ -71,10 +75,10 @@ export default function Interviews() {
     loadSlots();
   }, [loadSlots]);
 
-  // Which job ad a booked time belongs to, so a merged schedule still reads clearly.
+  // The position a booked time belongs to, so a merged schedule still reads clearly.
   const jobLabel = (slot) => {
     const job = jobs.find((item) => item.id === slot.job_id);
-    return job ? job.title : '';
+    return job ? job.position || job.title : '';
   };
 
   const generate = async () => {
