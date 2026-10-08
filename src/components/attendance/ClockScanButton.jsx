@@ -136,7 +136,7 @@ export default function ClockScanButton({ onRecorded }) {
           <DropdownMenuSeparator />
           <DropdownMenuItem onSelect={() => setOpen(true)}>
             <ScanLine className="mr-2 h-4 w-4" />
-            {t('clock.scan')}
+            {t('clock.record')}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
