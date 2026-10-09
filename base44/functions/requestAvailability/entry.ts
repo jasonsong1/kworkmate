@@ -53,7 +53,9 @@ export default async function (req) {
       subject: copy.subject,
       html: brandedEmail({
         heading: copy.heading,
+        badge: branch.name,
         lines: copy.lines,
+        tip: copy.tip,
         ctaText: copy.cta,
         // Straight to the sign-in page, never to a page that assumes who is asking: the person
         // opens this on their own phone and signs in with the ID their employer issued.

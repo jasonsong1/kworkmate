@@ -164,26 +164,61 @@ function fillLine(line, vars) {
   return missing ? '' : html.replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
 }
 
-function layout({ heading, lines, ctaText, color, footer, logoUrl }) {
+// Mirrors brandedEmail() in base44/shared/email.ts: the kworkmate lockup, a white card with the
+// store badge, a bulletproof button and the tip box. Keep the two in step.
+function layout({ heading, lines, ctaText, color, footer, logoUrl, badge, tip }) {
   const body = lines
-    .map((l) => `<p style="margin:0 0 12px;font-size:15px;line-height:1.6;color:#334155">${l}</p>`)
+    .map((l) => `<p style="margin:0 0 12px 0;font-size:15px;line-height:1.65;color:#475569">${l}</p>`)
     .join('');
   const cta = ctaText
-    ? `<a href="#" style="display:inline-block;margin-top:10px;padding:12px 22px;border-radius:10px;background:${color};color:#ffffff;font-weight:600;text-decoration:none;font-size:15px">${ctaText}</a>`
+    ? `<table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="margin:8px 0 24px 0"><tr><td align="center"><a href="#" style="display:inline-block;background-color:${color};color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;padding:14px 32px;border-radius:10px;letter-spacing:-0.2px">${ctaText}</a></td></tr></table>`
     : '';
-  const logo = logoUrl
-    ? `<img src="${logoUrl}" alt="" style="display:block;max-height:52px;max-width:200px;margin:0 0 18px" />`
+  const mark = logoUrl
+    ? `<img src="${logoUrl}" alt="kworkmate" style="display:block;max-height:34px;max-width:170px" />`
+    : `<div style="background-color:${color};color:#ffffff;font-weight:800;font-size:17px;width:34px;height:34px;line-height:34px;text-align:center;border-radius:8px">K</div>`;
+  const badgeHtml = badge
+    ? `<div style="display:inline-block;background-color:#eff6ff;border:1px solid #bfdbfe;color:#1d4ed8;font-size:12px;font-weight:600;padding:4px 10px;border-radius:9999px;margin:0 0 16px 0">📍 ${badge}</div>`
     : '';
-  return `<div style="font-family:Inter,Arial,sans-serif;background:#f1f5f9;padding:24px">
-  <div style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:16px;padding:28px;border:1px solid #e2e8f0">
-    ${logo}
-    <h1 style="margin:0 0 16px;font-size:20px;color:#0f172a;line-height:1.3">${heading}</h1>
-    ${body}
-    ${cta}
-    <hr style="margin:24px 0;border:none;border-top:1px solid #e2e8f0" />
-    <p style="margin:0;font-size:12px;color:#94a3b8">${footer}</p>
-  </div>
-</div>`;
+  const tipHtml = tip
+    ? `<div style="background-color:#fffbeb;border-left:3px solid #f59e0b;padding:12px 14px;border-radius:4px"><p style="margin:0;font-size:12px;color:#92400e;line-height:1.55">${tip}</p></div>`
+    : '';
+  return `<table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color:#f4f6f8;padding:36px 12px 40px 12px">
+  <tr>
+    <td align="center">
+      <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="560" style="width:100%;max-width:560px;margin:0 auto">
+        <tr>
+          <td align="center" style="padding:0 0 22px 0">
+            <table role="presentation" border="0" cellpadding="0" cellspacing="0">
+              <tr>
+                <td style="vertical-align:middle;padding-right:9px">${mark}</td>
+                <td style="vertical-align:middle;font-size:19px;font-weight:700;color:#0f172a;letter-spacing:-0.3px">kworkmate</td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+        <tr>
+          <td style="background-color:#ffffff;border:1px solid #e2e8f0;border-radius:16px;overflow:hidden">
+            <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%">
+              <tr><td style="height:4px;background-color:${color};font-size:0;line-height:0">&nbsp;</td></tr>
+              <tr>
+                <td style="padding:36px 32px 32px 32px">
+                  ${badgeHtml}
+                  <h1 style="margin:0 0 14px 0;font-size:21px;font-weight:700;color:#0f172a;line-height:1.35;letter-spacing:-0.3px">${heading}</h1>
+                  ${body}
+                  ${cta}
+                  ${tipHtml}
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+        <tr>
+          <td align="center" style="padding:22px 10px 0 10px;font-size:12px;line-height:1.6;color:#94a3b8">${footer}</td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>`;
 }
 
 export function getStage(key) {
@@ -234,6 +269,7 @@ export function renderEmailPreview({ stageKey, values, branding, companyName }) 
     subject: fillText(values.subject || '', vars),
     html: layout({
       heading: fillHtml(values.heading || '', vars),
+      badge: vars.store ? esc(vars.store) : '',
       lines,
       ctaText: stage.hasCta ? fillHtml(values.cta || stage.cta, vars) : '',
       color: branding.color || '#4338ca',

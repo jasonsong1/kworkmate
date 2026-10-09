@@ -96,6 +96,7 @@ export async function notifyStaff(
       subject: copy.subject,
       html: brandedEmail({
         heading: copy.heading,
+        badge: (branch && branch.name) || '',
         lines: copy.lines,
         brandColor: (branch && branch.brand_color) || (company && company.brand_color),
         footer: `${(company && company.name) || (branch && branch.name) || 'kworkmate'} · kworkmate`

@@ -191,6 +191,7 @@ export default async function (req) {
           subject: mail.subject,
           html: brandedEmail({
             heading: mail.heading,
+            badge: store,
             brandColor: branch ? branch.brand_color : undefined,
             lines: mail.lines,
             ctaText: mail.cta,
