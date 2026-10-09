@@ -116,9 +116,9 @@ export function WorkspaceProvider({ children }) {
       await loadPackageStatus('');
     }
 
-    // Everyone who is not a manager is an employee: staff and every company-defined position.
-    const appRole = user ? (superAdmin ? 'company_admin' : user.app_role || 'staff') : '';
-    if (user && appRole !== 'company_admin' && appRole !== 'branch_manager') {
+    // Everyone's own staff record. A manager works shifts too, so their own space shows the same
+    // record the crew's does — only the platform admin, who belongs to no store, has none.
+    if (user && !superAdmin) {
       const profiles = await base44.entities.EmployeeProfile.filter({ user_email: user.email }).catch(() => []);
       setEmployeeProfile(profiles[0] || null);
     } else {
