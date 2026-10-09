@@ -298,13 +298,13 @@ export default function Applicants() {
           </TabsList>
 
           <TabsContent value="shortlist" className="mt-6">
-            <div className="mb-4 rounded-xl border bg-muted/30 px-4 py-3 hidden">
-              <p className="text-sm text-muted-foreground">
-                {t('applicants.shortlistHint').
-              replace('{count}', String(shortlist.length)).
-              replace('{size}', String(topN))}
-              </p>
-            </div>
+            
+
+
+
+
+
+          
 
             {shortlist.length === 0 ?
           <Card>
