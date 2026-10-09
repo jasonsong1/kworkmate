@@ -98,6 +98,11 @@ export default async function (req) {
     );
     const nowIso = new Date().toISOString();
 
+    // A manager's own punch is recorded as it stands: there is nobody above them to accept it.
+    const managers = await branchManagers(base44, company, branch).catch(() => []);
+    const isManager = managers.includes(person.user_email);
+    const approval = isManager ? 'approved' : 'pending';
+
     if (action === 'in') {
       if (active.length > 0) return Response.json({ error: 'already_clocked_in' });
 
@@ -122,12 +127,19 @@ export default async function (req) {
         geo_verified: false,
         status: 'active',
         source: 'manual',
-        approval_status: 'pending'
+        approval_status: approval,
+        approved_at: isManager ? nowIso : ''
       });
 
-      await alertManagers(base44, company, branch, person, 'in').catch(() => null);
+      if (!isManager) await alertManagers(base44, company, branch, person, 'in').catch(() => null);
 
-      return Response.json({ ok: true, action: 'in', name: person.full_name, employee_number: canonical });
+      return Response.json({
+        ok: true,
+        action: 'in',
+        name: person.full_name,
+        employee_number: canonical,
+        pending: !isManager
+      });
     }
 
     if (active.length === 0) return Response.json({ error: 'not_clocked_in' });
@@ -139,14 +151,20 @@ export default async function (req) {
       minutes,
       status: 'completed',
       source: 'manual',
-      approval_status: 'pending',
-      approved_by_email: '',
-      approved_at: ''
+      approval_status: approval,
+      approved_by_email: isManager ? person.user_email : '',
+      approved_at: isManager ? nowIso : ''
     });
 
-    await alertManagers(base44, company, branch, person, 'out').catch(() => null);
+    if (!isManager) await alertManagers(base44, company, branch, person, 'out').catch(() => null);
 
-    return Response.json({ ok: true, action: 'out', name: person.full_name, employee_number: canonical });
+    return Response.json({
+      ok: true,
+      action: 'out',
+      name: person.full_name,
+      employee_number: canonical,
+      pending: !isManager
+    });
   } catch (error) {
     return Response.json({ error: error.message }, { status: 500 });
   }

@@ -9,6 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/components/ui/use-toast';
 import { useI18n } from '@/lib/i18n';
 import { HOURS_PER_DAY, daysBetween, hoursLabel, typeName } from '@/lib/leave';
+
 import { todayIso } from '@/lib/bh';
 import { base44 } from '@/api/base44Client';
 
@@ -32,6 +33,17 @@ export default function LeaveRequestDialog({ open, onOpenChange, types, onSubmit
 
   const hours = Number(form.hours) > 0 ? Number(form.hours) : Math.round(days * HOURS_PER_DAY * 100) / 100;
 
+  // What the person is told when the request is refused. When the answer says how much is left,
+  // they read the number rather than a bare refusal.
+  const refused = (data) => {
+    if (data && (data.error === 'insufficient' || data.error === 'insufficient_balance')) {
+      const left = Number(data.available);
+      if (Number.isFinite(left)) return t('leave.insufficientLeft').replace('{hours}', hoursLabel(left));
+      return t('leave.insufficient');
+    }
+    return t('leave.requestFailed');
+  };
+
   const submit = async () => {
     if (!type) return;
     setSaving(true);
@@ -40,28 +52,32 @@ export default function LeaveRequestDialog({ open, onOpenChange, types, onSubmit
       const result = await base44.integrations.Core.UploadPrivateFile({ file }).catch(() => null);
       uploaded = result && result.file_uri ? result : null;
     }
-    const response = await base44.functions.invoke('submitLeaveRequest', {
-      leave_type_key: type.key,
-      start_date: form.start_date,
-      end_date: form.end_date,
-      hours,
-      reason: form.reason,
-      certificate_file_uri: uploaded ? uploaded.file_uri : '',
-      certificate_filename: uploaded ? file.name : ''
-    });
-    setSaving(false);
-    const data = (response && response.data) || {};
-    if (data.error === 'insufficient') {
-      toast({ title: t('leave.insufficient'), variant: 'destructive' });
-      return;
+    try {
+      const response = await base44.functions.invoke('submitLeaveRequest', {
+        leave_type_key: type.key,
+        start_date: form.start_date,
+        end_date: form.end_date,
+        hours,
+        reason: form.reason,
+        certificate_file_uri: uploaded ? uploaded.file_uri : '',
+        certificate_filename: uploaded ? file.name : ''
+      });
+      const data = (response && response.data) || {};
+      if (data.error) {
+        toast({ title: refused(data), variant: 'destructive' });
+        return;
+      }
+      toast({ title: t('leave.submitted') });
+      onOpenChange(false);
+      onSubmitted && onSubmitted();
+    } catch (error) {
+      // A refused request (not enough hours left) comes back as a failed call, so the reason is read
+      // from the answer and shown: the button never stays spinning on an error.
+      const data = (error && error.response && error.response.data) || {};
+      toast({ title: refused(data), variant: 'destructive' });
+    } finally {
+      setSaving(false);
     }
-    if (data.error) {
-      toast({ title: t('leave.requestFailed'), variant: 'destructive' });
-      return;
-    }
-    toast({ title: t('leave.submitted') });
-    onOpenChange(false);
-    onSubmitted && onSubmitted();
   };
 
   return (

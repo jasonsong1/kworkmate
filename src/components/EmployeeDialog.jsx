@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Plus, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -18,6 +18,7 @@ const empty = {
   user_email: '',
   position: '',
   secondary_position: '',
+  extra_positions: [],
   visa_type: '',
   app_role: 'staff',
   hourly_rate: '',
@@ -69,6 +70,7 @@ export default function EmployeeDialog({ open, onOpenChange, branch, employee, o
         user_email: employee.user_email || '',
         position: employee.position || '',
         secondary_position: employee.secondary_position || '',
+        extra_positions: Array.isArray(employee.extra_positions) ? employee.extra_positions : [],
         visa_type: employee.visa_type || '',
         app_role: employee.app_role || 'staff',
         hourly_rate: employee.hourly_rate ?? '',
@@ -88,6 +90,20 @@ export default function EmployeeDialog({ open, onOpenChange, branch, employee, o
   }, [open, employee]);
 
   const set = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
+
+  // A person can cover several positions: one main, one secondary and then as many more as the
+  // employer needs, up to ten in all.
+  const MAX_POSITIONS = 10;
+  const maxExtra = MAX_POSITIONS - 2;
+  const addPosition = () =>
+    setForm((prev) => (prev.extra_positions.length >= maxExtra ? prev : { ...prev, extra_positions: [...prev.extra_positions, ''] }));
+  const setExtraPosition = (index, value) =>
+    setForm((prev) => ({
+      ...prev,
+      extra_positions: prev.extra_positions.map((item, at) => (at === index ? value : item))
+    }));
+  const removePosition = (index) =>
+    setForm((prev) => ({ ...prev, extra_positions: prev.extra_positions.filter((item, at) => at !== index) }));
 
   // What the employer is told about the account itself: a brand new address is invited, while
   // one the platform already knows simply has its way back in reopened.
@@ -199,9 +215,20 @@ export default function EmployeeDialog({ open, onOpenChange, branch, employee, o
               t('role.noneHint')}
             </p>
           </div>
-          <div>
-            <Label>{t('employees.secondaryPosition')}</Label>
-            <Select value={form.secondary_position || ''} onValueChange={(v) => set('secondary_position', v)}>
+          <div className="sm:col-span-2">
+            <div className="flex items-center justify-between gap-2">
+              <Label>{t('employees.secondaryPosition')}</Label>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={addPosition}
+                disabled={!canEditEmployees || form.extra_positions.length >= maxExtra}
+              >
+                <Plus className="mr-1 h-3.5 w-3.5" /> {t('employees.addPosition')}
+              </Button>
+            </div>
+            <Select value={form.secondary_position || ''} onValueChange={(v) => set('secondary_position', v)} disabled={!canEditEmployees}>
               <SelectTrigger>
                 <SelectValue placeholder={t('role.select')} />
               </SelectTrigger>
@@ -217,6 +244,38 @@ export default function EmployeeDialog({ open, onOpenChange, branch, employee, o
               </SelectContent>
             </Select>
             <p className="mt-1 text-xs text-muted-foreground">{t('employees.secondaryPositionHint')}</p>
+
+            {form.extra_positions.length > 0 &&
+            <div className="mt-2 space-y-2">
+                {form.extra_positions.map((label, index) =>
+              <div key={index} className="flex items-center gap-2">
+                    <Select value={label || ''} onValueChange={(v) => setExtraPosition(index, v)} disabled={!canEditEmployees}>
+                      <SelectTrigger>
+                        <SelectValue placeholder={t('role.select')} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {positionLabels.map((option) =>
+                    <SelectItem key={option} value={option}>
+                            {option}
+                          </SelectItem>
+                    )}
+                        {label && !positionLabels.includes(label) && <SelectItem value={label}>{label}</SelectItem>}
+                      </SelectContent>
+                    </Select>
+                    <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => removePosition(index)}
+                  disabled={!canEditEmployees}
+                  aria-label="Remove position">
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+              )}
+                <p className="text-xs text-muted-foreground">{t('employees.positionsHint')}</p>
+              </div>
+            }
           </div>
           <div>
             <Label>{t('employees.visa')}</Label>

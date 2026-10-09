@@ -89,6 +89,16 @@ export default async function (req) {
       onboarding_status: 'pending'
     });
 
+    // The ad closes by itself once the store has hired everyone it asked for. Raising the number
+    // of openings later is what opens it again.
+    const openings = Number(job && job.openings) || 0;
+    if (job && openings > 0 && job.status !== 'closed') {
+      const hired = await base44.asServiceRole.entities.Applicant.count({ job_id: job.id, status: 'hired' });
+      if (hired >= openings) {
+        await base44.asServiceRole.entities.Job.update(job.id, { status: 'closed' });
+      }
+    }
+
     const link = portalLink(body.origin, `/onboarding/${token}`);
 
     // The company's onboarding documents ride along with the hired email.

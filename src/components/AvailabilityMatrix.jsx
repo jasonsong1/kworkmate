@@ -2,6 +2,10 @@ import React from 'react';
 import { AVAILABILITY_TIMES, DAYS, normalizeAvailability, setDayAvailability, timeToMinutes } from '@/lib/bh';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
+// A sentinel for the picker: an empty value is not a selectable choice, so clearing a day goes
+// through this one, which is turned back into a blank day.
+const NOT_AVAILABLE = 'none';
+
 export default function AvailabilityMatrix({ value, onChange, disabled }) {
   const matrix = normalizeAvailability(value);
   const update = (dayKey, patch) => onChange(setDayAvailability(matrix, dayKey, patch));
@@ -22,6 +26,8 @@ export default function AvailabilityMatrix({ value, onChange, disabled }) {
                 value={entry.from || undefined}
                 disabled={disabled}
                 onValueChange={(v) =>
+                  v === NOT_AVAILABLE ?
+                  update(day.key, { from: '', to: '' }) :
                   update(day.key, { from: v, to: timeToMinutes(entry.to) > timeToMinutes(v) ? entry.to : '' })
                 }
               >
@@ -29,6 +35,8 @@ export default function AvailabilityMatrix({ value, onChange, disabled }) {
                   <SelectValue placeholder="Not available" />
                 </SelectTrigger>
                 <SelectContent>
+                  {/* The way back to a day off, after a time has been picked. */}
+                  <SelectItem value={NOT_AVAILABLE}>Not available</SelectItem>
                   {AVAILABILITY_TIMES.map((time) => (
                     <SelectItem key={time} value={time}>
                       {time}
@@ -60,7 +68,7 @@ export default function AvailabilityMatrix({ value, onChange, disabled }) {
         })}
       </div>
       <p className="text-xs text-muted-foreground">
-        Pick a start and finish time for every day you can work. Leave the day blank if you cannot work it.
+        Pick a start and finish time for every day you can work, and choose Not available to clear a day again.
       </p>
     </div>
   );

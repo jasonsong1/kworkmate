@@ -53,11 +53,13 @@ export default function JobDetail() {
   const save = async () => {
     if (!job) return;
     setSaving(true);
+    const openings = Math.max(1, Number(job.openings) || 1);
     await base44.entities.Job.update(job.id, {
       title: job.title,
       position: job.position,
       employment_type: job.employment_type,
       hourly_rate: Number(job.hourly_rate) || 0,
+      openings,
       description: job.description || '',
       contact_email: job.contact_email || '',
       screening_min_score: Number(job.screening_min_score) || 60,
@@ -70,6 +72,16 @@ export default function JobDetail() {
       brand_color: job.brand_color,
       poster_note: job.poster_note || ''
     });
+    // A closed ad that was closed by its own hiring opens again as soon as there is room for
+    // another person.
+    if (job.status === 'closed') {
+      const hired = await base44.entities.Applicant.count({ job_id: job.id, status: 'hired' });
+      if (hired < openings) {
+        await base44.entities.Job.update(job.id, { status: 'open' });
+        patch({ status: 'open' });
+      }
+    }
+    patch({ openings });
     setSaving(false);
     toast({ title: 'Job ad saved' });
   };
@@ -167,6 +179,16 @@ export default function JobDetail() {
                     value={job.hourly_rate ?? ''}
                     onChange={(e) => patch({ hourly_rate: e.target.value })}
                   />
+                </div>
+                <div>
+                  <Label>{t('jobs.openings')}</Label>
+                  <Input
+                    type="number"
+                    min="1"
+                    value={job.openings ?? 1}
+                    onChange={(e) => patch({ openings: e.target.value })}
+                  />
+                  <p className="mt-1 text-xs text-muted-foreground">{t('jobs.openingsHint')}</p>
                 </div>
                 <div>
                   <Label>Employment type</Label>

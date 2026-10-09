@@ -46,6 +46,8 @@ export default function Roster() {
   const [generating, setGenerating] = useState(false);
   // The shift being dragged, so a manager can nudge a couple of placements by hand.
   const [dragId, setDragId] = useState('');
+  // The shift opened for its hours to be changed or for it to be taken off the week.
+  const [editingShift, setEditingShift] = useState(null);
 
   const weekEnd = addDaysIso(weekStart, 6);
   const days = weekDates(weekStart);
@@ -184,34 +186,53 @@ export default function Roster() {
     }
   };
 
+  // A dragged shift is the same record moved, never a second one added: the shift keeps its id and
+  // only its person and day change.
   const moveShift = async (email, date) => {
     const shift = shifts.find((s) => s.id === dragId);
     setDragId('');
-    // Only a draft moves: a saved or sent week stays as it was agreed.
-    if (!shift || shift.status !== 'draft' || (shift.employee_email === email && shift.date === date)) return;
+    if (!shift || (shift.employee_email === email && shift.date === date)) return;
     if (onLeaveFor(email, date)) {
       toast({ title: t('roster.onLeaveBlocked'), variant: 'destructive' });
       return;
     }
     const target = employees.find((employee) => employee.user_email === email);
+    const previous = shift.employee_email;
     await base44.entities.Shift.update(shift.id, {
       employee_email: email,
       employee_name: target ? target.full_name : email,
       date
     });
-    // The person on the shift hears about it, and their subscribed calendar picks it up.
-    await base44.functions
-      .invoke('notifyShiftChange', {
-        branch_id: activeBranch.id,
-        employee_email: email,
-        change: 'updated',
-        published: shift.status === 'published',
-        date,
-        start_time: shift.start_time,
-        end_time: shift.end_time,
-        position: shift.position
-      })
-      .catch(() => null);
+    // A week that has already gone to staff carries the change to them; a draft or a saved week is
+    // still a private plan, so it moves quietly.
+    if (shift.status === 'published') {
+      await base44.functions
+        .invoke('notifyShiftChange', {
+          branch_id: activeBranch.id,
+          employee_email: email,
+          change: 'updated',
+          published: true,
+          date,
+          start_time: shift.start_time,
+          end_time: shift.end_time,
+          position: shift.position
+        })
+        .catch(() => null);
+      if (previous && previous !== email) {
+        await base44.functions
+          .invoke('notifyShiftChange', {
+            branch_id: activeBranch.id,
+            employee_email: previous,
+            change: 'cancelled',
+            published: true,
+            date: shift.date,
+            start_time: shift.start_time,
+            end_time: shift.end_time,
+            position: shift.position
+          })
+          .catch(() => null);
+      }
+    }
     await load();
   };
 
@@ -323,7 +344,7 @@ export default function Roster() {
                 <>
                   <p className="mb-4 text-xs text-muted-foreground">
                     {publishedCount} of {shifts.length} shifts published for this week
-                    {draftCount > 0 ? ` · ${t('roster.dragHint')}` : ''}
+                    {canManageRoster ? ` · ${t('roster.dragHint')}` : ''}
                   </p>
                   <div className="overflow-x-auto">
                     <table className="w-full min-w-[900px] border-separate border-spacing-0 text-sm">
@@ -351,8 +372,9 @@ export default function Roster() {
                             <td className="sticky left-0 z-10 border-t bg-card px-3 py-3">
                               <p className="text-sm font-medium">{employee.full_name}</p>
                               <p className="text-xs text-muted-foreground">
-                                {employee.position || '—'}
-                                {employee.secondary_position ? ` · ${employee.secondary_position}` : ''}
+                                {[employee.position, employee.secondary_position, ...(employee.extra_positions || [])].
+                                filter(Boolean).
+                                join(' · ') || '—'}
                               </p>
                             </td>
                             {days.map((day) => (
@@ -371,12 +393,17 @@ export default function Roster() {
                                   {shiftsFor(employee.user_email, day.date).map((shift) => (
                                     <div
                                       key={shift.id}
-                                      draggable={canManageRoster && shift.status === 'draft'}
+                                      draggable={canManageRoster}
                                       onDragStart={() => setDragId(shift.id)}
                                       onDragEnd={() => setDragId('')}
-                                      title={shift.status === 'draft' ? t('roster.dragHint') : undefined}
+                                      onClick={() => {
+                                        if (!canManageRoster) return;
+                                        setEditingShift(shift);
+                                        setDialogOpen(true);
+                                      }}
+                                      title={canManageRoster ? t('roster.dragHint') : undefined}
                                       className={`group rounded-lg border px-2 py-1.5 text-xs ${
-                                        shift.status === 'draft' ? 'cursor-grab' : 'cursor-default'
+                                        canManageRoster ? 'cursor-grab' : 'cursor-default'
                                       } ${
                                         shift.status === 'published'
                                           ? 'border-emerald-200 bg-emerald-50 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-100'
@@ -400,6 +427,7 @@ export default function Roster() {
                                     onClick={() => {
                                       setDialogDate(day.date);
                                       setDialogEmployee(employee);
+                                      setEditingShift(null);
                                       setDialogOpen(true);
                                     }}
                                     className="w-full rounded-lg border border-dashed px-2 py-1 text-[11px] text-muted-foreground hover:bg-muted"
@@ -446,6 +474,7 @@ export default function Roster() {
         employees={employees}
         defaultDate={dialogDate}
         defaultEmployee={dialogEmployee}
+        shift={editingShift}
         onSaved={load}
       />
       <RosterSettingsDialog

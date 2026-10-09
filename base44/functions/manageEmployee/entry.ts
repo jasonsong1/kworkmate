@@ -271,6 +271,10 @@ export default async function (req) {
         // An edit that does not touch the position leaves the one already stored in place.
         position: clean(input.position) || clean(profile.position) || '',
         secondary_position: input.secondary_position || '',
+        extra_positions: (Array.isArray(input.extra_positions) ? input.extra_positions : []).
+        filter(Boolean).
+        map((value: any) => String(value).trim()).
+        slice(0, 9),
         visa_type: input.visa_type || profile.visa_type || '',
         hourly_rate: Number(input.hourly_rate) || 0,
         employment_type: input.employment_type || profile.employment_type,
@@ -326,6 +330,10 @@ export default async function (req) {
       employee_number: employeeNumber,
       position: input.position || '',
       secondary_position: input.secondary_position || '',
+      extra_positions: (Array.isArray(input.extra_positions) ? input.extra_positions : []).
+      filter(Boolean).
+      map((value: any) => String(value).trim()).
+      slice(0, 9),
       visa_type: input.visa_type || '',
       hourly_rate: Number(input.hourly_rate) || 0,
       employment_type: input.employment_type || 'casual',

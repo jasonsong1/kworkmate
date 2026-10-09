@@ -5,7 +5,6 @@ import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { base44 } from '@/api/base44Client';
 import useInterviewConversation from '@/hooks/useInterviewConversation';
-import InterviewChat from '@/components/interview/InterviewChat';
 
 const pickMime = () => {
   if (typeof MediaRecorder === 'undefined') return '';
@@ -215,8 +214,6 @@ export default function VideoInterview() {
           </div>
           <Progress value={(covered / (total || 1)) * 100} className="h-1.5" />
         </div>
-
-        <InterviewChat greeting={data.greeting} turns={turns} current={busy ? null : current} thinking={busy} />
 
         <div className="rounded-2xl border bg-white p-5 shadow-sm">
           <video

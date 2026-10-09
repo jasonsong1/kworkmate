@@ -23,6 +23,12 @@
     "secondary_position": {
       "type": "string"
     },
+    "extra_positions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
     "visa_type": {
       "type": "string"
     },

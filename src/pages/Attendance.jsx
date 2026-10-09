@@ -234,17 +234,24 @@ export default function Attendance() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        {canEdit('attendance') ? (
-                          <ApprovalActions row={row} onDecide={decide} />
-                        ) : (
-                          <Badge variant="secondary">
-                            {row.approval_status === 'rejected'
-                              ? t('attendance.rejected')
-                              : row.approval_status === 'pending'
-                                ? t('attendance.pending')
-                                : t('attendance.approved')}
-                          </Badge>
-                        )}
+                        <div className="space-y-1">
+                          {canEdit('attendance') ? (
+                            <ApprovalActions row={row} onDecide={decide} />
+                          ) : (
+                            <Badge variant="secondary">
+                              {row.approval_status === 'rejected'
+                                ? t('attendance.rejected')
+                                : row.approval_status === 'pending'
+                                  ? t('attendance.pending')
+                                  : t('attendance.approved')}
+                            </Badge>
+                          )}
+                          {/* Why a record was turned down stays on the record, for the manager and
+                              for the person whose punch it was. */}
+                          {row.approval_status === 'rejected' && row.rejection_reason ? (
+                            <p className="max-w-[16rem] text-xs text-destructive">{row.rejection_reason}</p>
+                          ) : null}
+                        </div>
                       </TableCell>
                     </TableRow>
                 )}

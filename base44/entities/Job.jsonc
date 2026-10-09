@@ -29,6 +29,10 @@
     "description": {
       "type": "string"
     },
+    "openings": {
+      "type": "number",
+      "default": 1
+    },
     "required_questions": {
       "type": "array",
       "items": {

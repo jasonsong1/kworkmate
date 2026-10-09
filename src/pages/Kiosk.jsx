@@ -107,8 +107,8 @@ export default function Kiosk() {
       setError(MESSAGES[data.error] || data.error);
       return;
     }
-    // A punch made with a number only counts once a manager has accepted it.
-    setResult({ ...data, pending: true });
+    // A manager's own punch is recorded as it stands; everyone else's waits for a manager.
+    setResult({ ...data, pending: data.pending === true });
     setNumber('');
     setPin('');
   };
@@ -237,7 +237,7 @@ export default function Kiosk() {
             </div>
 
             <p className="mt-3 text-xs text-[#64748b]">
-              Entries made here are saved as pending and a manager approves them.
+              Entries are recorded against your employee number. A manager's own entry is recorded straight away.
             </p>
           </div>
         ) : (
@@ -257,11 +257,17 @@ export default function Kiosk() {
             <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0" />
             <div>
               <p className="font-semibold">
-                {result.action === 'in' ? 'Clock in request sent' : 'Clock out request sent'}
+                {result.pending
+                  ? result.action === 'in'
+                    ? 'Clock in request sent'
+                    : 'Clock out request sent'
+                  : result.action === 'in'
+                    ? 'Clocked in'
+                    : 'Clocked out'}
               </p>
               <p className="text-sm">
                 {result.name ? `${result.name} · ` : ''}
-                Inform your manager for approval.
+                {result.pending ? 'Inform your manager for approval.' : 'Recorded.'}
               </p>
             </div>
           </div>

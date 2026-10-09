@@ -104,10 +104,20 @@ export function appendAnswer(
   { question, kind, topicIndex, seconds, fileUri, transcript }: any
 ) {
   const at = new Date().toISOString();
+  const answer = { role: 'applicant', question, topic_index: topicIndex, kind, file_uri: fileUri, transcript, answered_at: at };
+  // The question the candidate is answering was often already put to them (a follow-up is written
+  // once and waits for its answer), so it is only written down when it is new.
+  const last = turns[turns.length - 1];
+  const alreadyAsked =
+    last &&
+    last.role === 'interviewer' &&
+    String(last.question || '').trim() === String(question || '').trim() &&
+    Number(last.topic_index || 0) === Number(topicIndex || 0);
+  if (alreadyAsked) return [...turns, answer];
   return [
     ...turns,
     { role: 'interviewer', question, topic_index: topicIndex, kind, seconds, asked_at: at },
-    { role: 'applicant', question, topic_index: topicIndex, kind, file_uri: fileUri, transcript, answered_at: at }
+    answer
   ];
 }
 

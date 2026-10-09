@@ -1,11 +1,12 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { CalendarDays, Eye, EyeOff, FolderOpen, KeyRound, Loader2, QrCode, UserCircle2 } from 'lucide-react';
+import { CalendarDays, Eye, EyeOff, FolderOpen, KeyRound, Loader2, QrCode, UserCircle2, Users } from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
 import AvailabilityMatrix from '@/components/AvailabilityMatrix';
 import CalendarSubscribeCard from '@/components/CalendarSubscribeCard';
 import ClockScanButton from '@/components/attendance/ClockScanButton';
 import EmployeeDocumentsDialog from '@/components/EmployeeDocumentsDialog';
 import SelfPasswordDialog from '@/components/staff/SelfPasswordDialog';
+import AllShiftsDialog from '@/components/staff/AllShiftsDialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -26,6 +27,7 @@ export default function StaffHome() {
   const [saving, setSaving] = useState(false);
   const [docsOpen, setDocsOpen] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
+  const [allShiftsOpen, setAllShiftsOpen] = useState(false);
   // The pay rate is hidden until the person asks to see it.
   const [showRate, setShowRate] = useState(false);
   // The floor position holds no store code of its own; a supervisor or a manager does.
@@ -177,10 +179,14 @@ export default function StaffHome() {
 
         {roster && (
         <Card>
-          <CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0">
             <CardTitle className="flex items-center gap-2 text-base">
               <CalendarDays className="h-4 w-4" /> {t('staff.shifts')}
             </CardTitle>
+            {/* Everyone's shifts for the store, next to the person's own. */}
+            <Button variant="outline" size="sm" onClick={() => setAllShiftsOpen(true)} disabled={!activeBranch}>
+              <Users className="mr-2 h-4 w-4" /> {t('staff.allShifts')}
+            </Button>
           </CardHeader>
           <CardContent className="space-y-2">
             {loading ? (
@@ -227,6 +233,7 @@ export default function StaffHome() {
         </div>)}
       </div>
 
+      <AllShiftsDialog open={allShiftsOpen} onOpenChange={setAllShiftsOpen} branch={activeBranch} />
       <EmployeeDocumentsDialog open={docsOpen} onOpenChange={setDocsOpen} employee={employeeProfile} />
       <SelfPasswordDialog open={resetOpen} onOpenChange={setResetOpen} profile={employeeProfile} />
     </div>

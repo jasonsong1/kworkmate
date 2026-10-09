@@ -247,10 +247,13 @@ export async function buildDraft(base44, branch, weekStart) {
       if (pinnedPlaced[`${email}|${date}`]) continue;
 
       const fixedHere = Boolean(fixedByDay[dayIndex] && fixedByDay[dayIndex].has(lower(email)));
-      // A fixed placement is the employer's own instruction, so it does not wait on a submitted
-      // availability window; everyone else has to be free for the whole shift.
-      const window = availableWindow(availByEmail[email], dayKey);
-      if (!fixedHere && (!window || window.from > start || window.to < end)) continue;
+      const submitted = availByEmail[email] || null;
+      const window = availableWindow(submitted, dayKey);
+      const freeForShift = Boolean(window && window.from <= start && window.to >= end);
+      // A fixed placement is the employer's own instruction, so it stands when the person has not
+      // said anything about that day. Once they have told us they cannot work those hours, the
+      // shift goes to somebody who can instead of being planned on top of them.
+      if (!freeForShift && (fixedHere ? submitted !== null : true)) continue;
 
       const room = remainingMinutes(person, assignedMinutes[email] || 0, earlierMinutes[email] || 0);
       if (room !== null && lengthMin > room) continue;
