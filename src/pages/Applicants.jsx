@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Check, Loader2, MailWarning, Sparkles, UserCheck, UserPlus, UserX, Video } from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
+import AiSpinner from '@/components/AiSpinner';
 import ApplicantCard from '@/components/ApplicantCard';
 import ApplicantDetailDialog from '@/components/ApplicantDetailDialog';
 import { Button } from '@/components/ui/button';
@@ -262,7 +263,7 @@ export default function Applicants() {
             {job &&
           <>
                 <Button variant="outline" onClick={runScreening} disabled={screening}>
-                  {screening ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
+                  {screening ? <AiSpinner className="mr-2" /> : <Sparkles className="mr-2 h-4 w-4" />}
                   {screening ? t('jobs.aiRunning') : t('applicants.addScreening')}
                 </Button>
                 <Button variant="outline" onClick={rejectUnselected}>

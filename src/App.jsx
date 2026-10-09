@@ -40,6 +40,7 @@ import JobDesign from '@/pages/JobDesign';
 import QrDesign from '@/pages/QrDesign';
 import PlatformAdmin from '@/pages/PlatformAdmin';
 import Kiosk from '@/pages/Kiosk';
+import StaffHome from '@/pages/StaffHome';
 
 // Paths that render for a visitor who is not signed in: the applicant and onboarding surfaces,
 // plus this app's own sign-in pages, which must never be swapped for a platform redirect.
@@ -91,6 +92,8 @@ const AuthenticatedApp = () => {
       <Route element={<ProtectedRoute unauthenticatedElement={<Navigate to="/login" replace />} />}>
         <Route element={<BackofficeLayout />}>
           <Route path="/" element={<Home />} />
+          {/* The same personal space the crew lands on, opened by a manager from their own menu. */}
+          <Route path="/my-space" element={<StaffHome />} />
           <Route path="/branches" element={<Branches />} />
           <Route path="/property" element={<PropertySetup />} />
           <Route path="/employees" element={<Employees />} />

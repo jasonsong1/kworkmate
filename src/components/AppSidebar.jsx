@@ -14,8 +14,7 @@ import {
   Settings,
   Mic,
   Palette,
-  UserCircle2,
-  QrCode
+  UserCircle2
 } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 import { useWorkspace } from '@/lib/WorkspaceContext';
@@ -36,10 +35,12 @@ const MANAGER_ITEMS = [
   { to: '/settings', key: 'nav.settings', icon: Settings, area: 'company_settings', module: 'settings' }
 ];
 
-const STAFF_ITEMS = [
-  { to: '/', key: 'nav.mySpace', icon: UserCircle2, end: true, module: 'dashboard' },
-  { to: '/clock', key: 'nav.clock', icon: QrCode, area: 'attendance', module: 'attendance' }
-];
+// Everyone's own space: their shifts, their hours, their clock-in and their own record. The crew
+// lands on it straight after sign-in; a manager opens it from beside the manager screens, because
+// a manager works shifts too.
+const MY_SPACE_ITEM = { to: '/my-space', key: 'nav.mySpace', icon: UserCircle2, module: 'dashboard' };
+
+const STAFF_ITEMS = [{ to: '/', key: 'nav.mySpace', icon: UserCircle2, end: true, module: 'dashboard' }];
 
 // Only a super admin (platform admin) ever sees this section.
 const PLATFORM_ITEMS = [{ to: '/platform', key: 'nav.platform', icon: ShieldCheck }];
@@ -52,7 +53,7 @@ export default function AppSidebar({ onNavigate }) {
   // outside that is not shown at all.
   const allowed = MANAGER_ITEMS.filter((item) => hasModule(item.module));
   const items = isManager
-    ? allowed
+    ? allowed.flatMap((item) => (item.end ? [item, MY_SPACE_ITEM] : [item]))
     : [
         ...STAFF_ITEMS.filter((item) => item.to === '/' || hasModule(item.module)),
         ...allowed.filter((item) => item.to !== '/')

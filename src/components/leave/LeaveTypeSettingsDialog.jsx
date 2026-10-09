@@ -49,6 +49,7 @@ export default function LeaveTypeSettingsDialog({ open, onOpenChange, companyId,
         expiry_enabled: false,
         expiry_months: 12,
         requires_certificate: false,
+        flag_hours: 0,
         custom: true,
         active: true
       }

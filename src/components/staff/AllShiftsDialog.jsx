@@ -8,8 +8,9 @@ import { WEEKS_AHEAD, addDaysIso, startOfWeekIso, todayIso, weekDates, weeksBetw
 import { base44 } from '@/api/base44Client';
 
 // The whole store's week, laid out exactly the way the roster page lays it out — without the hours
-// the team submitted — so anyone can see who they are working with. Only the weeks that have gone
-// out to staff are here: a draft nobody has been sent yet stays with the manager.
+// the team submitted — so anyone can see who they are working with, whoever they are. Only the
+// weeks that have gone out to staff are here: a draft nobody has been sent yet stays with the
+// manager.
 export default function AllShiftsDialog({ open, onOpenChange, branch }) {
   const { t } = useI18n();
   const thisWeek = startOfWeekIso(todayIso());
@@ -27,11 +28,6 @@ export default function AllShiftsDialog({ open, onOpenChange, branch }) {
     if (!open || !branch) return undefined;
     let cancelled = false;
     setLoading(true);
-    Promise.all([
-    base44.entities.EmployeeProfile.
-    filter({ branch_id: branch.id, status: 'active' }, { limit: 200 }).
-    then((page) => page.items || []).
-    catch(() => []),
     base44.entities.Shift.
     filter(
       {
@@ -42,12 +38,23 @@ export default function AllShiftsDialog({ open, onOpenChange, branch }) {
       { sort: 'date', limit: 500 }
     ).
     then((page) => page.items || []).
-    catch(() => [])]
-    ).
-    then(([staff, rows]) => {
+    catch(() => []).
+    then((rows) => {
       if (cancelled) return;
-      setEmployees(staff);
       setShifts(rows);
+      // The people are read out of the shifts themselves, so everyone sees the whole store's
+      // week whatever position or role they hold.
+      const byEmail = new Map();
+      rows.forEach((shift) => {
+        if (!shift.employee_email || byEmail.has(shift.employee_email)) return;
+        byEmail.set(shift.employee_email, {
+          id: shift.employee_email,
+          user_email: shift.employee_email,
+          full_name: shift.employee_name || shift.employee_email,
+          position: shift.position || ''
+        });
+      });
+      setEmployees(Array.from(byEmail.values()).sort((a, b) => a.full_name.localeCompare(b.full_name)));
     }).
     finally(() => {
       if (!cancelled) setLoading(false);

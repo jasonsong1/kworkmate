@@ -1,4 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.52';
+import { resolveCaller } from '../../shared/kwAuth.ts';
+import { holdsManagerPosition, managerPositionLabels } from '../../shared/access.ts';
 
 function rowsOf(result: any) {
   return Array.isArray(result) ? result : (result && result.items) || [];
@@ -11,7 +13,9 @@ const EMPLOYMENT = ['full_time', 'part_time', 'casual'];
 export default async function (req: Request) {
   try {
     const base44 = createClientFromRequest(req);
-    const me = await base44.auth.me();
+    // Either sign-in answers here: an employee with the ID their employer issued, or a platform
+    // account. The leave menu is the employer's own, so a manager position may change it too.
+    const me = await resolveCaller(base44, req);
     if (!me) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
     const body = await req.json().catch(() => ({}));
@@ -21,8 +25,18 @@ export default async function (req: Request) {
     const company = await base44.asServiceRole.entities.Company.get(companyId).catch(() => null);
     if (!company) return Response.json({ error: 'Company not found' }, { status: 404 });
 
-    const isMember = Array.isArray(company.member_emails) && company.member_emails.includes(me.email);
-    if (me.role !== 'admin' && me.app_role !== 'company_admin' && !isMember) {
+    const caller = rowsOf(
+      await base44.asServiceRole.entities.EmployeeProfile.filter({ user_email: me.email }, { limit: 1 }).catch(() => [])
+    )[0];
+    const isMember =
+      (Array.isArray(company.member_emails) && company.member_emails.includes(me.email)) ||
+      holdsManagerPosition(caller, managerPositionLabels(company.custom_roles));
+    if (
+      me.role !== 'admin' &&
+      me.app_role !== 'company_admin' &&
+      me.app_role !== 'branch_manager' &&
+      !isMember
+    ) {
       return Response.json({ error: 'You cannot change this company’s leave settings' }, { status: 403 });
     }
 
@@ -69,6 +83,8 @@ export default async function (req: Request) {
         expiry_enabled: Boolean(raw.expiry_enabled),
         expiry_months: Math.max(1, Math.min(24, Number(raw.expiry_months) || 12)),
         requires_certificate: Boolean(raw.requires_certificate),
+        // From this many hours a request of this leave shows red on the review list. 0 = off.
+        flag_hours: Math.max(0, Math.min(500, Number(raw.flag_hours) || 0)),
         custom: Boolean(raw.custom),
         active: raw.active !== false,
         order: index + 1

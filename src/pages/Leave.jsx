@@ -50,6 +50,12 @@ export default function Leave() {
   // off stays in the settings list so it can simply be switched back on.
   const types = (data && data.types) || [];
   const allTypes = (data && data.all_types) || types;
+  // The hours at which each leave is called out in red on the review list.
+  const flagHours = types.reduce((map, type) => {
+    const hours = Number(type.flag_hours) || 0;
+    if (hours > 0) map[type.key] = hours;
+    return map;
+  }, {});
 
   const teamRows = Array.from(
     balances.reduce((map, row) => {
@@ -105,6 +111,7 @@ export default function Leave() {
                       requests={requests}
                       canManage
                       showEmployee
+                      flagHours={flagHours}
                       onDecided={load}
                     />
                   </CardContent>

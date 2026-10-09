@@ -1,5 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.52';
 import { resolveCaller } from '../../shared/kwAuth.ts';
+import { holdsManagerPosition, managerPositionLabels } from '../../shared/access.ts';
 import {
   DEFAULT_LEAVE_TYPES,
   activeTypes,
@@ -43,6 +44,8 @@ function normaliseType(type: any) {
     expiry_enabled: Boolean(type.expiry_enabled),
     expiry_months: Number(type.expiry_months) || 12,
     requires_certificate: Boolean(type.requires_certificate),
+    // From this many hours a request of this leave is shown in red on the review list.
+    flag_hours: Math.max(0, Number(type.flag_hours) || 0),
     custom: Boolean(type.custom),
     active: type.active !== false,
     order: Number(type.order) || 10
@@ -68,6 +71,17 @@ export default async function (req: Request) {
     const branch = branchId ? await base44.asServiceRole.entities.Branch.get(branchId).catch(() => null) : null;
     const companyId = (branch && branch.company_id) || me.company_id || '';
     const company = companyId ? await base44.asServiceRole.entities.Company.get(companyId).catch(() => null) : null;
+
+    const caller = rowsOf(
+      await base44.asServiceRole.entities.EmployeeProfile.filter({ user_email: me.email }, { limit: 1 }).catch(() => [])
+    )[0];
+    // Who may change the leave settings: the company admin, and any position the employer runs
+    // the store with — the same people who approve the requests.
+    const runsStore =
+      me.role === 'admin' ||
+      me.app_role === 'company_admin' ||
+      me.app_role === 'branch_manager' ||
+      holdsManagerPosition(caller, managerPositionLabels(company && company.custom_roles));
 
     let staff: any[] = [];
     if (teamView) {
@@ -101,7 +115,7 @@ export default async function (req: Request) {
         balances: [],
         requests: [],
         can_manage: Boolean(manages),
-        can_configure: me.role === 'admin' || me.app_role === 'company_admin'
+        can_configure: runsStore
       });
     }
 
@@ -233,7 +247,7 @@ export default async function (req: Request) {
       branch_id: branchId,
       today,
       can_manage: Boolean(manages),
-      can_configure: me.role === 'admin' || me.app_role === 'company_admin',
+      can_configure: runsStore,
       types,
       all_types: allTypes,
       staff: staff.map((person: any) => ({

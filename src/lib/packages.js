@@ -25,6 +25,8 @@ export const MODULE_LABELS = {
 };
 
 const MODULE_BY_PREFIX = [
+  // Everyone's own space: it belongs to the dashboard, so nobody is ever shut out of it.
+  ['/my-space', 'dashboard'],
   ['/branches', 'branches'],
   ['/property', 'branches'],
   ['/employees', 'employees'],

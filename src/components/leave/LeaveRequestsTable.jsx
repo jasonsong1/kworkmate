@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Check, Paperclip, X } from 'lucide-react';
+import { Check, Flag, Paperclip, X } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -13,7 +13,7 @@ import { base44 } from '@/api/base44Client';
 
 // The requests and what happened to them. A manager approves or declines here; declining asks
 // for the reason the employee will read.
-export default function LeaveRequestsTable({ requests, canManage, showEmployee, onDecided }) {
+export default function LeaveRequestsTable({ requests, canManage, showEmployee, flagHours, onDecided }) {
   const { t } = useI18n();
   const { toast } = useToast();
   const [dialog, setDialog] = useState(null);
@@ -36,6 +36,13 @@ export default function LeaveRequestsTable({ requests, canManage, showEmployee, 
     setDialog(null);
     setReason('');
     onDecided && onDecided();
+  };
+
+  // A request long enough to matter for its leave type is called out in red, at the hours the
+  // manager set for that type in the leave settings.
+  const flagged = (request) => {
+    const limit = Number((flagHours || {})[request.leave_type_key]) || 0;
+    return limit > 0 && Number(request.hours) >= limit ? limit : 0;
   };
 
   const openCertificate = async (request) => {
@@ -61,7 +68,9 @@ export default function LeaveRequestsTable({ requests, canManage, showEmployee, 
               <TableHead>{t('leave.dates')}</TableHead>
               <TableHead>{t('leave.hours')}</TableHead>
               <TableHead>{t('common.status')}</TableHead>
-              <TableHead className="text-right">{t('common.actions')}</TableHead>
+              <TableHead className="text-right">
+                <span className="sr-only">{t('common.actions')}</span>
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -78,7 +87,19 @@ export default function LeaveRequestsTable({ requests, canManage, showEmployee, 
                   {request.reason ? <p className="text-xs text-muted-foreground">{request.reason}</p> : null}
                 </TableCell>
                 <TableCell className="text-sm">{rangeLabel(request)}</TableCell>
-                <TableCell className="text-sm">{hoursLabel(request.hours)}</TableCell>
+                <TableCell className="text-sm">
+                  {flagged(request) ? (
+                    <span
+                      className="inline-flex items-center gap-1 rounded-md bg-destructive/10 px-2 py-0.5 font-medium text-destructive"
+                      title={t('leave.flagged').replace('{hours}', String(flagged(request)))}
+                    >
+                      <Flag className="h-3.5 w-3.5" />
+                      {hoursLabel(request.hours)}
+                    </span>
+                  ) : (
+                    hoursLabel(request.hours)
+                  )}
+                </TableCell>
                 <TableCell>
                   <Badge className={STATUS_TONES[request.status]}>{t(STATUS_KEYS[request.status] || 'leave.statusPending')}</Badge>
                   {request.status === 'rejected' && request.decision_reason ? (

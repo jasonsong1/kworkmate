@@ -2,6 +2,7 @@ import React, { createContext, useState, useContext, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
 import { appParams } from '@/lib/app-params';
 import { kwActive, kwClearSession, kwLogout, kwVerify } from '@/lib/kwAuthClient';
+import useIdleLogout from '@/hooks/useIdleLogout';
 
 const AuthContext = createContext();
 
@@ -156,6 +157,11 @@ export const AuthProvider = ({ children }) => {
     window.location.href =
       onAuthPage || here === '/' ? '/login' : `/login?returnTo=${encodeURIComponent(here)}`;
   };
+
+  // A screen nobody has touched for half an hour signs itself out and asks for the sign-in again.
+  useIdleLogout(isAuthenticated, () => {
+    logout(true);
+  });
 
   return (
     <AuthContext.Provider value={{

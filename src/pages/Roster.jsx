@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { CalendarPlus, ChevronLeft, ChevronRight, Loader2, Plus, Send, Settings2, Sparkles } from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
+import AiSpinner from '@/components/AiSpinner';
 import ShiftDialog from '@/components/ShiftDialog';
 import RosterSettingsDialog from '@/components/RosterSettingsDialog';
 import RosterScheduleCard from '@/components/RosterScheduleCard';
@@ -73,8 +74,13 @@ export default function Roster() {
       base44.entities.Shift
         .filter({ branch_id: activeBranch.id, date: { $gte: weekStart, $lte: weekEnd } }, { sort: 'date', limit: 500 })
         .then((page) => page.items || []),
+      // The week on screen is the week whose availability is read, so the board follows the roster
+      // as the manager moves from one week to the next.
       base44.entities.AvailabilitySubmission
-        .filter({ branch_id: activeBranch.id }, { sort: '-created_date', limit: 500 })
+        .filter(
+          { branch_id: activeBranch.id, week_start: weekStart },
+          { sort: '-created_date', limit: 500 }
+        )
         .then((page) => page.items || []),
       // Approved leave blocks the day: it is shown as On leave and no shift can sit on it.
       base44.entities.LeaveRequest
@@ -279,11 +285,7 @@ export default function Roster() {
               onClick={autoBuild}
               disabled={!activeBranch || generating || !canManageRoster || !feature('auto_roster')}
             >
-              {generating ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <Sparkles className="mr-2 h-4 w-4" />
-              )}
+              {generating ? <AiSpinner className="mr-2" /> : <Sparkles className="mr-2 h-4 w-4" />}
               {generating ? t('roster.building') : t('roster.autoBuild')}
             </Button>
             {/* Anyone can keep their own shifts and approved leave in their phone calendar. */}

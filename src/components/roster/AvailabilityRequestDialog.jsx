@@ -37,21 +37,28 @@ export default function AvailabilityRequestDialog({ open, onOpenChange, employee
   const send = async () => {
     if (!picked || !branch) return;
     setSending(true);
-    const response = await base44.functions.invoke('requestAvailability', {
-      branch_id: branch.id,
-      employee_email: picked,
-      origin: window.location.origin
-    });
-    setSending(false);
-    if (response.data?.error) {
-      toast({ title: response.data.error, variant: 'destructive' });
-      return;
+    // A refusal from the server — as much as a request that never arrives — puts the button back
+    // instead of leaving the window saying "sending" for ever.
+    try {
+      const response = await base44.functions.invoke('requestAvailability', {
+        branch_id: branch.id,
+        employee_email: picked,
+        origin: window.location.origin
+      });
+      if (response.data?.error) {
+        toast({ title: response.data.error, variant: 'destructive' });
+        return;
+      }
+      onOpenChange(false);
+      setQuery('');
+      setPicked('');
+      toast({ title: t('roster.requestSent') });
+      if (onSent) onSent();
+    } catch (error) {
+      toast({ title: (error && error.message) || t('roster.requestFailed'), variant: 'destructive' });
+    } finally {
+      setSending(false);
     }
-    onOpenChange(false);
-    setQuery('');
-    setPicked('');
-    toast({ title: t('roster.requestSent') });
-    if (onSent) onSent();
   };
 
   return (

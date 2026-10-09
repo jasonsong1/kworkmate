@@ -81,6 +81,10 @@
       "type": "boolean",
       "default": false
     },
+    "flag_hours": {
+      "type": "number",
+      "default": 0
+    },
     "custom": {
       "type": "boolean",
       "default": false

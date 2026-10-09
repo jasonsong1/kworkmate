@@ -94,7 +94,19 @@ export default function LeaveTypeCard({ type, onChange, onRemove }) {
             </Select>
           </div>
         ) : null}
-        <div className="sm:col-span-3">
+        {/* From this many hours a request of this leave is flagged in red on the review list. */}
+        <div>
+          <Label className="mb-1 block text-xs">{t('leave.flagHours')}</Label>
+          <Input
+            type="number"
+            min="0"
+            step="1"
+            value={type.flag_hours ?? 0}
+            onChange={(event) => patch({ flag_hours: Number(event.target.value) || 0 })}
+          />
+          <p className="mt-1 text-[11px] text-muted-foreground">{t('leave.flagHoursHint')}</p>
+        </div>
+        <div className="sm:col-span-2">
           <Label className="mb-1 block text-xs">{t('leave.eligibleFor')}</Label>
           <div className="flex flex-wrap gap-1.5">
             {EMPLOYMENTS.map((value) => (
