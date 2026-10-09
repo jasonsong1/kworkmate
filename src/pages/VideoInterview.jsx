@@ -4,6 +4,8 @@ import { AlertCircle, CheckCircle2, Loader2, Square, Video, Volume2 } from 'luci
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { base44 } from '@/api/base44Client';
+import useInterviewConversation from '@/hooks/useInterviewConversation';
+import InterviewChat from '@/components/interview/InterviewChat';
 
 const pickMime = () => {
   if (typeof MediaRecorder === 'undefined') return '';
@@ -13,11 +15,13 @@ const pickMime = () => {
 
 export default function VideoInterview() {
   const { token } = useParams();
-  const [state, setState] = useState('loading');
-  const [data, setData] = useState(null);
-  const [index, setIndex] = useState(0);
+  const { state, data, turns, current, saving, error, setError, answer } = useInterviewConversation({
+    token,
+    getFunction: 'getVideoInterview',
+    submitFunction: 'submitVideoInterviewAnswer'
+  });
+  const [mode, setMode] = useState('idle'); // idle | recording | saving
   const [elapsed, setElapsed] = useState(0);
-  const [error, setError] = useState('');
   const [cameraReady, setCameraReady] = useState(false);
   const videoRef = useRef(null);
   const streamRef = useRef(null);
@@ -26,29 +30,15 @@ export default function VideoInterview() {
   const mimeRef = useRef('');
   const timerRef = useRef(null);
 
-  useEffect(() => {
-    const load = async () => {
-      const response = await base44.functions.invoke('getVideoInterview', { token });
-      const payload = response.data || {};
-      if (payload.error || !payload.questions || payload.questions.length === 0) {
-        setState('missing');
-        return;
-      }
-      setData(payload);
-      setState(payload.completed ? 'done' : 'ready');
-    };
-    load();
-  }, [token]);
-
-  const questions = (data && data.questions) || [];
-  const current = questions[index];
-  const limit = (current && current.seconds) || 60;
+  const total = (data && data.total) || 0;
+  const covered = turns.filter((turn) => turn.role !== 'interviewer' && turn.kind !== 'followup').length;
   const questionText = (current && current.question) || '';
-  const active = state === 'ready' || state === 'recording' || state === 'saving';
+  const limit = (current && current.seconds) || 60;
+  const busy = saving || mode === 'saving';
 
-  // The camera stays on for the whole interview so the applicant sees themselves while answering.
+  // The camera stays on for the whole conversation so the applicant sees themselves while answering.
   useEffect(() => {
-    if (!active) return undefined;
+    if (state !== 'ready') return undefined;
     let cancelled = false;
     const start = async () => {
       try {
@@ -77,7 +67,7 @@ export default function VideoInterview() {
       }
       setCameraReady(false);
     };
-  }, [active]);
+  }, [state]);
 
   // The question is read out loud instead of written down.
   const speak = (text) => {
@@ -89,40 +79,36 @@ export default function VideoInterview() {
     window.speechSynthesis.speak(utterance);
   };
 
-  // The question is only read out when the applicant presses "Play the question", so nobody
-  // walks into a question before they are ready.
+  // The first question is read out for the applicant when the interview opens, so the conversation
+  // begins by itself; every later question is read when they press the button.
+  useEffect(() => {
+    if (state !== 'ready' || turns.length !== 0 || !questionText) return undefined;
+    speak(`${data && data.greeting ? `${data.greeting} ` : ''}${questionText}`);
+    return () => {
+      if (typeof window !== 'undefined' && window.speechSynthesis) window.speechSynthesis.cancel();
+    };
+  }, [state, turns.length, questionText]);
 
   const upload = async (blob) => {
-    setState('saving');
-    setError('');
     try {
       const isMp4 = (mimeRef.current || '').includes('mp4');
       const extension = isMp4 ? 'mp4' : 'webm';
-      const file = new File([blob], `answer-${index + 1}.${extension}`, { type: mimeRef.current || 'video/webm' });
-      const { file_uri } = await base44.integrations.Core.UploadPrivateFile({ file });
-      const response = await base44.functions.invoke('submitVideoInterviewAnswer', {
-        token,
-        index,
-        question: questionText,
-        file_uri
+      const file = new File([blob], `answer-${turns.length + 1}.${extension}`, {
+        type: mimeRef.current || 'video/webm'
       });
-      if (response.data?.error) throw new Error(response.data.error);
-      if (response.data?.completed) {
-        setState('done');
-        return;
-      }
-      setIndex((prev) => prev + 1);
-      setState('ready');
+      const { file_uri } = await base44.integrations.Core.UploadPrivateFile({ file });
+      await answer(file_uri);
     } catch (err) {
-      setError(err.message);
-      setState('ready');
+      setError(err.message || 'Your answer could not be saved. Please try again.');
+    } finally {
+      setMode('idle');
     }
   };
 
   const stopRecording = () => {
     clearInterval(timerRef.current);
+    setMode('saving');
     if (recorderRef.current && recorderRef.current.state !== 'inactive') recorderRef.current.stop();
-    setState('saving');
   };
 
   const startRecording = () => {
@@ -143,14 +129,14 @@ export default function VideoInterview() {
       recorderRef.current = recorder;
       recorder.start();
       setElapsed(0);
-      setState('recording');
+      setMode('recording');
       timerRef.current = setInterval(() => {
         setElapsed((prev) => {
           if (prev + 1 >= limit) {
             clearInterval(timerRef.current);
+            setMode('saving');
             if (recorderRef.current && recorderRef.current.state !== 'inactive') {
               recorderRef.current.stop();
-              setState('saving');
             }
             return limit;
           }
@@ -189,9 +175,12 @@ export default function VideoInterview() {
       <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
         <div className="w-full max-w-md rounded-2xl border bg-white p-8 text-center shadow-sm">
           <CheckCircle2 className="mx-auto mb-4 h-10 w-10 text-emerald-500" />
-          <h1 className="text-lg font-semibold">Thank you!</h1>
+          <h1 className="text-lg font-semibold">
+            Thank you{data && data.full_name ? `, ${data.full_name.split(' ')[0]}` : ''}!
+          </h1>
           <p className="mt-2 text-sm text-slate-500">
-            Your video interview has been sent to the hiring team. They will be in touch about the next step.
+            That is the whole conversation. Your video interview has been sent to the hiring team, and they will be in
+            touch about the next step.
           </p>
         </div>
       </div>
@@ -205,56 +194,60 @@ export default function VideoInterview() {
           <p className="text-xs uppercase tracking-widest opacity-80">{data.company_name || ''}</p>
           <h1 className="mt-2 text-2xl font-bold">Video interview</h1>
           <p className="mt-1 text-sm opacity-90">
-            {data.job_title ? data.job_title : 'Shortlisted candidate'} · {questions.length} questions
+            {data.job_title ? data.job_title : 'Shortlisted candidate'} · {total} topics
           </p>
         </div>
       </header>
 
-      <main className="mx-auto max-w-xl space-y-6 px-4 py-6">
-        <div className="rounded-2xl border bg-white p-5 shadow-sm">
-          <div className="mb-3 flex items-center justify-between text-xs text-slate-500">
+      <main className="mx-auto max-w-xl space-y-5 px-4 py-6">
+        <div className="rounded-2xl border bg-white p-4 shadow-sm">
+          <div className="mb-2.5 flex items-center justify-between text-xs text-slate-500">
             <span>
-              Question {index + 1} of {questions.length}
+              {current && current.kind === 'followup'
+                ? `Follow-up · topic ${current.topic_index + 1} of ${total}`
+                : `Topic ${Math.min(covered + 1, total)} of ${total}`}
             </span>
-            {state === 'recording' ? (
+            {mode === 'recording' ? (
               <span className="font-medium text-red-600">
                 Recording {elapsed}s / {limit}s
               </span>
             ) : null}
           </div>
-          <Progress value={((index + (state === 'recording' ? 0.5 : 0)) / questions.length) * 100} className="h-1.5" />
+          <Progress value={(covered / (total || 1)) * 100} className="h-1.5" />
+        </div>
 
-          <div className="mt-5 flex flex-col items-center gap-3 text-center">
-            <Button variant="outline" size="lg" onClick={() => speak(questionText)}>
-              <Volume2 className="mr-2 h-4 w-4" /> Play the question
-            </Button>
-            <p className="text-sm text-slate-500">
-              Listen to the question, then record your answer on camera for up to {limit} seconds.
-            </p>
-          </div>
+        <InterviewChat greeting={data.greeting} turns={turns} current={busy ? null : current} thinking={busy} />
 
+        <div className="rounded-2xl border bg-white p-5 shadow-sm">
           <video
             ref={videoRef}
             autoPlay
             muted
             playsInline
-            className="mt-5 aspect-video w-full rounded-xl bg-black object-cover"
+            className="aspect-video w-full rounded-xl bg-black object-cover"
           />
 
           <div className="mt-5 flex flex-col items-center gap-3">
-            {state === 'saving' ? (
+            {busy ? (
               <p className="flex items-center gap-2 text-sm text-slate-500">
-                <Loader2 className="h-4 w-4 animate-spin" /> Saving your answer…
+                <Loader2 className="h-4 w-4 animate-spin" /> Thinking about your answer…
               </p>
-            ) : state === 'recording' ? (
+            ) : mode === 'recording' ? (
               <Button size="lg" variant="destructive" className="w-full" onClick={stopRecording}>
                 <Square className="mr-2 h-4 w-4" /> Stop and continue
               </Button>
             ) : (
               <Button size="lg" className="w-full" onClick={startRecording} disabled={!cameraReady}>
-                <Video className="mr-2 h-4 w-4" /> {index === 0 ? 'Start recording' : 'Record answer'}
+                <Video className="mr-2 h-4 w-4" /> {turns.length === 0 ? 'Start the interview' : 'Record your answer'}
               </Button>
             )}
+            <Button
+              variant="outline"
+              onClick={() => speak(questionText)}
+              disabled={!questionText || mode === 'recording'}
+            >
+              <Volume2 className="mr-2 h-4 w-4" /> Play the question again
+            </Button>
           </div>
 
           {error ? (
