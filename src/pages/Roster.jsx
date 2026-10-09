@@ -4,6 +4,7 @@ import PageHeader from '@/components/PageHeader';
 import ShiftDialog from '@/components/ShiftDialog';
 import RosterSettingsDialog from '@/components/RosterSettingsDialog';
 import RosterScheduleCard from '@/components/RosterScheduleCard';
+import RosterGrid from '@/components/roster/RosterGrid';
 import RosterAutomationCard from '@/components/roster/RosterAutomationCard';
 import AvailabilityBoard from '@/components/AvailabilityBoard';
 import CalendarSubscribeDialog from '@/components/roster/CalendarSubscribeDialog';
@@ -44,8 +45,6 @@ export default function Roster() {
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [sending, setSending] = useState(false);
   const [generating, setGenerating] = useState(false);
-  // The shift being dragged, so a manager can nudge a couple of placements by hand.
-  const [dragId, setDragId] = useState('');
   // The shift opened for its hours to be changed or for it to be taken off the week.
   const [editingShift, setEditingShift] = useState(null);
 
@@ -188,9 +187,8 @@ export default function Roster() {
 
   // A dragged shift is the same record moved, never a second one added: the shift keeps its id and
   // only its person and day change.
-  const moveShift = async (email, date) => {
-    const shift = shifts.find((s) => s.id === dragId);
-    setDragId('');
+  const moveShift = async (email, date, id) => {
+    const shift = shifts.find((s) => s.id === id);
     if (!shift || (shift.employee_email === email && shift.date === date)) return;
     if (onLeaveFor(email, date)) {
       toast({ title: t('roster.onLeaveBlocked'), variant: 'destructive' });
@@ -346,103 +344,24 @@ export default function Roster() {
                     {publishedCount} of {shifts.length} shifts published for this week
                     {canManageRoster ? ` · ${t('roster.dragHint')}` : ''}
                   </p>
-                  <div className="overflow-x-auto">
-                    <table className="w-full min-w-[900px] border-separate border-spacing-0 text-sm">
-                      <thead>
-                        <tr>
-                          <th className="sticky left-0 z-10 w-44 bg-card px-3 py-2 text-left text-xs font-medium text-muted-foreground">
-                            {t('common.employee')}
-                          </th>
-                          {days.map((day) => (
-                            <th key={day.date} className="px-2 py-2 text-center text-xs font-medium text-muted-foreground">
-                              <div>{day.short}</div>
-                              <div className="font-normal text-[11px]">{day.date.slice(5)}</div>
-                              {missingOn(day.date) > 0 && (
-                                <span className="mt-1 inline-block rounded-full bg-destructive/10 px-2 py-0.5 text-[10px] font-medium text-destructive">
-                                  {t('roster.unassigned')} {missingOn(day.date)}
-                                </span>
-                              )}
-                            </th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {employees.map((employee) => (
-                          <tr key={employee.id} className="align-top">
-                            <td className="sticky left-0 z-10 border-t bg-card px-3 py-3">
-                              <p className="text-sm font-medium">{employee.full_name}</p>
-                              <p className="text-xs text-muted-foreground">
-                                {[employee.position, employee.secondary_position, ...(employee.extra_positions || [])].
-                                filter(Boolean).
-                                join(' · ') || '—'}
-                              </p>
-                            </td>
-                            {days.map((day) => (
-                              <td
-                                key={`${employee.id}-${day.date}`}
-                                className="border-t p-1"
-                                onDragOver={(event) => event.preventDefault()}
-                                onDrop={() => canManageRoster && moveShift(employee.user_email, day.date)}
-                              >
-                                <div className="space-y-1">
-                                  {onLeaveFor(employee.user_email, day.date) ? (
-                                    <div className="rounded-lg border border-amber-200 bg-amber-50 px-2 py-1.5 text-[11px] font-medium text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
-                                      {t('roster.onLeave')}
-                                    </div>
-                                  ) : null}
-                                  {shiftsFor(employee.user_email, day.date).map((shift) => (
-                                    <div
-                                      key={shift.id}
-                                      draggable={canManageRoster}
-                                      onDragStart={() => setDragId(shift.id)}
-                                      onDragEnd={() => setDragId('')}
-                                      onClick={() => {
-                                        if (!canManageRoster) return;
-                                        setEditingShift(shift);
-                                        setDialogOpen(true);
-                                      }}
-                                      title={canManageRoster ? t('roster.dragHint') : undefined}
-                                      className={`group rounded-lg border px-2 py-1.5 text-xs ${
-                                        canManageRoster ? 'cursor-grab' : 'cursor-default'
-                                      } ${
-                                        shift.status === 'published'
-                                          ? 'border-emerald-200 bg-emerald-50 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-100'
-                                          : shift.status === 'saved'
-                                            ? 'border-sky-200 bg-sky-50 dark:border-sky-500/30 dark:bg-sky-500/10 dark:text-sky-100'
-                                            : 'bg-muted/40 dark:bg-muted/20'
-                                      }`}
-                                    >
-                                      <div className="flex items-center justify-between gap-1">
-                                        <span className="font-medium">
-                                          {shift.start_time}–{shift.end_time}
-                                        </span>
-                                      </div>
-                                      {shift.position ? (
-                                        <p className="truncate text-[11px] text-muted-foreground">{shift.position}</p>
-                                      ) : null}
-                                    </div>
-                                  ))}
-                                  {canManageRoster && !onLeaveFor(employee.user_email, day.date) && (
-                                  <button
-                                    onClick={() => {
-                                      setDialogDate(day.date);
-                                      setDialogEmployee(employee);
-                                      setEditingShift(null);
-                                      setDialogOpen(true);
-                                    }}
-                                    className="w-full rounded-lg border border-dashed px-2 py-1 text-[11px] text-muted-foreground hover:bg-muted"
-                                  >
-                                    +
-                                  </button>
-                                  )}
-                                </div>
-                              </td>
-                            ))}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                  <RosterGrid
+                    days={days}
+                    employees={employees}
+                    shifts={shifts}
+                    canManage={canManageRoster}
+                    onShiftClick={(shift) => {
+                      setEditingShift(shift);
+                      setDialogOpen(true);
+                    }}
+                    onAddShift={(employee, date) => {
+                      setDialogDate(date);
+                      setDialogEmployee(employee);
+                      setEditingShift(null);
+                      setDialogOpen(true);
+                    }}
+                    onMoveShift={moveShift}
+                    onLeaveFor={onLeaveFor}
+                    missingOn={missingOn} />
                 </>
               )}
             </CardContent>

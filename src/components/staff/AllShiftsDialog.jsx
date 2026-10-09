@@ -1,79 +1,108 @@
 import React, { useEffect, useState } from 'react';
-import { Loader2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import RosterGrid from '@/components/roster/RosterGrid';
 import { useI18n } from '@/lib/i18n';
-import { addDaysIso, todayIso } from '@/lib/bh';
+import { WEEKS_AHEAD, addDaysIso, startOfWeekIso, todayIso, weekDates, weeksBetweenCount } from '@/lib/bh';
 import { base44 } from '@/api/base44Client';
 
-// Every shift the store has sent out, so anyone can see who they are working with.
+// The whole store's week, laid out exactly the way the roster page lays it out — without the hours
+// the team submitted — so anyone can see who they are working with. Only the weeks that have gone
+// out to staff are here: a draft nobody has been sent yet stays with the manager.
 export default function AllShiftsDialog({ open, onOpenChange, branch }) {
   const { t } = useI18n();
-  const [rows, setRows] = useState([]);
+  const thisWeek = startOfWeekIso(todayIso());
+  const [weekStart, setWeekStart] = useState(thisWeek);
+  const [employees, setEmployees] = useState([]);
+  const [shifts, setShifts] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // Opening the window always starts on this week, never on the week that was last looked at.
+  useEffect(() => {
+    if (open) setWeekStart(thisWeek);
+  }, [open, thisWeek]);
 
   useEffect(() => {
     if (!open || !branch) return undefined;
     let cancelled = false;
     setLoading(true);
-    const today = todayIso();
-    base44.entities.Shift
-      .filter(
-        { branch_id: branch.id, status: 'published', date: { $gte: today, $lte: addDaysIso(today, 20) } },
-        { sort: 'date', limit: 300 }
-      )
-      .then((page) => {
-        if (!cancelled) setRows(page.items || []);
-      })
-      .catch(() => {
-        if (!cancelled) setRows([]);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
+    Promise.all([
+    base44.entities.EmployeeProfile.
+    filter({ branch_id: branch.id, status: 'active' }, { limit: 200 }).
+    then((page) => page.items || []).
+    catch(() => []),
+    base44.entities.Shift.
+    filter(
+      {
+        branch_id: branch.id,
+        status: 'published',
+        date: { $gte: weekStart, $lte: addDaysIso(weekStart, 6) }
+      },
+      { sort: 'date', limit: 500 }
+    ).
+    then((page) => page.items || []).
+    catch(() => [])]
+    ).
+    then(([staff, rows]) => {
+      if (cancelled) return;
+      setEmployees(staff);
+      setShifts(rows);
+    }).
+    finally(() => {
+      if (!cancelled) setLoading(false);
+    });
     return () => {
       cancelled = true;
     };
-  }, [open, branch]);
+  }, [open, branch, weekStart]);
 
-  const days = [...new Set(rows.map((row) => row.date))];
+  const days = weekDates(weekStart);
+  const canGoBack = weeksBetweenCount(weekStart, thisWeek) > 0;
+  const canGoForward = weeksBetweenCount(weekStart, thisWeek) < WEEKS_AHEAD - 1;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[85vh] max-w-2xl overflow-y-auto">
+      <DialogContent className="max-h-[85vh] max-w-[95vw] overflow-y-auto xl:max-w-6xl">
         <DialogHeader>
           <DialogTitle>{t('staff.allShiftsTitle')}</DialogTitle>
         </DialogHeader>
         <p className="text-xs text-muted-foreground">{t('staff.allShiftsHint')}</p>
 
-        {loading ? (
-          <p className="py-8 text-center">
+        <div className="flex items-center gap-1 rounded-lg border px-2 py-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            title={t('staff.weekPrev')}
+            disabled={!canGoBack}
+            onClick={() => setWeekStart(addDaysIso(weekStart, -7))}>
+
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <span className="px-2 text-sm font-medium">
+            {weekStart} → {addDaysIso(weekStart, 6)}
+          </span>
+          <Button
+            variant="ghost"
+            size="icon"
+            title={t('staff.weekNext')}
+            disabled={!canGoForward}
+            onClick={() => setWeekStart(addDaysIso(weekStart, 7))}>
+
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
+
+        {loading ?
+        <p className="py-8 text-center">
             <Loader2 className="mx-auto h-5 w-5 animate-spin" />
-          </p>
-        ) : days.length === 0 ? (
-          <p className="py-8 text-center text-sm text-muted-foreground">{t('staff.noShifts')}</p>
-        ) : (
-          <div className="space-y-4">
-            {days.map((date) => (
-              <div key={date} className="space-y-1.5">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{date}</p>
-                {rows.
-                filter((row) => row.date === date).
-                map((row) => (
-                  <div key={row.id} className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium">{row.employee_name}</p>
-                      {row.position ? <p className="text-xs text-muted-foreground">{row.position}</p> : null}
-                    </div>
-                    <span className="font-mono text-sm">
-                      {row.start_time}–{row.end_time}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            ))}
-          </div>
-        )}
+          </p> :
+        employees.length === 0 || shifts.length === 0 ?
+        <p className="py-8 text-center text-sm text-muted-foreground">{t('staff.noShifts')}</p> :
+
+        <RosterGrid days={days} employees={employees} shifts={shifts} canManage={false} />
+        }
       </DialogContent>
-    </Dialog>
-  );
+    </Dialog>);
+
 }

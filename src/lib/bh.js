@@ -256,6 +256,27 @@ export function weekDates(startIso) {
   return DAYS.map((d, i) => ({ ...d, date: addDaysIso(startIso, i) }));
 }
 
+// How far ahead a roster, a set of shifts or a week of availability is looked at: this week and
+// the three after it. Anything earlier is behind us and is never shown.
+export const WEEKS_AHEAD = 4;
+
+export function weeksBetweenCount(weekStart, from = startOfWeekIso(todayIso())) {
+  return Math.round((Date.parse(`${weekStart}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / (7 * 24 * 60 * 60 * 1000));
+}
+
+// How long a shift actually is, with the unpaid break taken out. Every total on every screen is
+// read the same way, so two screens can never disagree about a week.
+export function shiftHours(shift) {
+  const start = timeToMinutes(shift && shift.start_time);
+  const end = timeToMinutes(shift && shift.end_time);
+  if (start === null || end === null || end <= start) return 0;
+  return Math.max(0, end - start - (Number(shift && shift.break_min) || 0)) / 60;
+}
+
+export function hoursValue(value) {
+  return `${Math.round((Number(value) || 0) * 10) / 10}h`;
+}
+
 export function formatDateTime(value) {
   if (!value) return '—';
   const d = new Date(value);

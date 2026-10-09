@@ -38,6 +38,8 @@ export default function Interviews() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [savingToggle, setSavingToggle] = useState(false);
+  // The switch is only a draft until Save is pressed: flipping it on its own stores nothing.
+  const [rescheduleDraft, setRescheduleDraft] = useState(null);
   const [form, setForm] = useState({ date: todayIso(), from: '14:00', to: '17:00', step: 20 });
 
   const canManage =
@@ -46,6 +48,13 @@ export default function Interviews() {
     ['manager', 'supervisor_manager'].includes(presetKey) ||
     ['update', 'write'].includes(levelOf('interviews'));
   const allowReschedule = Boolean(company && company.allow_interview_reschedule);
+  const rescheduleValue = rescheduleDraft === null ? allowReschedule : rescheduleDraft;
+  const rescheduleDirty = rescheduleDraft !== null && rescheduleDraft !== allowReschedule;
+
+  // A company that has just been reloaded is the truth again, so a half-made change is dropped.
+  useEffect(() => {
+    setRescheduleDraft(null);
+  }, [company]);
 
   const loadJobs = useCallback(async () => {
     if (!activeBranch) return;
@@ -129,11 +138,13 @@ export default function Interviews() {
     await loadSlots();
   };
 
+  // Only Save writes the setting; the switch on its own changes nothing.
   const toggleReschedule = async (value) => {
     if (!company) return;
     setSavingToggle(true);
     await base44.entities.Company.update(company.id, { allow_interview_reschedule: value });
     await reload();
+    setRescheduleDraft(null);
     setSavingToggle(false);
     toast({ title: value ? t('interviews.rescheduleOn') : t('interviews.rescheduleOff') });
   };
@@ -228,11 +239,19 @@ export default function Interviews() {
                 <p className="text-sm font-medium">{t('interviews.rescheduleToggle')}</p>
                 <p className="mt-1 text-xs text-muted-foreground">{t('interviews.rescheduleHint')}</p>
               </div>
-              <Switch
-                checked={allowReschedule}
-                disabled={!canManage || savingToggle}
-                onCheckedChange={toggleReschedule}
-              />
+              <div className="flex items-center gap-2">
+                <Switch
+                  checked={rescheduleValue}
+                  disabled={!canManage || savingToggle}
+                  onCheckedChange={(value) => setRescheduleDraft(value)}
+                />
+                {rescheduleDirty ? (
+                  <Button size="sm" onClick={() => toggleReschedule(rescheduleValue)} disabled={savingToggle}>
+                    {savingToggle ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                    {t('common.save')}
+                  </Button>
+                ) : null}
+              </div>
             </CardContent>
           </Card>
         </div>

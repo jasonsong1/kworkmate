@@ -70,6 +70,7 @@ export default function JobDetail() {
       required_questions: visibleRequiredQuestions(job.required_questions),
       custom_questions: job.custom_questions || [],
       brand_color: job.brand_color,
+      logo_url: job.logo_url || '',
       poster_note: job.poster_note || ''
     });
     // A closed ad that was closed by its own hiring opens again as soon as there is room for

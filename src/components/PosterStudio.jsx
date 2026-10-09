@@ -13,7 +13,9 @@ export default function PosterStudio({ job, branch, company, applyUrl, onJobChan
   const { toast } = useToast();
   const canvasRef = useRef(null);
   const [busy, setBusy] = useState(false);
-  const [note, setNote] = useState(job.poster_note || '');
+  // Nothing in the studio is stored as it is typed or picked: the job ad's own Save writes the
+  // colour, the note and the logo together with the rest of the ad.
+  const patchJob = (changes) => onJobChange && onJobChange({ ...job, ...changes });
 
   const address = [branch?.address, branch?.suburb, branch?.state, branch?.postcode].filter(Boolean).join(', ');
 
@@ -29,7 +31,7 @@ export default function PosterStudio({ job, branch, company, applyUrl, onJobChan
         applyUrl,
         brandColor: job.brand_color || branch?.brand_color || company?.brand_color,
         logoUrl: job.logo_url || branch?.logo_url,
-        note
+        note: job.poster_note || ''
       });
       if (!active) return;
     };
@@ -37,16 +39,15 @@ export default function PosterStudio({ job, branch, company, applyUrl, onJobChan
     return () => {
       active = false;
     };
-  }, [job.title, job.hourly_rate, job.brand_color, job.logo_url, branch, company, applyUrl, address, note]);
+  }, [job.title, job.hourly_rate, job.brand_color, job.logo_url, branch, company, applyUrl, address, job.poster_note]);
 
   const uploadLogo = async (event) => {
     const file = event.target.files && event.target.files[0];
     if (!file) return;
     setBusy(true);
     const { file_url } = await base44.integrations.Core.UploadPublicFile({ file });
-    await base44.entities.Job.update(job.id, { logo_url: file_url });
     setBusy(false);
-    onJobChange && onJobChange({ ...job, logo_url: file_url });
+    patchJob({ logo_url: file_url });
     toast({ title: 'Logo updated' });
   };
 
@@ -97,10 +98,7 @@ export default function PosterStudio({ job, branch, company, applyUrl, onJobChan
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={async () => {
-                      await base44.entities.Job.update(job.id, { logo_url: '' });
-                      onJobChange && onJobChange({ ...job, logo_url: '' });
-                    }}
+                    onClick={() => patchJob({ logo_url: '' })}
                   >
                     Remove
                   </Button>
@@ -111,9 +109,8 @@ export default function PosterStudio({ job, branch, company, applyUrl, onJobChan
               <Label>Note line</Label>
               <Textarea
                 rows={3}
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                onBlur={() => base44.entities.Job.update(job.id, { poster_note: note })}
+                value={job.poster_note || ''}
+                onChange={(e) => patchJob({ poster_note: e.target.value })}
                 placeholder="Free staff meals · Flexible shifts"
               />
             </div>
@@ -122,8 +119,7 @@ export default function PosterStudio({ job, branch, company, applyUrl, onJobChan
               <Input
                 type="color"
                 value={job.brand_color || branch?.brand_color || '#4338ca'}
-                onChange={(e) => onJobChange && onJobChange({ ...job, brand_color: e.target.value })}
-                onBlur={(e) => base44.entities.Job.update(job.id, { brand_color: e.target.value })}
+                onChange={(e) => patchJob({ brand_color: e.target.value })}
                 className="h-10 w-full p-1"
               />
             </div>

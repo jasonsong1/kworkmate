@@ -176,7 +176,13 @@ export function WorkspaceProvider({ children }) {
   // A super admin always acts as the company admin of the company they are in, whatever
   // app role happens to be stored on their account.
   const role = isPlatformAdmin ? 'company_admin' : (me && me.app_role) || 'staff';
-  const isManager = role === 'company_admin' || role === 'branch_manager';
+  // A manager is one of the two roles the platform ships with, or whatever position the company
+  // itself put on a manager preset: an employer who promotes somebody to a manager position
+  // expects the manager screens, whatever role key sits behind that position.
+  const isManager =
+    role === 'company_admin' ||
+    role === 'branch_manager' ||
+    ['manager', 'supervisor_manager'].includes(permissions.presetKey);
   const isCompanyAdmin = role === 'company_admin';
   const access = permissions.access;
 

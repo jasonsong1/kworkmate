@@ -176,12 +176,21 @@ export async function buildDraft(base44, branch, weekStart) {
     fixedByDay[day].add(email);
   }
 
-  // Latest submitted availability per person wins.
+  // A submission carries the week it was filled in for, so the week being built is read from the
+  // availability that belongs to it. Somebody who has not filled in this week yet is read from
+  // their latest submission instead of being dropped from the plan.
   const availByEmail = {};
+  const availThisWeek = {};
   for (const sub of rowsOf(subPage)) {
-    if (!sub.employee_email || availByEmail[sub.employee_email]) continue;
-    availByEmail[sub.employee_email] = sub.availability || {};
+    if (!sub || !sub.employee_email) continue;
+    const forWeek = startOfWeekIso(String(sub.week_start || sub.created_date || '').slice(0, 10));
+    if (forWeek === weekStart) {
+      if (!availThisWeek[sub.employee_email]) availThisWeek[sub.employee_email] = sub.availability || {};
+      continue;
+    }
+    if (!availByEmail[sub.employee_email]) availByEmail[sub.employee_email] = sub.availability || {};
   }
+  for (const email of Object.keys(availThisWeek)) availByEmail[email] = availThisWeek[email];
 
   const shiftByKey = {};
   for (const shift of shifts) shiftByKey[shift.key] = shift;

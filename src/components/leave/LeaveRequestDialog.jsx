@@ -33,14 +33,37 @@ export default function LeaveRequestDialog({ open, onOpenChange, types, onSubmit
 
   const hours = Number(form.hours) > 0 ? Number(form.hours) : Math.round(days * HOURS_PER_DAY * 100) / 100;
 
-  // What the person is told when the request is refused. When the answer says how much is left,
-  // they read the number rather than a bare refusal.
+  // A refused request comes back either as an answer or as a failed call, so the reason is dug out
+  // of wherever the server put it before it is turned into a sentence.
+  const payloadOf = (error) => {
+    const direct = (error && error.response && error.response.data) || (error && error.data);
+    if (direct && typeof direct === 'object') return direct;
+    const match = /\{[\s\S]*\}/.exec(String((error && error.message) || ''));
+    if (match) {
+      try {
+        return JSON.parse(match[0]);
+      } catch {
+        return {};
+      }
+    }
+    return {};
+  };
+
+  // What the person is told when the request is refused: the real reason, with the hours left when
+  // the answer carries them, never a bare "could not be sent".
   const refused = (data) => {
-    if (data && (data.error === 'insufficient' || data.error === 'insufficient_balance')) {
-      const left = Number(data.available);
+    const code = String((data && data.error) || '');
+    const left = Number(data && data.available);
+    if (code === 'insufficient' || code === 'insufficient_balance') {
       if (Number.isFinite(left)) return t('leave.insufficientLeft').replace('{hours}', hoursLabel(left));
       return t('leave.insufficient');
     }
+    if (code === 'not_eligible') return t('leave.notEligible');
+    if (code === 'invalid_hours' || code === 'invalid_dates') return t('leave.invalidRequest');
+    if (code === 'unknown_type') return t('leave.unknownType');
+    if (code === 'no_profile') return t('leave.noProfile');
+    // A sentence the server wrote itself is shown as it stands; a bare code is not.
+    if (code.includes(' ')) return code;
     return t('leave.requestFailed');
   };
 
@@ -73,8 +96,7 @@ export default function LeaveRequestDialog({ open, onOpenChange, types, onSubmit
     } catch (error) {
       // A refused request (not enough hours left) comes back as a failed call, so the reason is read
       // from the answer and shown: the button never stays spinning on an error.
-      const data = (error && error.response && error.response.data) || {};
-      toast({ title: refused(data), variant: 'destructive' });
+      toast({ title: refused(payloadOf(error)), variant: 'destructive' });
     } finally {
       setSaving(false);
     }

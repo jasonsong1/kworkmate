@@ -12,6 +12,29 @@ function rowsOf(result: any) {
 // on a manager preset — which is how most employers describe their own managers.
 const MANAGER_PRESETS = ['manager', 'supervisor_manager'];
 
+// The position labels this company gives its managers. An employer sets a position in Employee
+// management, and whoever holds that position runs the store — so they are a manager here even
+// when the role key behind that position was never handed out with it.
+function managerPositionLabels(company: any) {
+  const labels = new Set<string>();
+  (company && Array.isArray(company.custom_roles) ? company.custom_roles : []).forEach((role: any) => {
+    if (role && role.key && role.label && MANAGER_PRESETS.includes(role.preset_key)) {
+      labels.add(String(role.label).trim().toLowerCase());
+    }
+  });
+  return labels;
+}
+
+function holdsManagerPosition(person: any, labels: Set<string>) {
+  if (!person || labels.size === 0) return false;
+  const positions = [
+    person.position,
+    person.secondary_position,
+    ...(Array.isArray(person.extra_positions) ? person.extra_positions : [])
+  ];
+  return positions.some((label: any) => label && labels.has(String(label).trim().toLowerCase()));
+}
+
 // Who has to be told about a branch: its managers and the company admins. A store's own manager
 // list is what makes somebody a manager of that store, so a manager next door hears nothing.
 export async function branchManagers(base44: any, company: any, branch: any) {
@@ -32,8 +55,10 @@ export async function branchManagers(base44: any, company: any, branch: any) {
       { limit: 200 }
     ).catch(() => [])
   );
+  const managerPositions = managerPositionLabels(company);
   profiles.forEach((person: any) => {
-    if (!person || !person.user_email || !managerRoles.has(person.app_role)) return;
+    if (!person || !person.user_email) return;
+    if (!managerRoles.has(person.app_role) && !holdsManagerPosition(person, managerPositions)) return;
     // A company admin runs the whole company; a store's manager hears about that store only.
     if (person.app_role === 'company_admin' || !branch || !person.branch_id || person.branch_id === branch.id) {
       emails.add(person.user_email);
