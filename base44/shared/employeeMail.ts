@@ -97,9 +97,10 @@ export function availabilityMail(lang: string, { name, branchName }) {
       heading: `Hi ${name}, please update your availability`,
       lines: [
         `Let us know which days and hours you can work next week at <b>${branchName}</b>.`,
-        'Press the button below and sign in with the ID your employer issued, then enter your hours.',
         'It only takes a minute — your manager uses this to build the roster.'
       ],
+      // The sign-in note is an aside, so it rides in the tip box under the button.
+      tip: '💡 <strong>Signing in:</strong> press the button, then use the employee ID and password your employer issued and enter your hours in <strong>My space</strong>.',
       cta: 'Update my availability'
     };
   }
@@ -108,9 +109,10 @@ export function availabilityMail(lang: string, { name, branchName }) {
     heading: `${name}님, 근무가능시간을 업데이트해 주세요`,
     lines: [
       `다음 주에 근무할 수 있는 요일과 시간을 알려주세요. (<b>${branchName}</b>)`,
-      '아래 버튼을 눌러 사번(ID)과 비밀번호로 로그인한 뒤 내 공간에서 입력하시면 됩니다.',
       '1분이면 끝나고, 매니저가 이 내용으로 근무표를 만듭니다.'
     ],
+    // 로그인 안내는 본문이 아니라 버튼 아래 팁 박스에 담아 둔다.
+    tip: '💡 <strong>로그인 안내:</strong> 위 버튼을 누른 뒤 발급받은 사번(ID)과 비밀번호로 로그인하시면 <strong>내 공간</strong>에서 바로 입력하실 수 있습니다.',
     cta: '근무가능시간 입력하기'
   };
 }

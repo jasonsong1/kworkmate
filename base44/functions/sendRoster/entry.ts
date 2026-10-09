@@ -91,6 +91,7 @@ export default async function (req: Request) {
         subject: copy.subject,
         html: brandedEmail({
           heading: copy.heading,
+          badge: branch.name,
           brandColor: branch.brand_color || (company && company.brand_color),
           lines: [copy.greeting, copy.lead, ...lines],
           footer: `${company ? company.name : branch.name} · kworkmate`

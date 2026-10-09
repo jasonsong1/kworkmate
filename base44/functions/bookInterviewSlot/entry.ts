@@ -159,6 +159,7 @@ export default async function (req) {
           subject: `Interview booked — ${applicant.full_name} on ${claimed.date} ${claimed.start_time}`,
           html: brandedEmail({
             heading: 'An applicant booked an interview slot',
+            badge: branch ? branch.name : '',
             brandColor: (branch && branch.brand_color) || '#4338ca',
             lines: [
               `<b>${applicant.full_name}</b> (${applicant.email}) booked <b>${claimed.date} at ${claimed.start_time}</b> for ${job ? job.title : 'the role'}.`,

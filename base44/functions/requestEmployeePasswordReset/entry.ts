@@ -50,6 +50,7 @@ export default async function (req) {
       subject: 'Set a new password for kworkmate',
       html: brandedEmail({
         heading: 'Set a new password',
+        badge: branch ? branch.name : '',
         brandColor: (branch && branch.brand_color) || undefined,
         lines: [
           `Hi ${profile.full_name || 'there'},`,

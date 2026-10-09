@@ -99,6 +99,7 @@ export default async function (req) {
       subject: 'Your onboarding documents are complete',
       html: brandedEmail({
         heading: 'Onboarding complete, thank you',
+        badge: branch ? branch.name : '',
         brandColor: (branch && branch.brand_color) || '#4338ca',
         lines: [
           `Hi ${employee.full_name},`,
