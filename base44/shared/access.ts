@@ -233,8 +233,55 @@ export function resolveAccess({ packageModules, preset, companyGrant, branchGran
   return access;
 }
 
-export function resolvePresetKey({ roleKey, customRoles, isCompanyAdmin }) {
+// The positions a company calls its managers. A label counts when the company put it on a
+// manager preset, and the presets' own names count as well: an employer typing "매니저" into the
+// position field of a staff record means exactly what a manager role means.
+export const MANAGER_PRESETS = ['manager', 'supervisor_manager'];
+
+export function managerPositionLabels(customRoles, presets) {
+  const labels = new Set();
+  mergePresets([])
+    .filter((preset) => MANAGER_PRESETS.includes(preset.key))
+    .forEach((preset) => {
+      [preset.label_en, preset.label_ko, preset.label]
+        .filter(Boolean)
+        .forEach((label) => labels.add(String(label).trim().toLowerCase()));
+    });
+  (presets || [])
+    .filter((preset) => MANAGER_PRESETS.includes(preset.key))
+    .forEach((preset) => {
+      if (preset.label) labels.add(String(preset.label).trim().toLowerCase());
+    });
+  (customRoles || []).forEach((role) => {
+    if (role && role.key && role.label && MANAGER_PRESETS.includes(role.preset_key)) {
+      labels.add(String(role.label).trim().toLowerCase());
+    }
+  });
+  return labels;
+}
+
+// Every position the employer recorded on one person's own staff record.
+export function positionsOf(person) {
+  return [
+    person && person.position,
+    person && person.secondary_position,
+    ...(person && Array.isArray(person.extra_positions) ? person.extra_positions : [])
+  ].filter(Boolean);
+}
+
+export function holdsManagerPosition(person, labels) {
+  if (!person || !labels || labels.size === 0) return false;
+  return positionsOf(person).some((label) => labels.has(String(label).trim().toLowerCase()));
+}
+
+export function resolvePresetKey({ roleKey, customRoles, isCompanyAdmin, positions }) {
   if (isCompanyAdmin) return ROLE_PRESET.company_admin;
+  // The position the employer set on the staff record is what most companies mean by "manager":
+  // whoever holds it works as a manager, whatever role key sits behind that position.
+  if (positions && positions.length > 0) {
+    const labels = managerPositionLabels(customRoles);
+    if (positions.some((label) => labels.has(String(label).trim().toLowerCase()))) return 'manager';
+  }
   const builtIn = ROLE_PRESET[roleKey];
   if (builtIn && roleKey !== 'staff') return builtIn;
   const role = (customRoles || []).find((item) => item && item.key === roleKey);

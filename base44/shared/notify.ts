@@ -3,36 +3,16 @@
 import { sendEmail, brandedEmail } from './email.ts';
 import { employeeLanguage } from './employeeMail.ts';
 import { sendWebPush } from './webpush.ts';
+import { MANAGER_PRESETS, holdsManagerPosition, managerPositionLabels } from './access.ts';
 
 function rowsOf(result: any) {
   return Array.isArray(result) ? result : (result && result.items) || [];
 }
 
-// A manager is one of the roles the platform ships with, or a position the company named itself
-// on a manager preset — which is how most employers describe their own managers.
-const MANAGER_PRESETS = ['manager', 'supervisor_manager'];
-
-// The position labels this company gives its managers. An employer sets a position in Employee
-// management, and whoever holds that position runs the store — so they are a manager here even
-// when the role key behind that position was never handed out with it.
-function managerPositionLabels(company: any) {
-  const labels = new Set<string>();
-  (company && Array.isArray(company.custom_roles) ? company.custom_roles : []).forEach((role: any) => {
-    if (role && role.key && role.label && MANAGER_PRESETS.includes(role.preset_key)) {
-      labels.add(String(role.label).trim().toLowerCase());
-    }
-  });
-  return labels;
-}
-
-function holdsManagerPosition(person: any, labels: Set<string>) {
-  if (!person || labels.size === 0) return false;
-  const positions = [
-    person.position,
-    person.secondary_position,
-    ...(Array.isArray(person.extra_positions) ? person.extra_positions : [])
-  ];
-  return positions.some((label: any) => label && labels.has(String(label).trim().toLowerCase()));
+// The position labels this company gives its managers: a position the employer set on a staff
+// record means the same as a manager role, whatever key sits behind it.
+function managerLabels(company: any) {
+  return managerPositionLabels(company && company.custom_roles);
 }
 
 // Who has to be told about a branch: its managers and the company admins. A store's own manager
@@ -55,7 +35,7 @@ export async function branchManagers(base44: any, company: any, branch: any) {
       { limit: 200 }
     ).catch(() => [])
   );
-  const managerPositions = managerPositionLabels(company);
+  const managerPositions = managerLabels(company);
   profiles.forEach((person: any) => {
     if (!person || !person.user_email) return;
     if (!managerRoles.has(person.app_role) && !holdsManagerPosition(person, managerPositions)) return;

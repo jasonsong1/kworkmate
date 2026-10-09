@@ -6,7 +6,14 @@
 // resolveCaller() prefers whichever is present, so screens shared by managers and staff
 // keep working either way.
 
-import { mergePresets, presetFor, resolveAccess, resolvePresetKey } from './access.ts';
+import {
+  MANAGER_PRESETS,
+  mergePresets,
+  positionsOf,
+  presetFor,
+  resolveAccess,
+  resolvePresetKey
+} from './access.ts';
 import { ALL_MODULES, applyModuleOverrides, loadModuleOverrides, packageState } from './packages.ts';
 
 const encoder = new TextEncoder();
@@ -308,7 +315,20 @@ export async function accessFor(base44: any, me: any, everyModule = false) {
   const stored = rowsOf(await base44.asServiceRole.entities.PositionPreset.list().catch(() => []));
   const presets = mergePresets(stored);
   const customRoles = company && Array.isArray(company.custom_roles) ? company.custom_roles : [];
-  const preset = presetFor(resolvePresetKey({ roleKey, customRoles, isCompanyAdmin }), presets);
+  const baseKey = resolvePresetKey({ roleKey, customRoles, isCompanyAdmin });
+  let presetKey = baseKey;
+  // A manager position the employer set on the staff record carries the manager preset, so the
+  // screens and the rows they may touch agree: the person's own record decides, not the key.
+  if (!isAdmin && !MANAGER_PRESETS.includes(baseKey)) {
+    const person = rowsOf(
+      await base44.asServiceRole.entities.EmployeeProfile.filter(
+        { user_email: me.email },
+        { limit: 1 }
+      ).catch(() => [])
+    )[0];
+    presetKey = resolvePresetKey({ roleKey, customRoles, isCompanyAdmin, positions: positionsOf(person) });
+  }
+  const preset = presetFor(presetKey, presets);
   const branchId = clean(me && me.branch_id);
   const branch = branchId
     ? await base44.asServiceRole.entities.Branch.get(branchId).catch(() => null)

@@ -9,7 +9,7 @@ import {
   resolveLimit,
   today
 } from '../../shared/packages.ts';
-import { mergePresets, presetFor, resolveAccess, resolvePresetKey } from '../../shared/access.ts';
+import { mergePresets, positionsOf, presetFor, resolveAccess, resolvePresetKey } from '../../shared/access.ts';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -91,7 +91,22 @@ export default async function (req) {
     // Who is signed in, and which position preset that is.
     const isCompanyAdmin = isSuperAdmin || roleKey === 'company_admin';
     const customRoles = Array.isArray(company.custom_roles) ? company.custom_roles : [];
-    const presetKey = resolvePresetKey({ roleKey, customRoles, isCompanyAdmin });
+    // A position the employer set on the staff record — "매니저" — works as a manager here even
+    // when the role key behind it was never built for it, so the record itself decides.
+    const person = isSuperAdmin
+      ? null
+      : rowsOf(
+          await base44.asServiceRole.entities.EmployeeProfile.filter(
+            { user_email: me.email },
+            { limit: 1 }
+          ).catch(() => [])
+        )[0];
+    const presetKey = resolvePresetKey({
+      roleKey,
+      customRoles,
+      isCompanyAdmin,
+      positions: positionsOf(person)
+    });
     const preset = presetFor(presetKey, presets);
 
     // The branch the workspace is working in narrows the company grant further.
