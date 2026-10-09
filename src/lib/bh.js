@@ -16,10 +16,10 @@ const LEGACY_VISA_KEYS = {
 };
 
 // Hours each visa allows in one week. Null means no limit. A student visa holder may work at
-// most 20 hours (48 hours a fortnight); the roster builder and its checks respect this.
+// most 24 hours (48 hours a fortnight); the roster builder and its checks respect this.
 export const VISA_WEEKLY_HOURS = {
   working_holiday: null,
-  student: 20,
+  student: 24,
   graduate: null,
   pr_citizen: null,
   other: null

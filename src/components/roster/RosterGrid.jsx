@@ -15,7 +15,7 @@ export default function RosterGrid({
   onAddShift,
   onMoveShift,
   onLeaveFor,
-  missingOn
+  missingFor
 }) {
   const { t } = useI18n();
   const [dragId, setDragId] = useState('');
@@ -37,11 +37,16 @@ export default function RosterGrid({
               <th key={day.date} className="px-2 py-2 text-center text-xs font-medium text-muted-foreground">
                 <div>{day.short}</div>
                 <div className="font-normal text-[11px]">{day.date.slice(5)}</div>
-                {missingOn && missingOn(day.date) > 0 ? (
-                  <span className="mt-1 inline-block rounded-full bg-destructive/10 px-2 py-0.5 text-[10px] font-medium text-destructive">
-                    {t('roster.unassigned')} {missingOn(day.date)}
+                {/* What the last build could not fill, one line per position, so the day itself
+                    says which seat is open and by how many. */}
+                {(missingFor ? missingFor(day.date) : []).map((item) => (
+                  <span
+                    key={item.position}
+                    className="mt-1 block rounded-full bg-destructive/10 px-2 py-0.5 text-[10px] font-medium text-destructive"
+                  >
+                    {item.position} {t('roster.unassigned')}{item.missing}
                   </span>
-                ) : null}
+                ))}
               </th>
             ))}
             <th className="w-20 border-l px-2 py-2 text-right text-xs font-medium text-muted-foreground">

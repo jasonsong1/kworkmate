@@ -28,7 +28,8 @@ export default function Attendance() {
   const selfOnly = scopeOf('attendance') === 'self';
   // Every punch is read on the clock of the store it belongs to, whatever zone the viewer is in.
   const branchState = stateFromBranch(activeBranch);
-  const [date, setDate] = useState(todayIso());
+  const [fromDate, setFromDate] = useState(todayIso());
+  const [toDate, setToDate] = useState(todayIso());
   const [employeeFilter, setEmployeeFilter] = useState(ALL);
   const [employees, setEmployees] = useState([]);
   const [rows, setRows] = useState([]);
@@ -62,8 +63,16 @@ export default function Attendance() {
       return;
     }
     setLoading(true);
-    const { from, to } = dayRangeForState(date, branchState);
-    const query = { branch_id: activeBranch.id, clock_in_at: { $gte: from, $lte: to } };
+    // The screen reads a range of days. Picking the two dates the wrong way round still shows the
+    // days that were meant instead of an empty table.
+    const [start, end] = fromDate <= toDate ? [fromDate, toDate] : [toDate, fromDate];
+    const query = {
+      branch_id: activeBranch.id,
+      clock_in_at: {
+        $gte: dayRangeForState(start, branchState).from,
+        $lte: dayRangeForState(end, branchState).to
+      }
+    };
     if (selfOnly) query.employee_email = (me && me.email) || '__none__';
     else if (employeeFilter !== ALL) query.employee_email = employeeFilter;
     const [list, grouped] = await Promise.all([
@@ -83,7 +92,7 @@ export default function Attendance() {
       pending: (buckets.find((bucket) => bucket.approval_status === 'pending') || {}).count || 0
     });
     setLoading(false);
-  }, [activeBranch, branchState, date, employeeFilter, selfOnly, me]);
+  }, [activeBranch, branchState, fromDate, toDate, employeeFilter, selfOnly, me]);
 
   useEffect(() => {
     load();
@@ -109,7 +118,11 @@ export default function Attendance() {
         subtitle={activeBranch ? activeBranch.name : t('attendance.subtitle')}
         actions={
         <div className="flex flex-wrap items-center gap-2">
-            <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-40" />
+            <div className="flex items-center gap-2">
+              <Input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className="w-40" />
+              <span className="text-muted-foreground">→</span>
+              <Input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className="w-40" />
+            </div>
             {!selfOnly && (
             <Select value={employeeFilter} onValueChange={setEmployeeFilter}>
               <SelectTrigger className="w-48">

@@ -12,6 +12,49 @@ const EXTRAS_KEY = 'kw_session_extras';
 let raw = null;
 let verifyPromise = null;
 
+// A sign-in belongs to the tab it was made in. A store every tab of the browser shares let the last
+// person to sign in take over every other tab — two employees side by side on one machine swapped
+// accounts, and the tab left holding the other person's session said the account was not linked.
+// sessionStorage keeps each tab on its own session; a session an earlier build left in the shared
+// store is taken over once, so the upgrade signs nobody out.
+function readRaw(key) {
+  try {
+    const held = sessionStorage.getItem(key);
+    if (held !== null) return held;
+  } catch (error) {
+    /* a private window may refuse storage: the session then simply does not survive a reload */
+  }
+  try {
+    const legacy = localStorage.getItem(key);
+    if (legacy !== null) sessionStorage.setItem(key, legacy);
+    return legacy;
+  } catch (error) {
+    return null;
+  }
+}
+
+function writeRaw(key, value) {
+  try {
+    sessionStorage.setItem(key, value);
+    // The copy every tab shares is never read again: leaving it behind is what carried one
+    // person's sign-in into another tab.
+    localStorage.removeItem(key);
+  } catch (error) {
+    /* a private window may refuse storage: the session then simply does not survive a reload */
+  }
+}
+
+function dropRaw(key) {
+  try {
+    sessionStorage.removeItem(key);
+    localStorage.removeItem(key);
+  } catch (error) {
+    /* nothing to clear */
+  }
+}
+
+// The per-device extras — a chosen theme and the like — are not a sign-in, so they stay in the
+// store every tab of the browser can read.
 function readJson(key) {
   try {
     const value = localStorage.getItem(key);
@@ -29,23 +72,24 @@ function writeJson(key, value) {
   }
 }
 
-function writeToken(value) {
+function readTabJson(key) {
+  const value = readRaw(key);
+  if (!value) return null;
   try {
-    localStorage.setItem(TOKEN_KEY, String(value || ''));
+    return JSON.parse(value);
   } catch (error) {
-    /* a private window may refuse storage: the session then simply does not survive a reload */
+    return null;
   }
 }
 
+function writeToken(value) {
+  writeRaw(TOKEN_KEY, String(value || ''));
+}
+
 export function kwToken() {
-  try {
-    const stored = localStorage.getItem(TOKEN_KEY) || '';
-    // Sessions saved by an earlier build went through JSON, which wrapped the token in quotes and
-    // made every request unrecognisable to the server. Unwrap those so they still work.
-    return stored.replace(/^"(.*)"$/, '$1');
-  } catch (error) {
-    return '';
-  }
+  // Sessions saved by an earlier build went through JSON, which wrapped the token in quotes and
+  // made every request unrecognisable to the server. Unwrap those so they still work.
+  return (readRaw(TOKEN_KEY) || '').replace(/^"(.*)"$/, '$1');
 }
 
 export function kwActive() {
@@ -53,7 +97,8 @@ export function kwActive() {
 }
 
 export function kwIdentity() {
-  return readJson(IDENTITY_KEY);
+  // The identity is read from the tab's own session, the same way its token is.
+  return readTabJson(IDENTITY_KEY);
 }
 
 export function kwExtras() {
@@ -65,16 +110,13 @@ export function kwSetExtras(data) {
 }
 
 function storeIdentity(user) {
-  writeJson(IDENTITY_KEY, user);
+  writeRaw(IDENTITY_KEY, JSON.stringify(user));
 }
 
 export function kwClearSession() {
-  try {
-    localStorage.removeItem(TOKEN_KEY);
-    localStorage.removeItem(IDENTITY_KEY);
-  } catch (error) {
-    /* nothing to clear */
-  }
+  // This tab's session goes; the device's own extras stay, as they are not a sign-in.
+  dropRaw(TOKEN_KEY);
+  dropRaw(IDENTITY_KEY);
   verifyPromise = null;
 }
 

@@ -1,8 +1,8 @@
 // How many hours each visa allows a person to work in one week. Null means no limit.
-// A student visa holder may work at most 20 hours a week (48 hours over a fortnight).
+// A student visa holder may work at most 24 hours a week (48 hours over a fortnight).
 export const VISA_WEEKLY_HOURS = {
   working_holiday: null,
-  student: 20,
+  student: 24,
   graduate: null,
   pr_citizen: null,
   other: null

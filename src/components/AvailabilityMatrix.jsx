@@ -47,11 +47,13 @@ export default function AvailabilityMatrix({ value, onChange, disabled }) {
               <span className="text-sm text-muted-foreground">to</span>
               <Select
                 value={entry.to || undefined}
-                disabled={disabled}
+                // A day with no start time is not available, so the finish says the same thing
+                // instead of offering a time on a day off.
+                disabled={disabled || start === null}
                 onValueChange={(v) => update(day.key, { to: v })}
               >
                 <SelectTrigger className="h-9 w-[118px] text-sm">
-                  <SelectValue placeholder="Finish" />
+                  <SelectValue placeholder="Not available" />
                 </SelectTrigger>
                 <SelectContent>
                   {finishTimes.map((time) => (

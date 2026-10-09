@@ -12,13 +12,13 @@
 // Re-planning a week keeps that week's saved and sent shifts exactly where they are: they count
 // against the day's headcount, so pressing the AI roster button again fills the gaps without ever
 // planning more people on a day than the store asked for.
-import { visaKey } from './visa.ts';
+import { weeklyHourCap } from './visa.ts';
 
 const DAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
 
-// A full working week in Australia, and the hours a student visa allows across a fortnight.
+// A full working week in Australia, kept beside each visa's own weekly limit in visa.ts so the
+// builder and the screens that quote it can never disagree.
 const FULL_TIME_WEEKLY_HOURS = 38;
-const STUDENT_FORTNIGHT_HOURS = 48;
 
 // A contract is served before spare hours are handed out.
 const EMPLOYMENT_RANK = { full_time: 0, part_time: 1, casual: 2 };
@@ -77,16 +77,16 @@ function lengthOf(shift) {
   return end - start;
 }
 
-// How much of this person's allowance is still free in the week being built. A full-time
-// contract may not be planned past a 38 hour week, and a student visa may not be planned past
-// 48 hours across the fortnight — the week before this one is already part of that sum.
-function remainingMinutes(person, weekMinutes, earlierMinutes) {
-  let cap = lower(person.employment_type) === 'full_time' ? FULL_TIME_WEEKLY_HOURS * 60 : null;
-  if (visaKey(person.visa_type) === 'student') {
-    const fortnight = STUDENT_FORTNIGHT_HOURS * 60 - earlierMinutes;
-    cap = cap === null ? fortnight : Math.min(cap, fortnight);
-  }
-  return cap === null ? null : cap - weekMinutes;
+// How much of this person's allowance is still free in the week being built. A full-time contract
+// may not be planned past a 38 hour week, and a visa with a weekly limit of its own — a student
+// visa's 24 hours — is never planned past that, however the week is put together.
+function remainingMinutes(person, weekMinutes) {
+  const caps = [
+    lower(person.employment_type) === 'full_time' ? FULL_TIME_WEEKLY_HOURS : null,
+    weeklyHourCap(person.visa_type)
+  ].filter((value) => typeof value === 'number');
+  if (caps.length === 0) return null;
+  return Math.min(...caps) * 60 - weekMinutes;
 }
 
 // Builds one week's draft for a store and files it as draft shifts. The answer says what was
@@ -94,20 +94,14 @@ function remainingMinutes(person, weekMinutes, earlierMinutes) {
 // when the store has not set its shifts or headcount yet.
 export async function buildDraft(base44, branch, weekStart) {
   const weekEnd = addDays(weekStart, 6);
-  const fortnightStart = addDays(weekStart, -7);
 
-  const [settingPage, staffPage, subPage, earlierPage, leavePage, weekPage] = await Promise.all([
+  const [settingPage, staffPage, subPage, leavePage, weekPage] = await Promise.all([
     base44.asServiceRole.entities.RosterSetting.filter({ branch_id: branch.id }, { limit: 1 }),
     base44.asServiceRole.entities.EmployeeProfile.filter({ branch_id: branch.id, status: 'active' }, { limit: 500 }),
     base44.asServiceRole.entities.AvailabilitySubmission.filter(
       { branch_id: branch.id },
       { sort: '-created_date', limit: 500 }
     ),
-    // The week before this one: what a student visa holder was already given there is part of
-    // the fortnight's allowance.
-    base44.asServiceRole.entities.Shift
-      .filter({ branch_id: branch.id, date: { $gte: fortnightStart, $lte: addDays(weekStart, -1) } }, { limit: 500 })
-      .catch(() => []),
     // Anyone with approved leave in this week is away, so the builder never plans them in.
     base44.asServiceRole.entities.LeaveRequest.filter(
       {
@@ -137,12 +131,6 @@ export async function buildDraft(base44, branch, weekStart) {
     }));
   const onLeave = (email, date) =>
     leaveRanges.some((range) => range.email === email && date >= range.start && date <= range.end);
-
-  const earlierMinutes = {};
-  rowsOf(earlierPage).forEach((shift) => {
-    if (!shift || !shift.employee_email) return;
-    earlierMinutes[shift.employee_email] = (earlierMinutes[shift.employee_email] || 0) + lengthOf(shift);
-  });
 
   const setting = rowsOf(settingPage)[0] || null;
   const staff = rowsOf(staffPage);
@@ -264,7 +252,7 @@ export async function buildDraft(base44, branch, weekStart) {
       // shift goes to somebody who can instead of being planned on top of them.
       if (!freeForShift && (fixedHere ? submitted !== null : true)) continue;
 
-      const room = remainingMinutes(person, assignedMinutes[email] || 0, earlierMinutes[email] || 0);
+      const room = remainingMinutes(person, assignedMinutes[email] || 0);
       if (room !== null && lengthMin > room) continue;
 
       const newStart = absMinutes(date, start);

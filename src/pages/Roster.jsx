@@ -307,9 +307,18 @@ export default function Roster() {
   const publishedCount = shifts.filter((s) => s.status === 'published').length;
   const draftCount = shifts.filter((s) => s.status === 'draft').length;
   const savedCount = shifts.filter((s) => s.status === 'saved').length;
-  // What the last build could not fill on one day, so the day itself carries the warning.
-  const missingOn = (date) =>
-    unassigned.filter((item) => item.date === date).reduce((sum, item) => sum + (Number(item.missing) || 0), 0);
+  // What the last build could not fill on one day, named by position, so the day itself says which
+  // seat is open ("Manager unfilled 1") and the next build can be aimed at it.
+  const unfilledByDay = (date) => {
+    const totals = new Map();
+    unassigned.
+    filter((item) => item.date === date).
+    forEach((item) => {
+      const position = item.position || t('common.position');
+      totals.set(position, (totals.get(position) || 0) + (Number(item.missing) || 0));
+    });
+    return [...totals].map(([position, missing]) => ({ position, missing }));
+  };
 
   return (
     <div>
@@ -429,7 +438,7 @@ export default function Roster() {
                       }}
                       onMoveShift={moveShift}
                       onLeaveFor={onLeaveFor}
-                      missingOn={missingOn} />
+                      missingFor={unfilledByDay} />
                   </div>
                 </>
               )}
