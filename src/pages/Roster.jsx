@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { CalendarPlus, ChevronLeft, ChevronRight, Loader2, Plus, Send, Settings2, Sparkles } from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
 import AiSpinner from '@/components/AiSpinner';
@@ -32,13 +32,23 @@ export default function Roster() {
 
   const [tab, setTab] = useState('roster');
   const [weekStart, setWeekStart] = useState(startOfWeekIso(todayIso()));
+  // Four weeks either side of this one, and no further: the roster stays inside the window the
+  // store actually plans in.
+  const firstWeek = addDaysIso(startOfWeekIso(todayIso()), -28);
+  const lastWeek = addDaysIso(startOfWeekIso(todayIso()), 28);
   const [employees, setEmployees] = useState([]);
   const [shifts, setShifts] = useState([]);
   const [submissions, setSubmissions] = useState([]);
   const [approvedLeave, setApprovedLeave] = useState([]);
   // Shifts the last build could not fill: they stay open on the screen instead of disappearing.
   const [unassigned, setUnassigned] = useState([]);
+  // The first read of the store blanks the grid. Every later one — another week as much as a
+  // refresh — keeps the grid on screen and only spins beside the dates.
   const [loading, setLoading] = useState(true);
+  const [fetching, setFetching] = useState(true);
+  // Each read takes a ticket and only the newest ticket may write, so flipping quickly through
+  // the weeks can never leave an older week's shifts on the screen.
+  const latestLoad = useRef(0);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogDate, setDialogDate] = useState('');
   const [dialogEmployee, setDialogEmployee] = useState(null);
@@ -64,44 +74,67 @@ export default function Roster() {
   const load = useCallback(async () => {
     if (!activeBranch) {
       setLoading(false);
+      setFetching(false);
       return;
     }
-    setLoading(true);
-    const [staff, list, subs, leaveRows] = await Promise.all([
-      base44.entities.EmployeeProfile
-        .filter({ branch_id: activeBranch.id, status: 'active' }, { limit: 200 })
-        .then((page) => page.items || []),
-      base44.entities.Shift
-        .filter({ branch_id: activeBranch.id, date: { $gte: weekStart, $lte: weekEnd } }, { sort: 'date', limit: 500 })
-        .then((page) => page.items || []),
-      // The week on screen is the week whose availability is read, so the board follows the roster
-      // as the manager moves from one week to the next.
-      base44.entities.AvailabilitySubmission
-        .filter(
-          { branch_id: activeBranch.id, week_start: weekStart },
-          { sort: '-created_date', limit: 500 }
-        )
-        .then((page) => page.items || []),
-      // Approved leave blocks the day: it is shown as On leave and no shift can sit on it.
-      base44.entities.LeaveRequest
-        .filter(
-          {
-            branch_id: activeBranch.id,
-            status: 'approved',
-            start_date: { $lte: weekEnd },
-            end_date: { $gte: weekStart }
-          },
-          { limit: 200 }
-        )
-        .then((page) => page.items || [])
-        .catch(() => [])
-    ]);
-    setEmployees(staff);
-    setShifts(list);
-    setSubmissions(subs);
-    setApprovedLeave(leaveRows);
-    setLoading(false);
-  }, [activeBranch, weekStart, weekEnd]);
+    const ticket = latestLoad.current + 1;
+    latestLoad.current = ticket;
+    setFetching(true);
+    try {
+      const [staff, list, subs, leaveRows] = await Promise.all([
+        // A manager plans with the crew list. The crew's own copy is built from the week's shifts.
+        canManageRoster
+          ? base44.entities.EmployeeProfile
+              .filter({ branch_id: activeBranch.id, status: 'active' }, { limit: 200 })
+              .then((page) => page.items || [])
+          : Promise.resolve([]),
+        // A manager reads the whole week, drafts included; the crew reads the week that was sent.
+        base44.entities.Shift
+          .filter(
+            canManageRoster
+              ? { branch_id: activeBranch.id, date: { $gte: weekStart, $lte: weekEnd } }
+              : { branch_id: activeBranch.id, date: { $gte: weekStart, $lte: weekEnd }, status: 'published' },
+            { sort: 'date', limit: 500 }
+          )
+          .then((page) => page.items || []),
+        // The week on screen is the week whose availability is read, so the board follows the
+        // roster as the manager moves from one week to the next.
+        canManageRoster
+          ? base44.entities.AvailabilitySubmission
+              .filter(
+                { branch_id: activeBranch.id, week_start: weekStart },
+                { sort: '-created_date', limit: 500 }
+              )
+              .then((page) => page.items || [])
+          : Promise.resolve([]),
+        // Approved leave blocks the day: it is shown as On leave and no shift can sit on it.
+        base44.entities.LeaveRequest
+          .filter(
+            {
+              branch_id: activeBranch.id,
+              status: 'approved',
+              start_date: { $lte: weekEnd },
+              end_date: { $gte: weekStart }
+            },
+            { limit: 200 }
+          )
+          .then((page) => page.items || [])
+          .catch(() => [])
+      ]);
+      // Another week was asked for while this read was on its way: that answer is the one to show.
+      if (ticket !== latestLoad.current) return;
+      setEmployees(staff);
+      setShifts(list);
+      setSubmissions(subs);
+      setApprovedLeave(leaveRows);
+    } finally {
+      // Whether the read arrived or failed, only the newest one may clear the week's spinner.
+      if (ticket === latestLoad.current) {
+        setLoading(false);
+        setFetching(false);
+      }
+    }
+  }, [activeBranch, weekStart, weekEnd, canManageRoster]);
 
   useEffect(() => {
     load();
@@ -250,6 +283,25 @@ export default function Roster() {
   const boardEmployees = canManageRoster
     ? employees
     : employees.filter((employee) => employee.user_email === ((me && me.email) || ''));
+  // Who gets a row. A manager reads the crew list; the crew's copy is built from the week's
+  // shifts, exactly the way the All shifts view works, so every working employee has a row.
+  const gridEmployees = canManageRoster
+    ? employees
+    : Array.from(
+        shifts.reduce((map, shift) => {
+          const email = shift.employee_email;
+          if (!email) return map;
+          const row = map.get(email) || {
+            id: email,
+            user_email: email,
+            full_name: shift.employee_name || email,
+            position: shift.position || ''
+          };
+          if (!row.position && shift.position) row.position = shift.position;
+          map.set(email, row);
+          return map;
+        }, new Map()).values()
+      ).sort((a, b) => String(a.full_name).localeCompare(String(b.full_name)));
 
   const shiftsFor = (email, date) => shifts.filter((s) => s.employee_email === email && s.date === date);
   const publishedCount = shifts.filter((s) => s.status === 'published').length;
@@ -267,15 +319,26 @@ export default function Roster() {
         actions={
           <>
             <div className="flex items-center gap-1 rounded-lg border px-2 py-1">
-              <Button variant="ghost" size="icon" onClick={() => setWeekStart(addDaysIso(weekStart, -7))}>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setWeekStart(addDaysIso(weekStart, -7))}
+                disabled={weekStart <= firstWeek}
+              >
                 <ChevronLeft className="h-4 w-4" />
               </Button>
               <span className="px-2 text-sm font-medium">
                 {weekStart} → {weekEnd}
               </span>
-              <Button variant="ghost" size="icon" onClick={() => setWeekStart(addDaysIso(weekStart, 7))}>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setWeekStart(addDaysIso(weekStart, 7))}
+                disabled={weekStart >= lastWeek}
+              >
                 <ChevronRight className="h-4 w-4" />
               </Button>
+              {fetching ? <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /> : null}
             </div>
             <Button variant="outline" onClick={() => setSettingsOpen(true)} disabled={!activeBranch || !canManageRoster}>
               <Settings2 className="mr-2 h-4 w-4" /> {t('roster.settings')}
@@ -338,7 +401,7 @@ export default function Roster() {
                   <Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin" />
                   {t('common.loading')}
                 </p>
-              ) : employees.length === 0 ? (
+              ) : gridEmployees.length === 0 ? (
                 <p className="py-10 text-center text-sm text-muted-foreground">{t('common.none')}</p>
               ) : (
                 <>
@@ -346,38 +409,46 @@ export default function Roster() {
                     {publishedCount} of {shifts.length} shifts published for this week
                     {canManageRoster ? ` · ${t('roster.dragHint')}` : ''}
                   </p>
-                  <RosterGrid
-                    days={days}
-                    employees={employees}
-                    shifts={shifts}
-                    canManage={canManageRoster}
-                    onShiftClick={(shift) => {
-                      setEditingShift(shift);
-                      setDialogOpen(true);
-                    }}
-                    onAddShift={(employee, date) => {
-                      setDialogDate(date);
-                      setDialogEmployee(employee);
-                      setEditingShift(null);
-                      setDialogOpen(true);
-                    }}
-                    onMoveShift={moveShift}
-                    onLeaveFor={onLeaveFor}
-                    missingOn={missingOn} />
+                  {/* The week being read stays on screen, held back a little, instead of being
+                      replaced by a spinner every time the dates move. */}
+                  <div className={fetching ? 'pointer-events-none opacity-60 transition-opacity' : undefined}>
+                    <RosterGrid
+                      days={days}
+                      employees={gridEmployees}
+                      shifts={shifts}
+                      canManage={canManageRoster}
+                      onShiftClick={(shift) => {
+                        setEditingShift(shift);
+                        setDialogOpen(true);
+                      }}
+                      onAddShift={(employee, date) => {
+                        setDialogDate(date);
+                        setDialogEmployee(employee);
+                        setEditingShift(null);
+                        setDialogOpen(true);
+                      }}
+                      onMoveShift={moveShift}
+                      onLeaveFor={onLeaveFor}
+                      missingOn={missingOn} />
+                  </div>
                 </>
               )}
             </CardContent>
           </Card>
 
-          <AvailabilityBoard
-            employees={boardEmployees}
-            submissions={visibleSubmissions}
-            days={days}
-            branch={activeBranch}
-            weekStart={weekStart}
-            canEdit={canEditAvailability}
-            onSaved={load}
-          />
+          {/* The submitted hours are the manager's working view of the week: the crew sees the
+              roster itself and enters their own hours from their own space. */}
+          {canManageRoster ? (
+            <AvailabilityBoard
+              employees={boardEmployees}
+              submissions={visibleSubmissions}
+              days={days}
+              branch={activeBranch}
+              weekStart={weekStart}
+              canEdit={canEditAvailability}
+              onSaved={load}
+            />
+          ) : null}
         </TabsContent>
 
         {canManageAutomation && (

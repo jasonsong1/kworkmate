@@ -97,6 +97,7 @@ export function availabilityMail(lang: string, { name, branchName }) {
       heading: `Hi ${name}, please update your availability`,
       lines: [
         `Let us know which days and hours you can work next week at <b>${branchName}</b>.`,
+        'Press the button below and sign in with the ID your employer issued, then enter your hours.',
         'It only takes a minute — your manager uses this to build the roster.'
       ],
       cta: 'Update my availability'
@@ -107,6 +108,7 @@ export function availabilityMail(lang: string, { name, branchName }) {
     heading: `${name}님, 근무가능시간을 업데이트해 주세요`,
     lines: [
       `다음 주에 근무할 수 있는 요일과 시간을 알려주세요. (<b>${branchName}</b>)`,
+      '아래 버튼을 눌러 사번(ID)과 비밀번호로 로그인한 뒤 내 공간에서 입력하시면 됩니다.',
       '1분이면 끝나고, 매니저가 이 내용으로 근무표를 만듭니다.'
     ],
     cta: '근무가능시간 입력하기'

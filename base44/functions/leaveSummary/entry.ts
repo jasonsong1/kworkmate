@@ -44,7 +44,7 @@ function normaliseType(type: any) {
     expiry_enabled: Boolean(type.expiry_enabled),
     expiry_months: Number(type.expiry_months) || 12,
     requires_certificate: Boolean(type.requires_certificate),
-    // From this many hours a request of this leave is shown in red on the review list.
+    // From this many hours held, this leave's balance is shown in red.
     flag_hours: Math.max(0, Number(type.flag_hours) || 0),
     custom: Boolean(type.custom),
     active: type.active !== false,

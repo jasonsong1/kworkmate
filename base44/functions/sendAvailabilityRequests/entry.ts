@@ -74,7 +74,8 @@ export default async function (req) {
           { limit: 500 }
         )
       );
-      const link = portalLink(branch.roster_email_origin, '/');
+      // The crew signs in with their own ID, then lands on their own space to enter their hours.
+      const link = portalLink(branch.roster_email_origin, '/login?returnTo=/my-space');
 
       let sent = 0;
       for (const person of staff) {

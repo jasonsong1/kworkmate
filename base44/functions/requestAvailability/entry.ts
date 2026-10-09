@@ -55,7 +55,9 @@ export default async function (req) {
         heading: copy.heading,
         lines: copy.lines,
         ctaText: copy.cta,
-        ctaUrl: portalLink(body.origin, '/'),
+        // Straight to the sign-in page, never to a page that assumes who is asking: the person
+        // opens this on their own phone and signs in with the ID their employer issued.
+        ctaUrl: portalLink(body.origin, '/login?returnTo=/my-space'),
         brandColor: branch.brand_color || (company && company.brand_color),
         footer: `${company ? company.name : branch.name} · kworkmate`
       })

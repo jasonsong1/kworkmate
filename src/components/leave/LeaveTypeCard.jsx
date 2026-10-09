@@ -94,7 +94,7 @@ export default function LeaveTypeCard({ type, onChange, onRemove }) {
             </Select>
           </div>
         ) : null}
-        {/* From this many hours a request of this leave is flagged in red on the review list. */}
+        {/* From this many hours held, this leave is flagged in red: it follows the balance. */}
         <div>
           <Label className="mb-1 block text-xs">{t('leave.flagHours')}</Label>
           <Input

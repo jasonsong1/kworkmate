@@ -71,7 +71,9 @@ export function reportRows(entries, options = {}) {
       pay.pay === null ? '' : `$${pay.pay.toFixed(2)}`,
       row.source === 'manual' ? 'Manual' : 'App / QR',
       row.geo_verified ? 'Verified' : '—',
-      APPROVAL_LABEL[row.approval_status || 'approved']
+      APPROVAL_LABEL[row.approval_status || 'approved'],
+      // What the manager wrote when the punch was turned down. Only a refused punch carries one.
+      (row.approval_status || '') === 'rejected' ? row.rejection_reason || '' : ''
     ];
   });
 }
@@ -98,7 +100,8 @@ export const REPORT_HEADERS = [
   'Est. pay',
   'Source',
   'GPS',
-  'Approval'
+  'Approval',
+  'Reason'
 ];
 
 export function downloadCsv(entries, filename, options = {}) {
@@ -111,7 +114,7 @@ export function downloadCsv(entries, filename, options = {}) {
 export function downloadPdf(entries, { branchName, from, to, filename, ...options }) {
   const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
   const marginX = 32;
-  const widths = [58, 104, 56, 52, 52, 52, 122, 42, 60, 56, 42, 52];
+  const widths = [50, 92, 48, 44, 44, 44, 96, 32, 50, 46, 34, 42, 132];
 
   const header = () => {
     const state = stateLabel(options.state, 'en');

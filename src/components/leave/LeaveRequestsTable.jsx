@@ -13,7 +13,7 @@ import { base44 } from '@/api/base44Client';
 
 // The requests and what happened to them. A manager approves or declines here; declining asks
 // for the reason the employee will read.
-export default function LeaveRequestsTable({ requests, canManage, showEmployee, flagHours, onDecided }) {
+export default function LeaveRequestsTable({ requests, canManage, showEmployee, flagBalance, onDecided }) {
   const { t } = useI18n();
   const { toast } = useToast();
   const [dialog, setDialog] = useState(null);
@@ -38,12 +38,10 @@ export default function LeaveRequestsTable({ requests, canManage, showEmployee, 
     onDecided && onDecided();
   };
 
-  // A request long enough to matter for its leave type is called out in red, at the hours the
-  // manager set for that type in the leave settings.
-  const flagged = (request) => {
-    const limit = Number((flagHours || {})[request.leave_type_key]) || 0;
-    return limit > 0 && Number(request.hours) >= limit ? limit : 0;
-  };
+  // The flag follows the balance, not the request: when this person already holds at least the
+  // hours the manager set for that leave type, the row is called out in red.
+  const flagged = (request) =>
+    flagBalance ? Number(flagBalance(request.employee_email, request.leave_type_key)) || 0 : 0;
 
   const openCertificate = async (request) => {
     const signed = await base44.integrations.Core.CreateFileSignedUrl({
@@ -68,9 +66,7 @@ export default function LeaveRequestsTable({ requests, canManage, showEmployee, 
               <TableHead>{t('leave.dates')}</TableHead>
               <TableHead>{t('leave.hours')}</TableHead>
               <TableHead>{t('common.status')}</TableHead>
-              <TableHead className="text-right">
-                <span className="sr-only">{t('common.actions')}</span>
-              </TableHead>
+              <TableHead className="text-right" />
             </TableRow>
           </TableHeader>
           <TableBody>

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { CalendarPlus, Loader2, Settings2 } from 'lucide-react';
+import { CalendarPlus, Flag, Loader2, Settings2 } from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
 import LeaveBalanceCard from '@/components/leave/LeaveBalanceCard';
 import LeaveRequestDialog from '@/components/leave/LeaveRequestDialog';
@@ -22,7 +22,8 @@ export default function Leave() {
   const { activeBranch, isManager } = useWorkspace();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState('mine');
+  // A manager opens this screen to answer what is waiting, so the requests show first.
+  const [tab, setTab] = useState('approvals');
   const [requestOpen, setRequestOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
@@ -50,12 +51,21 @@ export default function Leave() {
   // off stays in the settings list so it can simply be switched back on.
   const types = (data && data.types) || [];
   const allTypes = (data && data.all_types) || types;
-  // The hours at which each leave is called out in red on the review list.
+  // The hours at which a leave is called out in red: the manager sets, per leave type, the
+  // balance worth a look. It follows what the person holds, never the length of a request.
   const flagHours = types.reduce((map, type) => {
     const hours = Number(type.flag_hours) || 0;
     if (hours > 0) map[type.key] = hours;
     return map;
   }, {});
+  const flaggedHours = (email, typeKey) => {
+    const limit = flagHours[typeKey];
+    if (!limit) return 0;
+    const row = balances.find(
+      (balance) => balance.employee_email === email && balance.leave_type_key === typeKey
+    );
+    return row && Number(row.available_hours) >= limit ? limit : 0;
+  };
 
   const teamRows = Array.from(
     balances.reduce((map, row) => {
@@ -111,7 +121,7 @@ export default function Leave() {
                       requests={requests}
                       canManage
                       showEmployee
-                      flagHours={flagHours}
+                      flagBalance={flaggedHours}
                       onDecided={load}
                     />
                   </CardContent>
@@ -142,11 +152,28 @@ export default function Leave() {
                                 {row.name}
                                 <span className="block text-xs font-normal text-muted-foreground">{row.email}</span>
                               </TableCell>
-                              {types.map((type) => (
-                                <TableCell key={type.key} className="text-right text-sm">
-                                  {type.key in row.cells ? hoursLabel(row.cells[type.key]) : '—'}
-                                </TableCell>
-                              ))}
+                              {types.map((type) => {
+                                const limit = flaggedHours(row.email, type.key);
+                                return (
+                                  <TableCell key={type.key} className="text-right text-sm">
+                                    {type.key in row.cells ? (
+                                      limit ? (
+                                        <span
+                                          className="inline-flex items-center gap-1 font-medium text-destructive"
+                                          title={t('leave.flagged').replace('{hours}', String(limit))}
+                                        >
+                                          <Flag className="h-3.5 w-3.5" />
+                                          {hoursLabel(row.cells[type.key])}
+                                        </span>
+                                      ) : (
+                                        hoursLabel(row.cells[type.key])
+                                      )
+                                    ) : (
+                                      '—'
+                                    )}
+                                  </TableCell>
+                                );
+                              })}
                             </TableRow>
                           ))}
                         </TableBody>
