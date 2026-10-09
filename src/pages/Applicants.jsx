@@ -39,14 +39,14 @@ export default function Applicants() {
   const [detailId, setDetailId] = useState('');
   const [screening, setScreening] = useState(false);
 
-  const topN = (company && company.ai_top_n) || 10;
+  const topN = company && company.ai_top_n || 10;
 
   const loadJobs = useCallback(async () => {
     if (!activeBranch) return;
     const page = await base44.entities.Job.filter({ branch_id: activeBranch.id }, { sort: '-created_date', limit: 100 });
     const list = page.items || [];
     setJobs(list);
-    setJobId((prev) => (prev && list.some((j) => j.id === prev) ? prev : list[0] ? list[0].id : ''));
+    setJobId((prev) => prev && list.some((j) => j.id === prev) ? prev : list[0] ? list[0].id : '');
   }, [activeBranch]);
 
   useEffect(() => {
@@ -62,13 +62,13 @@ export default function Applicants() {
     }
     setLoading(true);
     const [currentJob, list, total, interviewCount] = await Promise.all([
-      base44.entities.Job.get(jobId).catch(() => null),
-      base44.entities.Applicant
-        .filter({ job_id: jobId }, { sort: '-ai_score', limit: 200 })
-        .then((page) => page.items || []),
-      base44.entities.Applicant.count({ job_id: jobId }).catch(() => 0),
-      base44.entities.Applicant.count({ job_id: jobId, status: { $in: INTERVIEW_STATUSES } }).catch(() => 0)
-    ]);
+    base44.entities.Job.get(jobId).catch(() => null),
+    base44.entities.Applicant.
+    filter({ job_id: jobId }, { sort: '-ai_score', limit: 200 }).
+    then((page) => page.items || []),
+    base44.entities.Applicant.count({ job_id: jobId }).catch(() => 0),
+    base44.entities.Applicant.count({ job_id: jobId, status: { $in: INTERVIEW_STATUSES } }).catch(() => 0)]
+    );
     setJob(currentJob);
     setApplicants(list);
     setCounts({ total, interview: interviewCount });
@@ -158,9 +158,9 @@ export default function Applicants() {
       });
       if (extended.data?.error) throw new Error(extended.data.error);
       toast({
-        title: t('applicants.screened')
-          .replace('{count}', String(analysed))
-          .replace('{added}', String(extended.data.added || 0))
+        title: t('applicants.screened').
+        replace('{count}', String(analysed)).
+        replace('{added}', String(extended.data.added || 0))
       });
       await loadApplicants();
     } catch (error) {
@@ -187,58 +187,58 @@ export default function Applicants() {
   const shortlist = applicants.filter((a) => SHORTLIST_STATUSES.includes(a.status));
   const interviewList = applicants.filter((a) => INTERVIEW_STATUSES.includes(a.status));
 
-  const actionButtons = (applicant) => (
-    <>
-      {miniAllowed && job && job.mini_interview_enabled !== false && applicant.status === 'top10' && (
-        <Button size="sm" variant="secondary" disabled={busyId === applicant.id} onClick={() => act(applicant, 'mini')}>
-          {applicant.mini_interview_status === 'sent' ? (
-            <Check className="mr-1.5 h-3.5 w-3.5" />
-          ) : (
-            <UserPlus className="mr-1.5 h-3.5 w-3.5" />
-          )}
+  const actionButtons = (applicant) =>
+  <>
+      {miniAllowed && job && job.mini_interview_enabled !== false && applicant.status === 'top10' &&
+    <Button size="sm" variant="secondary" disabled={busyId === applicant.id} onClick={() => act(applicant, 'mini')}>
+          {applicant.mini_interview_status === 'sent' ?
+      <Check className="mr-1.5 h-3.5 w-3.5" /> :
+
+      <UserPlus className="mr-1.5 h-3.5 w-3.5" />
+      }
           {applicant.mini_interview_status === 'sent' ? t('applicants.miniInterviewSent') : t('applicants.miniInterview')}
         </Button>
-      )}
+    }
       {videoAllowed &&
-        job &&
-        job.video_interview_enabled !== false &&
-        (!company || company.video_interview_enabled !== false) &&
-        ['top10', 'mini_interview'].includes(applicant.status) &&
-        applicant.video_interview_status !== 'completed' && (
-          <Button size="sm" variant="secondary" disabled={busyId === applicant.id} onClick={() => act(applicant, 'video')}>
-            {applicant.video_interview_status === 'sent' ? (
-              <Check className="mr-1.5 h-3.5 w-3.5" />
-            ) : (
-              <Video className="mr-1.5 h-3.5 w-3.5" />
-            )}
-            {applicant.video_interview_status === 'sent'
-              ? t('applicants.videoInterviewSent')
-              : t('applicants.videoInterview')}
+    job &&
+    job.video_interview_enabled !== false && (
+    !company || company.video_interview_enabled !== false) &&
+    ['top10', 'mini_interview'].includes(applicant.status) &&
+    applicant.video_interview_status !== 'completed' &&
+    <Button size="sm" variant="secondary" disabled={busyId === applicant.id} onClick={() => act(applicant, 'video')}>
+            {applicant.video_interview_status === 'sent' ?
+      <Check className="mr-1.5 h-3.5 w-3.5" /> :
+
+      <Video className="mr-1.5 h-3.5 w-3.5" />
+      }
+            {applicant.video_interview_status === 'sent' ?
+      t('applicants.videoInterviewSent') :
+      t('applicants.videoInterview')}
           </Button>
-        )}
-      {['top10', 'mini_interview', 'final_interview'].includes(applicant.status) && (
-        <Button size="sm" disabled={busyId === applicant.id} onClick={() => act(applicant, 'invite')}>
+    }
+      {['top10', 'mini_interview', 'final_interview'].includes(applicant.status) &&
+    <Button size="sm" disabled={busyId === applicant.id} onClick={() => act(applicant, 'invite')}>
           <Sparkles className="mr-1.5 h-3.5 w-3.5" /> {t('applicants.invite')}
         </Button>
-      )}
-      {['final_interview', 'interview_scheduled'].includes(applicant.status) && (
-        <Button size="sm" variant="default" disabled={busyId === applicant.id} onClick={() => act(applicant, 'hire')}>
+    }
+      {['final_interview', 'interview_scheduled'].includes(applicant.status) &&
+    <Button size="sm" variant="default" disabled={busyId === applicant.id} onClick={() => act(applicant, 'hire')}>
           <UserCheck className="mr-1.5 h-3.5 w-3.5" /> {t('applicants.hire')}
         </Button>
-      )}
-      {applicant.status !== 'rejected' && applicant.status !== 'hired' && (
-        <Button
-          size="sm"
-          variant="ghost"
-          className="text-destructive hover:text-destructive"
-          disabled={busyId === applicant.id}
-          onClick={() => act(applicant, 'reject')}
-        >
+    }
+      {applicant.status !== 'rejected' && applicant.status !== 'hired' &&
+    <Button
+      size="sm"
+      variant="ghost"
+      className="text-destructive hover:text-destructive"
+      disabled={busyId === applicant.id}
+      onClick={() => act(applicant, 'reject')}>
+      
           <UserX className="mr-1.5 h-3.5 w-3.5" /> {t('applicants.reject')}
         </Button>
-      )}
-    </>
-  );
+    }
+    </>;
+
 
   return (
     <div>
@@ -246,21 +246,21 @@ export default function Applicants() {
         title={t('applicants.title')}
         subtitle={activeBranch ? activeBranch.name : t('applicants.title')}
         actions={
-          <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
             <Select value={jobId} onValueChange={setJobId}>
               <SelectTrigger className="w-64">
                 <SelectValue placeholder={t('jobs.title')} />
               </SelectTrigger>
               <SelectContent>
-                {jobs.map((j) => (
-                  <SelectItem key={j.id} value={j.id}>
+                {jobs.map((j) =>
+              <SelectItem key={j.id} value={j.id}>
                     {j.title}
                   </SelectItem>
-                ))}
+              )}
               </SelectContent>
             </Select>
-            {job && (
-              <>
+            {job &&
+          <>
                 <Button variant="outline" onClick={runScreening} disabled={screening}>
                   {screening ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
                   {screening ? t('jobs.aiRunning') : t('applicants.addScreening')}
@@ -269,22 +269,22 @@ export default function Applicants() {
                   <MailWarning className="mr-2 h-4 w-4" /> {t('applicants.rejectAll')}
                 </Button>
               </>
-            )}
+          }
           </div>
-        }
-      />
+        } />
+      
 
-      {!jobId ? (
-        <Card>
+      {!jobId ?
+      <Card>
           <CardContent className="p-10 text-center text-sm text-muted-foreground">{t('common.none')}</CardContent>
-        </Card>
-      ) : loading ? (
-        <p className="py-10 text-center text-sm text-muted-foreground">
+        </Card> :
+      loading ?
+      <p className="py-10 text-center text-sm text-muted-foreground">
           <Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin" />
           {t('common.loading')}
-        </p>
-      ) : (
-        <Tabs defaultValue="shortlist">
+        </p> :
+
+      <Tabs defaultValue="shortlist">
           <TabsList>
             <TabsTrigger value="shortlist">
               {t('applicants.tabTop')} ({shortlist.length})
@@ -298,87 +298,87 @@ export default function Applicants() {
           </TabsList>
 
           <TabsContent value="shortlist" className="mt-6">
-            <div className="mb-4 rounded-xl border bg-muted/30 px-4 py-3">
+            <div className="mb-4 rounded-xl border bg-muted/30 px-4 py-3 hidden">
               <p className="text-sm text-muted-foreground">
-                {t('applicants.shortlistHint')
-                  .replace('{count}', String(shortlist.length))
-                  .replace('{size}', String(topN))}
+                {t('applicants.shortlistHint').
+              replace('{count}', String(shortlist.length)).
+              replace('{size}', String(topN))}
               </p>
             </div>
 
-            {shortlist.length === 0 ? (
-              <Card>
+            {shortlist.length === 0 ?
+          <Card>
                 <CardContent className="p-10 text-center text-sm text-muted-foreground">
                   {t('applicants.empty')}
                 </CardContent>
-              </Card>
-            ) : (
-              <div className="space-y-3">
-                {shortlist.map((applicant) => (
-                  <ApplicantCard
-                    key={applicant.id}
-                    applicant={applicant}
-                    actions={actionButtons(applicant)}
-                    onOpen={() => setDetailId(applicant.id)}
-                    onViewResume={() => viewResume(applicant)}
-                  />
-                ))}
-              </div>
+              </Card> :
+
+          <div className="space-y-3">
+                {shortlist.map((applicant) =>
+            <ApplicantCard
+              key={applicant.id}
+              applicant={applicant}
+              actions={actionButtons(applicant)}
+              onOpen={() => setDetailId(applicant.id)}
+              onViewResume={() => viewResume(applicant)} />
+
             )}
+              </div>
+          }
           </TabsContent>
 
           <TabsContent value="interview" className="mt-6">
-            {interviewList.length === 0 ? (
-              <Card>
+            {interviewList.length === 0 ?
+          <Card>
                 <CardContent className="p-10 text-center text-sm text-muted-foreground">
                   {t('applicants.empty')}
                 </CardContent>
-              </Card>
-            ) : (
-              <div className="space-y-3">
-                {interviewList.map((applicant) => (
-                  <ApplicantCard
-                    key={applicant.id}
-                    applicant={applicant}
-                    actions={actionButtons(applicant)}
-                    onOpen={() => setDetailId(applicant.id)}
-                    onViewResume={() => viewResume(applicant)}
-                  />
-                ))}
-              </div>
+              </Card> :
+
+          <div className="space-y-3">
+                {interviewList.map((applicant) =>
+            <ApplicantCard
+              key={applicant.id}
+              applicant={applicant}
+              actions={actionButtons(applicant)}
+              onOpen={() => setDetailId(applicant.id)}
+              onViewResume={() => viewResume(applicant)} />
+
             )}
+              </div>
+          }
           </TabsContent>
 
           <TabsContent value="all" className="mt-6">
-            {applicants.length === 0 ? (
-              <Card>
+            {applicants.length === 0 ?
+          <Card>
                 <CardContent className="p-10 text-center text-sm text-muted-foreground">
                   {t('applicants.empty')}
                 </CardContent>
-              </Card>
-            ) : (
-              <div className="space-y-3">
-                {applicants.map((applicant) => (
-                  <ApplicantCard
-                    key={applicant.id}
-                    applicant={applicant}
-                    actions={actionButtons(applicant)}
-                    onOpen={() => setDetailId(applicant.id)}
-                    onViewResume={() => viewResume(applicant)}
-                  />
-                ))}
-              </div>
+              </Card> :
+
+          <div className="space-y-3">
+                {applicants.map((applicant) =>
+            <ApplicantCard
+              key={applicant.id}
+              applicant={applicant}
+              actions={actionButtons(applicant)}
+              onOpen={() => setDetailId(applicant.id)}
+              onViewResume={() => viewResume(applicant)} />
+
             )}
+              </div>
+          }
           </TabsContent>
         </Tabs>
-      )}
+      }
 
       <ApplicantDetailDialog
         applicant={applicants.find((a) => a.id === detailId) || null}
         open={Boolean(detailId)}
         onOpenChange={(v) => !v && setDetailId('')}
-        onResent={loadApplicants}
-      />
-    </div>
-  );
+        onResent={loadApplicants} />
+      
+    </div>);
+
 }
