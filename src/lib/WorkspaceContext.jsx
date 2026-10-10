@@ -1,5 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { base44 } from '@/api/base44Client';
+import { coversEveryBranch } from '@/lib/access';
 
 const WorkspaceContext = createContext(null);
 
@@ -51,23 +52,28 @@ export function WorkspaceProvider({ children }) {
       const response = await base44.functions.invoke('syncMyProfile', {}).catch(() => null);
       const data = response && response.data && !response.data.error ? response.data : null;
       const fresh = await base44.auth.me().catch(() => null);
-      // A session opened before the employer linked the account still reports no company, so
-      // the answer the call has just returned fills the gap.
+      // The server has just worked the workspace out from the employer's records, so its answer
+      // fills in whatever the sign-in still reports from an earlier visit: a session opened before
+      // the account was linked carries no company at all, and a position the employer changed
+      // since then carries another set of branches.
       user =
-        fresh && !fresh.company_id && data && data.company_id
+        fresh && data && data.company_id
           ? {
               ...fresh,
-              company_id: data.company_id,
-              branch_id: data.branch_id,
-              branch_ids: data.branch_ids || [],
-              app_role: data.app_role || 'staff'
+              company_id: fresh.company_id || data.company_id,
+              branch_id: fresh.branch_id || data.branch_id,
+              branch_ids: data.branch_ids && data.branch_ids.length ? data.branch_ids : fresh.branch_ids || [],
+              app_role: fresh.app_role || data.app_role || 'staff'
             }
           : fresh;
       return data;
     };
 
+    // The employer's records decide which company and branches this account belongs to, and a
+    // position they changed after the account was linked has to reach this screen too, so the
+    // answer is worked out again on every visit rather than left from the first sign-in.
     let linked = null;
-    if (user && !user.company_id) linked = await link();
+    if (user) linked = await link();
 
     setMe(user);
 
@@ -179,10 +185,14 @@ export function WorkspaceProvider({ children }) {
   // A manager is one of the two roles the platform ships with, or whatever position the company
   // itself put on a manager preset: an employer who promotes somebody to a manager position
   // expects the manager screens, whatever role key sits behind that position.
+  const preset = (permissions.presets || []).find((item) => item.key === permissions.presetKey) || null;
   const isManager =
     role === 'company_admin' ||
     role === 'branch_manager' ||
-    ['manager', 'supervisor_manager'].includes(permissions.presetKey);
+    ['manager', 'supervisor_manager'].includes(permissions.presetKey) ||
+    // A position whose preset runs the company's crew areas across every store works in the back
+    // office, whatever the key of the platform preset behind it.
+    coversEveryBranch(preset);
   const isCompanyAdmin = role === 'company_admin';
   const access = permissions.access;
 

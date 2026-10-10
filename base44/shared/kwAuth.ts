@@ -7,7 +7,6 @@
 // keep working either way.
 
 import {
-  MANAGER_PRESETS,
   mergePresets,
   presetFor,
   primaryPositionOf,
@@ -15,6 +14,7 @@ import {
   resolvePresetKey
 } from './access.ts';
 import { ALL_MODULES, applyModuleOverrides, loadModuleOverrides, packageState } from './packages.ts';
+import { companyBranchIds } from './companies.ts';
 
 const encoder = new TextEncoder();
 const ITERATIONS = 100000;
@@ -139,8 +139,9 @@ export function lockedUntil(profile) {
   return stamp > Date.now() ? stamp : 0;
 }
 
-// An employee belongs to the branch their record names, plus any branch that lists them as
-// its manager. That is the whole answer to "which branches may this account touch".
+// The branches an account may touch: the branch its record names, any branch that lists them as
+// its manager, and — for a position whose preset runs the company's crew areas company-wide —
+// every store the company runs.
 export async function branchIdsFor(base44, profile) {
   const found = new Set();
   if (profile.branch_id) found.add(profile.branch_id);
@@ -154,6 +155,8 @@ export async function branchIdsFor(base44, profile) {
       if (managers.includes(email)) found.add(branch.id);
     });
   }
+  const everywhere = await companyBranchIds(base44, profile).catch(() => []);
+  everywhere.forEach((id) => found.add(id));
   return [...found];
 }
 
@@ -315,12 +318,11 @@ export async function accessFor(base44: any, me: any, everyModule = false) {
   const stored = rowsOf(await base44.asServiceRole.entities.PositionPreset.list().catch(() => []));
   const presets = mergePresets(stored);
   const customRoles = company && Array.isArray(company.custom_roles) ? company.custom_roles : [];
-  const baseKey = resolvePresetKey({ roleKey, customRoles, isCompanyAdmin });
-  let presetKey = baseKey;
-  // The position an employer set as the person's own carries the preset it is linked to, so the
-  // screens and the rows they may touch agree: the main position decides, never the secondary one
-  // they can also cover shifts in.
-  if (!isAdmin && !MANAGER_PRESETS.includes(baseKey)) {
+  let presetKey = resolvePresetKey({ roleKey, customRoles, isCompanyAdmin });
+  // The position an employer set as the person's own carries the preset the company linked to it,
+  // so the screens and the rows they may touch agree: the main position decides, never the
+  // secondary one they can also cover shifts in.
+  if (!isAdmin && !isCompanyAdmin) {
     const person = rowsOf(
       await base44.asServiceRole.entities.EmployeeProfile.filter(
         { user_email: me.email },

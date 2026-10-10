@@ -281,13 +281,53 @@ export function holdsManagerPosition(person, labels) {
   return positionsOf(person).some((label) => labels.has(String(label).trim().toLowerCase()));
 }
 
+// The areas whose records live in one store rather than in the company at large. A preset that
+// reaches these across the whole company is a position the employer means to work in every store
+// they run, not only in the one store the person's own record happens to name.
+export const EVERY_BRANCH_MODULES = [
+  'employees',
+  'jobs',
+  'applicants',
+  'interviews',
+  'roster',
+  'leave',
+  'attendance'
+];
+
+export function coversEveryBranch(preset) {
+  if (!preset || !preset.access) return false;
+  return EVERY_BRANCH_MODULES.some((module) => {
+    const cell = preset.access[module];
+    return Boolean(cell && cell.level && cell.level !== 'none' && cell.scope === 'company');
+  });
+}
+
+function labelKey(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+// The preset a position runs as. The employer's own list is answered first: a position they
+// created and linked to a preset carries that preset, so a new position behaves the way the
+// employer wired it, whatever role key happens to sit behind the account.
+function presetForPosition(positions, customRoles) {
+  const wanted = (positions || []).filter(Boolean).map(labelKey);
+  if (wanted.length === 0) return '';
+  const linked = (customRoles || []).find(
+    (role) => role && role.preset_key && wanted.includes(labelKey(role.label))
+  );
+  return linked ? linked.preset_key : '';
+}
+
 export function resolvePresetKey({ roleKey, customRoles, isCompanyAdmin, positions }) {
   if (isCompanyAdmin) return ROLE_PRESET.company_admin;
-  // The position the employer set on the staff record is what most companies mean by "manager":
-  // whoever holds it works as a manager, whatever role key sits behind that position.
+  // The position the employer assigned carries the preset they linked to it.
+  const linked = presetForPosition(positions, customRoles);
+  if (linked) return linked;
+  // A position the company calls a manager one — the preset's own name, or a label the company put
+  // on a manager preset — still means the manager screens, whatever role key sits behind it.
   if (positions && positions.length > 0) {
     const labels = managerPositionLabels(customRoles);
-    if (positions.some((label) => labels.has(String(label).trim().toLowerCase()))) return 'manager';
+    if (positions.some((label) => labels.has(labelKey(label)))) return 'manager';
   }
   const builtIn = ROLE_PRESET[roleKey];
   if (builtIn && roleKey !== 'staff') return builtIn;

@@ -143,3 +143,24 @@ export function scopeOptions(ceiling) {
 export function grantedModules(access) {
   return MODULES.filter((module) => access && access[module] && access[module].level !== 'none');
 }
+
+// The areas whose records live in one store rather than in the company at large — the same list
+// the server resolves against: a preset that reaches these across the whole company belongs to
+// somebody who works in every store the company runs.
+export const EVERY_BRANCH_MODULES = [
+  'employees',
+  'jobs',
+  'applicants',
+  'interviews',
+  'roster',
+  'leave',
+  'attendance'
+];
+
+export function coversEveryBranch(preset) {
+  if (!preset || !preset.access) return false;
+  return EVERY_BRANCH_MODULES.some((module) => {
+    const cell = normalizeCell(preset.access[module]);
+    return Boolean(cell.level && cell.level !== 'none' && cell.scope === 'company');
+  });
+}
