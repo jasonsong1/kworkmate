@@ -128,18 +128,25 @@ export function activeTypes(rows: any) {
     .sort((a, b) => (Number(a.order) || 0) - (Number(b.order) || 0));
 }
 
+// A permanent (정규직) contract is the full-time entitlements the employer already set, so a leave
+// type that names full time covers permanent staff as well.
+export function employmentKey(value: string) {
+  const key = String(value || 'casual');
+  return key === 'permanent' ? 'full_time' : key;
+}
+
 // A type with no employment list of its own is open to everyone. The employer narrows it by
 // ticking the employment types the leave is meant for.
 export function eligibleFor(type: any, employmentType: string) {
   const list = type && Array.isArray(type.employment_types) ? type.employment_types : [];
   if (list.length === 0) return true;
-  return list.includes(employmentType || 'casual');
+  return list.includes(employmentKey(employmentType));
 }
 
 export function grantsFor(type: any, employmentType: string) {
   const list = type && Array.isArray(type.grant_employment_types) ? type.grant_employment_types : [];
   if (list.length === 0) return eligibleFor(type, employmentType);
-  return list.includes(employmentType || 'casual');
+  return list.includes(employmentKey(employmentType));
 }
 
 function dayIso(ms: number) {

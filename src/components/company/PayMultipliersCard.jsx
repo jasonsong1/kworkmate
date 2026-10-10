@@ -1,10 +1,9 @@
 import React from 'react';
-import { Plus, Trash2 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useI18n } from '@/lib/i18n';
+import PayPenaltiesEditor from '@/components/company/PayPenaltiesEditor';
 
 export const DEFAULT_PAY_MULTIPLIERS = {
   weekday: 1,
@@ -57,14 +56,6 @@ export default function PayMultipliersCard({ value, onChange, disabled }) {
   const emit = (nextRates, nextPenalties) => onChange({ ...nextRates, penalties: nextPenalties });
 
   const set = (key, next) => emit({ ...rates, [key]: next }, penalties);
-  const setPenalty = (index, key, next) =>
-    emit(
-      rates,
-      penalties.map((row, i) => (i === index ? { ...row, [key]: next } : row))
-    );
-  const addPenalty = () =>
-    emit(rates, [...penalties, { name: '', multiplier: 1.25, from_time: '22:00' }]);
-  const removePenalty = (index) => emit(rates, penalties.filter((row, i) => i !== index));
 
   const FIELDS = [
     { key: 'weekday', label: t('settings.payWeekday') },
@@ -102,65 +93,12 @@ export default function PayMultipliersCard({ value, onChange, disabled }) {
         <p className="mt-1 text-xs text-muted-foreground">{t('settings.payExample')}</p>
 
         {/* The penalties the store wants under its own names, added here rather than fixed. */}
-        <div className="mt-6 space-y-3 border-t pt-5">
-          <div>
-            <Label>{t('settings.payPenaltiesTitle')}</Label>
-            <p className="mt-1 text-xs text-muted-foreground">{t('settings.payPenaltiesHint')}</p>
-          </div>
-
-          {penalties.length === 0 ? (
-            <p className="text-sm text-muted-foreground">{t('settings.payPenaltiesEmpty')}</p>
-          ) : null}
-
-          {penalties.map((row, index) => (
-            <div key={index} className="grid items-end gap-3 sm:grid-cols-[1fr_7rem_8rem_auto]">
-              <div>
-                <Label className="text-xs">{t('settings.payPenaltyName')}</Label>
-                <Input
-                  value={row.name || ''}
-                  placeholder={t('settings.payPenaltyNamePlaceholder')}
-                  disabled={disabled}
-                  onChange={(e) => setPenalty(index, 'name', e.target.value)}
-                />
-              </div>
-              <div>
-                <Label className="text-xs">{t('settings.payPenaltyRate')}</Label>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-muted-foreground">×</span>
-                  <Input
-                    type="number"
-                    min="1"
-                    step="0.05"
-                    value={row.multiplier ?? ''}
-                    disabled={disabled}
-                    onChange={(e) => setPenalty(index, 'multiplier', e.target.value)}
-                  />
-                </div>
-              </div>
-              <div>
-                <Label className="text-xs">{t('settings.payPenaltyFrom')}</Label>
-                <Input
-                  type="time"
-                  value={row.from_time || '22:00'}
-                  disabled={disabled}
-                  onChange={(e) => setPenalty(index, 'from_time', e.target.value)}
-                />
-              </div>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => removePenalty(index)}
-                disabled={disabled}
-                aria-label={t('common.delete')}
-              >
-                <Trash2 className="h-4 w-4 text-destructive" />
-              </Button>
-            </div>
-          ))}
-
-          <Button variant="outline" size="sm" onClick={addPenalty} disabled={disabled}>
-            <Plus className="mr-1.5 h-3.5 w-3.5" /> {t('settings.payPenaltyAdd')}
-          </Button>
+        <div className="mt-6 border-t pt-5">
+          <PayPenaltiesEditor
+            value={penalties}
+            onChange={(next) => emit(rates, next)}
+            disabled={disabled}
+          />
         </div>
       </CardContent>
     </Card>

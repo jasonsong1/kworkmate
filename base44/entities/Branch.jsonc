@@ -65,6 +65,18 @@
     "role_permissions": {
       "type": "object"
     },
+    "pay_penalties": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "roster_order": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
     "roster_email_enabled": {
       "type": "boolean",
       "default": false

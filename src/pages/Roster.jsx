@@ -22,7 +22,7 @@ import { base44 } from '@/api/base44Client';
 
 export default function Roster() {
   const { t } = useI18n();
-  const { activeBranch, isManager, me, feature } = useWorkspace();
+  const { activeBranch, isManager, me, feature, patchBranch } = useWorkspace();
   const { canEdit } = usePermissions();
   // Building, saving and sending the roster needs update access; reading it does not.
   const canManageRoster = canEdit('roster');
@@ -298,6 +298,20 @@ export default function Roster() {
     await load();
   };
 
+  // Carrying a name onto another line puts that person above the row it was dropped on, and the
+  // order is kept with the branch so every manager opens the week the same way.
+  const reorderEmployees = async (fromEmail, toEmail) => {
+    if (!activeBranch || !canManageRoster || !fromEmail || fromEmail === toEmail) return;
+    const emails = gridEmployees.map((employee) => employee.user_email);
+    const from = emails.indexOf(fromEmail);
+    const to = emails.indexOf(toEmail);
+    if (from < 0 || to < 0) return;
+    const next = [...emails];
+    next.splice(to, 0, ...next.splice(from, 1));
+    patchBranch(activeBranch.id, { roster_order: next });
+    await base44.entities.Branch.update(activeBranch.id, { roster_order: next }).catch(() => null);
+  };
+
   // Managers and the branch's own supervisors can correct what a person submitted. A position
   // that only reads the roster still sees the team's schedule but only its own availability.
   const inManagerEmails = Boolean(activeBranch && me && (activeBranch.manager_emails || []).includes(me.email));
@@ -310,7 +324,7 @@ export default function Roster() {
     : employees.filter((employee) => employee.user_email === ((me && me.email) || ''));
   // Who gets a row. A manager reads the crew list; the crew's copy is built from the week's
   // shifts, exactly the way the All shifts view works, so every working employee has a row.
-  const gridEmployees = canManageRoster
+  const gridRows = canManageRoster
     ? employees
     : Array.from(
         shifts.reduce((map, shift) => {
@@ -327,6 +341,22 @@ export default function Roster() {
           return map;
         }, new Map()).values()
       ).sort((a, b) => String(a.full_name).localeCompare(String(b.full_name)));
+
+  // The rows stand in the order the manager arranged them for this branch; anyone the manager has
+  // not placed yet keeps their own place at the end of the list.
+  const rosterRank = new Map(
+    ((activeBranch && activeBranch.roster_order) || []).map((email, index) => [email, index])
+  );
+  const inRosterOrder = (list) =>
+    list
+      .map((employee, index) => ({ employee, index }))
+      .sort((a, b) => {
+        const rankA = rosterRank.has(a.employee.user_email) ? rosterRank.get(a.employee.user_email) : Infinity;
+        const rankB = rosterRank.has(b.employee.user_email) ? rosterRank.get(b.employee.user_email) : Infinity;
+        return rankA === rankB ? a.index - b.index : rankA - rankB;
+      })
+      .map((entry) => entry.employee);
+  const gridEmployees = inRosterOrder(gridRows);
 
   const shiftsFor = (email, date) => shifts.filter((s) => s.employee_email === email && s.date === date);
   const publishedCount = shifts.filter((s) => s.status === 'published').length;
@@ -448,7 +478,9 @@ export default function Roster() {
               ) : (
                 <>
                   <p className="mb-4 text-xs text-muted-foreground">
-                    {publishedCount} of {shifts.length} shifts published for this week
+                    {t('roster.publishedCount').
+                    replace('{published}', String(publishedCount)).
+                    replace('{total}', String(shifts.length))}
                     {canManageRoster ? ` · ${t('roster.dragHint')}` : ''}
                   </p>
                   {/* The week being read stays on screen, held back a little, instead of being
@@ -470,6 +502,7 @@ export default function Roster() {
                         setDialogOpen(true);
                       }}
                       onMoveShift={moveShift}
+                      onReorder={reorderEmployees}
                       onLeaveFor={onLeaveFor}
                       missingFor={unfilledByDay} />
                   </div>

@@ -19,7 +19,8 @@
       "enum": [
         "casual",
         "part_time",
-        "full_time"
+        "full_time",
+        "permanent"
       ],
       "default": "casual"
     },

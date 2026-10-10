@@ -19,8 +19,9 @@ import { weeklyHourCap } from './visa.ts';
 const DAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
 
 // A full working week in Australia, kept beside each visa's own weekly limit in visa.ts so the
-// builder and the screens that quote it can never disagree.
-const FULL_TIME_WEEKLY_HOURS = 38;
+// builder and the screens that quote it can never disagree. A full-time contract is 38 hours; a
+// permanent (정규직) contract the employer agreed at 50 hours is planned up to that.
+const CONTRACT_WEEKLY_HOURS = { full_time: 38, permanent: 50 };
 
 // How many days of one week a person is planned for, unless the store raised it for them.
 const DEFAULT_MAX_DAYS = 5;
@@ -91,8 +92,9 @@ function lengthOf(shift) {
 // may not be planned past a 38 hour week, and a visa with a weekly limit of its own — a student
 // visa's 24 hours — is never planned past that, however the week is put together.
 function remainingMinutes(person, weekMinutes) {
+  const contractCap = CONTRACT_WEEKLY_HOURS[lower(person.employment_type)];
   const caps = [
-    lower(person.employment_type) === 'full_time' ? FULL_TIME_WEEKLY_HOURS : null,
+    typeof contractCap === 'number' ? contractCap : null,
     weeklyHourCap(person.visa_type)
   ].filter((value) => typeof value === 'number');
   if (caps.length === 0) return null;

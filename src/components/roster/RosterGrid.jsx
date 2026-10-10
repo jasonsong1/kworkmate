@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
+import { GripVertical } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 import { hoursValue, shiftHours } from '@/lib/bh';
 
 // The week at a glance: one row per person, one column per day, and the hours each person has
 // been given for the week on the right, breaks already taken out. A manager's copy is the working
 // one — a shift is dragged to move it, opened to change its hours, and added from the day's own
-// plus — while the crew's copy is the same table to read.
+// plus, while the grip beside a name lifts that whole row onto another line — and the crew's copy
+// is the same table to read.
 export default function RosterGrid({
   days,
   employees,
@@ -14,16 +16,21 @@ export default function RosterGrid({
   onShiftClick,
   onAddShift,
   onMoveShift,
+  onReorder,
   onLeaveFor,
   missingFor
 }) {
   const { t } = useI18n();
   const [dragId, setDragId] = useState('');
+  // The row being carried. Kept apart from a dragged shift, so a drop on a day cell is never
+  // mistaken for a row move and the other way round.
+  const [dragRow, setDragRow] = useState('');
 
   const shiftsFor = (email, date) => (shifts || []).filter((shift) => shift.employee_email === email && shift.date === date);
   const hoursFor = (email) =>
     (shifts || []).filter((shift) => shift.employee_email === email).reduce((sum, shift) => sum + shiftHours(shift), 0);
   const leave = (email, date) => (onLeaveFor ? onLeaveFor(email, date) : false);
+  const canReorder = Boolean(canManage && onReorder);
 
   return (
     <div className="overflow-x-auto">
@@ -56,14 +63,51 @@ export default function RosterGrid({
         </thead>
         <tbody>
           {employees.map((employee) => (
-            <tr key={employee.id || employee.user_email} className="align-top">
+            <tr
+              key={employee.id || employee.user_email}
+              className={`align-top ${dragRow === employee.user_email ? 'opacity-50' : ''}`}
+              onDragOver={
+                canReorder ?
+                (event) => {
+                  if (dragRow) event.preventDefault();
+                } :
+                undefined
+              }
+              onDrop={
+                canReorder ?
+                (event) => {
+                  if (!dragRow) return;
+                  event.preventDefault();
+                  onReorder(dragRow, employee.user_email);
+                  setDragRow('');
+                } :
+                undefined
+              }
+            >
               <td className="sticky left-0 z-10 border-t bg-card px-3 py-3">
-                <p className="text-sm font-medium">{employee.full_name}</p>
-                <p className="text-xs text-muted-foreground">
-                  {[employee.position, employee.secondary_position, ...(employee.extra_positions || [])].
-                  filter(Boolean).
-                  join(' · ') || '—'}
-                </p>
+                <div className="flex items-start gap-1.5">
+                  {canReorder ? (
+                    <button
+                      type="button"
+                      draggable
+                      onDragStart={() => setDragRow(employee.user_email)}
+                      onDragEnd={() => setDragRow('')}
+                      title={t('roster.dragRowHint')}
+                      aria-label={t('roster.dragRowHint')}
+                      className="mt-0.5 cursor-grab text-muted-foreground"
+                    >
+                      <GripVertical className="h-4 w-4" />
+                    </button>
+                  ) : null}
+                  <div>
+                    <p className="text-sm font-medium">{employee.full_name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {[employee.position, employee.secondary_position, ...(employee.extra_positions || [])].
+                      filter(Boolean).
+                      join(' · ') || '—'}
+                    </p>
+                  </div>
+                </div>
               </td>
               {days.map((day) => (
                 <td
@@ -73,6 +117,8 @@ export default function RosterGrid({
                   onDrop={
                     canManage && onMoveShift ?
                     () => {
+                      // A carried row is not a shift: that drop belongs to the row above.
+                      if (dragRow) return;
                       onMoveShift(employee.user_email, day.date, dragId);
                       setDragId('');
                     } :

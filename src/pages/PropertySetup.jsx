@@ -5,6 +5,7 @@ import PageHeader from '@/components/PageHeader';
 import AccessMatrixEditor from '@/components/access/AccessMatrixEditor';
 import { MODULES, clampAccess, levelRank, normalizeCell, scopeRank } from '@/lib/access';
 import TradingHoursEditor, { hasOverlappingTradingHours } from '@/components/TradingHoursEditor';
+import BranchPayPenaltiesCard from '@/components/company/BranchPayPenaltiesCard';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -47,7 +48,9 @@ export default function PropertySetup() {
       gps_radius_m: branch.gps_radius_m || 100,
       // A grant saved before an area stopped offering create-and-delete is pulled back to what
       // the table now offers.
-      role_permissions: clampAccess(branch.role_permissions || {})
+      role_permissions: clampAccess(branch.role_permissions || {}),
+      // The penalties this store pays under its own names, set here by whoever runs the branch.
+      pay_penalties: Array.isArray(branch.pay_penalties) ? branch.pay_penalties : []
     });
   }, [branch]);
 
@@ -253,6 +256,10 @@ export default function PropertySetup() {
               </div>
             </CardContent>
           </Card>
+
+          <BranchPayPenaltiesCard
+            value={form.pay_penalties}
+            onChange={(next) => set('pay_penalties', next)} />
         </div>
       </div>
 

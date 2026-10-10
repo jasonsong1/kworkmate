@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/components/ui/use-toast';
 import { useI18n } from '@/lib/i18n';
-import { EMPLOYMENT_TYPES, VISA_TYPES } from '@/lib/bh';
+import { EMPLOYMENT_TYPES, EMPLOYMENT_LABEL_KEYS, VISA_TYPES, VISA_LABEL_KEYS } from '@/lib/bh';
 import { useWorkspace } from '@/lib/WorkspaceContext';
 import { usePermissions } from '@/lib/permissions';
 import { base44 } from '@/api/base44Client';
@@ -117,7 +117,7 @@ export default function EmployeeDialog({ open, onOpenChange, branch, employee, o
   const submit = async () => {
     if (!branch) return;
     if (!form.full_name.trim() || !form.user_email.trim()) {
-      setError('Name and email are required.');
+      setError(t('employees.nameEmailRequired'));
       return;
     }
     setSaving(true);
@@ -286,7 +286,7 @@ export default function EmployeeDialog({ open, onOpenChange, branch, employee, o
               <SelectContent>
                 {VISA_TYPES.map((v) =>
                 <SelectItem key={v.value} value={v.value}>
-                    {v.label}
+                    {t(VISA_LABEL_KEYS[v.value] || v.value)}
                   </SelectItem>
                 )}
               </SelectContent>
@@ -297,7 +297,7 @@ export default function EmployeeDialog({ open, onOpenChange, branch, employee, o
 
           
           <div>
-            <Label>Employment type</Label>
+            <Label>{t('employees.employmentType')}</Label>
             <Select value={form.employment_type} onValueChange={(v) => set('employment_type', v)}>
               <SelectTrigger>
                 <SelectValue />
@@ -305,14 +305,14 @@ export default function EmployeeDialog({ open, onOpenChange, branch, employee, o
               <SelectContent>
                 {EMPLOYMENT_TYPES.map((e) =>
                 <SelectItem key={e.value} value={e.value}>
-                    {e.label}
+                    {t(EMPLOYMENT_LABEL_KEYS[e.value] || e.value)}
                   </SelectItem>
                 )}
               </SelectContent>
             </Select>
           </div>
           <div>
-            <Label>Start date</Label>
+            <Label>{t('employees.startDate')}</Label>
             <Input type="date" value={form.start_date} onChange={(e) => set('start_date', e.target.value)} />
           </div>
           <div>
@@ -320,14 +320,14 @@ export default function EmployeeDialog({ open, onOpenChange, branch, employee, o
             <Input value={form.phone} onChange={(e) => set('phone', e.target.value)} />
           </div>
           <div>
-            <Label>Emergency contact</Label>
+            <Label>{t('employees.emergencyContact')}</Label>
             <Input
               value={form.emergency_contact_name}
               onChange={(e) => set('emergency_contact_name', e.target.value)} />
             
           </div>
           <div>
-            <Label>Emergency phone</Label>
+            <Label>{t('employees.emergencyPhone')}</Label>
             <Input
               value={form.emergency_contact_phone}
               onChange={(e) => set('emergency_contact_phone', e.target.value)} />
