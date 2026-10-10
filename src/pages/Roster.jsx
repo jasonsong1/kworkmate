@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { CalendarPlus, ChevronLeft, ChevronRight, Loader2, Plus, Send, Settings2, Sparkles } from 'lucide-react';
+import { CalendarPlus, ChevronLeft, ChevronRight, Loader2, Plus, Send, Settings2, Sparkles, Trash2 } from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
 import AiSpinner from '@/components/AiSpinner';
 import ShiftDialog from '@/components/ShiftDialog';
@@ -9,6 +9,7 @@ import RosterGrid from '@/components/roster/RosterGrid';
 import RosterAutomationCard from '@/components/roster/RosterAutomationCard';
 import AvailabilityBoard from '@/components/AvailabilityBoard';
 import CalendarSubscribeDialog from '@/components/roster/CalendarSubscribeDialog';
+import ClearRosterDialog from '@/components/roster/ClearRosterDialog';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -54,6 +55,9 @@ export default function Roster() {
   const [dialogEmployee, setDialogEmployee] = useState(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
+  // Emptying the week is a deliberate act, so it waits behind a confirmation.
+  const [clearOpen, setClearOpen] = useState(false);
+  const [clearing, setClearing] = useState(false);
   const [sending, setSending] = useState(false);
   const [generating, setGenerating] = useState(false);
   // The shift opened for its hours to be changed or for it to be taken off the week.
@@ -159,6 +163,27 @@ export default function Roster() {
     );
     toast({ title: t('roster.cancelled') });
     await load();
+  };
+
+  // Clearing the week takes every shift off it, whatever state it is in, so the roster can be
+  // built again from an empty screen.
+  const clearRoster = async () => {
+    if (!activeBranch) return;
+    setClearing(true);
+    try {
+      await base44.entities.Shift.deleteMany({
+        branch_id: activeBranch.id,
+        date: { $gte: weekStart, $lte: weekEnd }
+      });
+      setUnassigned([]);
+      toast({ title: t('roster.cleared') });
+      setClearOpen(false);
+      await load();
+    } catch (error) {
+      toast({ title: (error && error.message) || t('roster.clearFailed'), variant: 'destructive' });
+    } finally {
+      setClearing(false);
+    }
   };
 
   const sendWeek = async () => {
@@ -364,6 +389,14 @@ export default function Roster() {
             <Button variant="outline" onClick={() => setCalendarOpen(true)} disabled={!activeBranch}>
               <CalendarPlus className="mr-2 h-4 w-4" /> {t('leave.calendar')}
             </Button>
+            {/* Emptying the week is the manager's own clean slate. */}
+            <Button
+              variant="outline"
+              onClick={() => setClearOpen(true)}
+              disabled={!activeBranch || shifts.length === 0 || !canManageRoster}
+            >
+              <Trash2 className="mr-2 h-4 w-4" /> {t('roster.clear')}
+            </Button>
             <Button
               variant="outline"
               onClick={() => {
@@ -486,6 +519,14 @@ export default function Roster() {
       />
 
       <CalendarSubscribeDialog open={calendarOpen} onOpenChange={setCalendarOpen} />
+      <ClearRosterDialog
+        open={clearOpen}
+        onOpenChange={setClearOpen}
+        weekStart={weekStart}
+        weekEnd={weekEnd}
+        clearing={clearing}
+        onConfirm={clearRoster}
+      />
     </div>
   );
 }

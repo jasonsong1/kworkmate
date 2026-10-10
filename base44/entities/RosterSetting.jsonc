@@ -29,6 +29,16 @@
     "min_rest_hours": {
       "type": "number",
       "default": 10
+    },
+    "max_days_per_week": {
+      "type": "number",
+      "default": 5
+    },
+    "day_overrides": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
     }
   },
   "required": [

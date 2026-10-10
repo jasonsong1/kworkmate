@@ -76,9 +76,15 @@ export default function AttendanceReportDialog({ open, onOpenChange, branch }) {
   const [ready, setReady] = useState(false);
 
   const state = stateFromBranch(branch);
+  // A person the store gave their own penalties is paid by those instead of the house rates.
+  const overridesByEmail = {};
+  ((company && company.pay_overrides) || []).forEach((row) => {
+    if (row && row.email) overridesByEmail[String(row.email).trim().toLowerCase()] = row.rates || {};
+  });
   const options = {
     state,
     multipliers: payMultipliers(company ? company.pay_multipliers : null),
+    overridesByEmail,
     rates,
     regional
   };

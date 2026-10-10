@@ -36,22 +36,34 @@ export default function AvailabilityEditDialog({ open, onOpenChange, employee, s
   const save = async () => {
     if (!employee || !branch) return;
     setSaving(true);
-    const response = await base44.functions.invoke('saveAvailabilityEdit', {
-      submission_id: submission ? submission.id : '',
-      branch_id: branch.id,
-      employee_email: employee.user_email,
-      employee_name: employee.full_name,
-      week_start: weekStart,
-      availability: matrix
-    });
-    setSaving(false);
-    if (response.data?.error) {
-      toast({ title: response.data.error, variant: 'destructive' });
-      return;
+    // A refusal on the way — a failed request as much as an error in the answer — has to end the
+    // save, or the dialog sits on its spinner for ever.
+    try {
+      const response = await base44.functions.invoke('saveAvailabilityEdit', {
+        submission_id: submission ? submission.id : '',
+        branch_id: branch.id,
+        employee_email: employee.user_email,
+        employee_name: employee.full_name,
+        week_start: weekStart,
+        availability: matrix
+      });
+      if (response.data?.error) {
+        toast({ title: response.data.error, variant: 'destructive' });
+        return;
+      }
+      onOpenChange(false);
+      toast({ title: t('roster.availabilitySaved') });
+      onSaved();
+    } catch (error) {
+      const said =
+        (error && error.data && error.data.error) ||
+        (error && error.response && error.response.data && error.response.data.error) ||
+        (error && error.message) ||
+        t('roster.availabilitySaveFailed');
+      toast({ title: said, variant: 'destructive' });
+    } finally {
+      setSaving(false);
     }
-    onOpenChange(false);
-    toast({ title: t('roster.availabilitySaved') });
-    onSaved();
   };
 
   return (

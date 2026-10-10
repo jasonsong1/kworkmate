@@ -129,6 +129,12 @@
     "pay_multipliers": {
       "type": "object"
     },
+    "pay_overrides": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
     "holiday_exclusions": {
       "type": "array",
       "items": {

@@ -8,19 +8,20 @@ export const DEFAULT_PAY_MULTIPLIERS = {
   weekday: 1,
   saturday: 1.25,
   sunday: 1.5,
-  public_holiday: 2
+  public_holiday: 2,
+  overnight: 1.25
 };
 
 export function payMultipliers(value) {
   const saved = value || {};
+  const pick = (key) =>
+    saved[key] === undefined || saved[key] === '' ? DEFAULT_PAY_MULTIPLIERS[key] : saved[key];
   return {
-    weekday: saved.weekday === undefined || saved.weekday === '' ? DEFAULT_PAY_MULTIPLIERS.weekday : saved.weekday,
-    saturday: saved.saturday === undefined || saved.saturday === '' ? DEFAULT_PAY_MULTIPLIERS.saturday : saved.saturday,
-    sunday: saved.sunday === undefined || saved.sunday === '' ? DEFAULT_PAY_MULTIPLIERS.sunday : saved.sunday,
-    public_holiday:
-      saved.public_holiday === undefined || saved.public_holiday === ''
-        ? DEFAULT_PAY_MULTIPLIERS.public_holiday
-        : saved.public_holiday
+    weekday: pick('weekday'),
+    saturday: pick('saturday'),
+    sunday: pick('sunday'),
+    public_holiday: pick('public_holiday'),
+    overnight: pick('overnight')
   };
 }
 
@@ -36,7 +37,8 @@ export default function PayMultipliersCard({ value, onChange, disabled }) {
     { key: 'weekday', label: t('settings.payWeekday') },
     { key: 'saturday', label: t('settings.paySaturday') },
     { key: 'sunday', label: t('settings.paySunday') },
-    { key: 'public_holiday', label: t('settings.payHoliday') }
+    { key: 'public_holiday', label: t('settings.payHoliday') },
+    { key: 'overnight', label: t('settings.payOvernight') }
   ];
 
   return (
@@ -46,7 +48,7 @@ export default function PayMultipliersCard({ value, onChange, disabled }) {
         <p className="text-sm text-muted-foreground">{t('settings.payHint')}</p>
       </CardHeader>
       <CardContent>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
           {FIELDS.map((field) => (
             <div key={field.key}>
               <Label>{field.label}</Label>

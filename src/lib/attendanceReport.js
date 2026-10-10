@@ -36,27 +36,72 @@ function multiplierFor(key, multipliers) {
   return value === undefined || value === '' ? 1 : Number(value) || 1;
 }
 
+// The hour a punch falls on, read on the branch's own clock.
+function hourInZone(value, state) {
+  if (!value) return null;
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return null;
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: timeZoneFor(state),
+    hour: '2-digit',
+    hourCycle: 'h23'
+  }).formatToParts(d);
+  const hour = parts.find((part) => part.type === 'hour');
+  const number = hour ? Number(hour.value) : NaN;
+  return Number.isNaN(number) ? null : number;
+}
+
+// A late start, a finish in the small hours or a punch that runs past midnight earns the
+// overnight penalty.
+function isOvernight(row, options) {
+  const startHour = hourInZone(row.clock_in_at, options.state);
+  const endHour = hourInZone(row.clock_out_at, options.state);
+  const startsLate = startHour !== null && startHour >= options.overnightFrom;
+  const endsEarly = endHour !== null && endHour < options.overnightUntil;
+  const crossesMidnight =
+    Boolean(row.clock_out_at) &&
+    dayPart(row.clock_out_at, options.state) !== dayPart(row.clock_in_at, options.state);
+  return startsLate || endsEarly || crossesMidnight;
+}
+
 // The date worked gives the weekday and the branch state gives the public holidays,
 // so every punch carries the penalty rate it actually earned.
 function payRow(row, options) {
   const date = dayPart(row.clock_in_at, options.state);
   const type = dayTypeFor(date, options.state, options.regional);
-  const multiplier = multiplierFor(type.key, options.multipliers);
-  const rate = options.rates[String(row.employee_email || '').toLowerCase()];
+  const email = String(row.employee_email || '').toLowerCase();
+  // The person's own penalties, where the store set them, stand in for the company's.
+  const table = (options.overridesByEmail && options.overridesByEmail[email]) || options.multipliers;
+  const dayMultiplier = multiplierFor(type.key, table);
+  const overnight = isOvernight(row, options);
+  const nightMultiplier = multiplierFor('overnight', table);
+  // Penalties do not stack: the higher of the two applies.
+  const multiplier = overnight && nightMultiplier > dayMultiplier ? nightMultiplier : dayMultiplier;
+  const rate = options.rates[email];
   const pay = row.minutes && rate ? (row.minutes / 60) * Number(rate) * multiplier : null;
+  const dayLabel =
+    type.key === 'public_holiday'
+      ? `Public holiday · ${(type.holiday && type.holiday.en) || ''}`
+      : DAY_TYPE_LABEL[type.key] || DAY_TYPE_LABEL.weekday;
   return {
     date,
-    dayType:
-      type.key === 'public_holiday'
-        ? `Public holiday · ${(type.holiday && type.holiday.en) || ''}`
-        : DAY_TYPE_LABEL[type.key] || DAY_TYPE_LABEL.weekday,
+    dayType: overnight ? `${dayLabel} · Overnight` : dayLabel,
     rateText: `×${multiplier}`,
     pay
   };
 }
 
 export function reportRows(entries, options = {}) {
-  const opts = { state: '', multipliers: null, rates: {}, regional: {}, ...options };
+  const opts = {
+    state: '',
+    multipliers: null,
+    overridesByEmail: {},
+    rates: {},
+    regional: {},
+    overnightFrom: 22,
+    overnightUntil: 6,
+    ...options
+  };
   return entries.map((row) => {
     const pay = payRow(row, opts);
     return [
@@ -80,7 +125,16 @@ export function reportRows(entries, options = {}) {
 
 // Rejected punches are not paid, so they stay out of the estimate.
 export function estimatedPay(entries, options = {}) {
-  const opts = { state: '', multipliers: null, rates: {}, regional: {}, ...options };
+  const opts = {
+    state: '',
+    multipliers: null,
+    overridesByEmail: {},
+    rates: {},
+    regional: {},
+    overnightFrom: 22,
+    overnightUntil: 6,
+    ...options
+  };
   return entries.reduce((total, row) => {
     if ((row.approval_status || 'approved') === 'rejected') return total;
     const pay = payRow(row, opts).pay;

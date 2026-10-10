@@ -4,11 +4,15 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/components/ui/use-toast';
 import { useI18n } from '@/lib/i18n';
 import { useWorkspace } from '@/lib/WorkspaceContext';
 import { DAYS } from '@/lib/bh';
 import { base44 } from '@/api/base44Client';
+
+// A week everyone gets, and the numbers a person can be raised to.
+const DAYS_PER_WEEK_OPTIONS = [5, 6, 7];
 
 const DEFAULT_SHIFTS = [
   { key: 'open', label: 'Open', start_time: '08:00', end_time: '15:00' },
@@ -31,6 +35,10 @@ export default function RosterSettingsDialog({ open, onOpenChange, branch, onSav
   const [fixed, setFixed] = useState({});
   const [staff, setStaff] = useState([]);
   const [minRest, setMinRest] = useState(10);
+  // Five days is what a week means for everyone; the people who want six or seven carry their
+  // own number here.
+  const [maxDays, setMaxDays] = useState(5);
+  const [dayOverrides, setDayOverrides] = useState({});
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -54,6 +62,13 @@ export default function RosterSettingsDialog({ open, onOpenChange, branch, onSav
         setSettingId(found.id);
         setShifts(Array.isArray(found.shifts) && found.shifts.length > 0 ? found.shifts : DEFAULT_SHIFTS);
         setMinRest(Number(found.min_rest_hours) >= 0 ? Number(found.min_rest_hours) : 10);
+        setMaxDays(Number(found.max_days_per_week) > 0 ? Number(found.max_days_per_week) : 5);
+        const perPerson = {};
+        (found.day_overrides || []).forEach((row) => {
+          const days = Number(row && row.max_days);
+          if (row && row.email && days > 0) perPerson[row.email] = days;
+        });
+        setDayOverrides(perPerson);
         const next = {};
         (found.requirements || []).forEach((req) => {
           next[cellKey(req.shift_key, req.day, req.position)] = req.count;
@@ -72,6 +87,8 @@ export default function RosterSettingsDialog({ open, onOpenChange, branch, onSav
         setCounts({});
         setFixed({});
         setMinRest(10);
+        setMaxDays(5);
+        setDayOverrides({});
       }
       setLoading(false);
     };
@@ -87,6 +104,14 @@ export default function RosterSettingsDialog({ open, onOpenChange, branch, onSav
   const removeShift = (index) => setShifts((prev) => prev.filter((_, i) => i !== index));
   const setCount = (shiftKey, day, position, value) =>
     setCounts((prev) => ({ ...prev, [cellKey(shiftKey, day, position)]: value }));
+
+  const setDaysFor = (email, value) =>
+    setDayOverrides((prev) => {
+      const next = { ...prev };
+      if (value === 'default') delete next[email];
+      else next[email] = Number(value);
+      return next;
+    });
 
   const toggleFixed = (day, email) =>
     setFixed((prev) => {
@@ -120,7 +145,9 @@ export default function RosterSettingsDialog({ open, onOpenChange, branch, onSav
       shifts,
       requirements,
       fixed_staff: fixedStaff,
-      min_rest_hours: Number(minRest) || 0
+      min_rest_hours: Number(minRest) || 0,
+      max_days_per_week: Number(maxDays) || 5,
+      day_overrides: Object.entries(dayOverrides).map(([email, days]) => ({ email, max_days: Number(days) }))
     };
     if (settingId) await base44.entities.RosterSetting.update(settingId, payload);
     else await base44.entities.RosterSetting.create(payload);
@@ -187,6 +214,61 @@ export default function RosterSettingsDialog({ open, onOpenChange, branch, onSav
                 <Label className="mb-1 block text-xs">{t('roster.minRest')}</Label>
                 <Input type="number" min="0" value={minRest} onChange={(e) => setMinRest(e.target.value)} />
               </div>
+            </div>
+
+            {/* How many days of one week a person is planned for: five by default, raised for the
+                people the store agreed more with. */}
+            <div className="space-y-3">
+              <div>
+                <Label>{t('roster.maxDaysTitle')}</Label>
+                <p className="mt-1 text-xs text-muted-foreground">{t('roster.maxDaysHint')}</p>
+              </div>
+              <div className="max-w-xs">
+                <Label className="mb-1 block text-xs">{t('roster.maxDaysDefault')}</Label>
+                <Select value={String(maxDays)} onValueChange={(value) => setMaxDays(Number(value))}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {DAYS_PER_WEEK_OPTIONS.map((days) => (
+                      <SelectItem key={days} value={String(days)}>
+                        {t('roster.daysOption').replace('{days}', String(days))}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              {staff.length > 0 ? (
+                <div className="space-y-2">
+                  <Label className="text-xs">{t('roster.maxDaysPerPerson')}</Label>
+                  <div className="grid max-h-64 gap-2 overflow-y-auto sm:grid-cols-2">
+                    {staff.map((person) => (
+                      <div
+                        key={person.id}
+                        className="flex items-center justify-between gap-2 rounded-lg border px-3 py-1.5"
+                      >
+                        <span className="truncate text-sm">{person.full_name}</span>
+                        <Select
+                          value={String(dayOverrides[person.user_email] || 'default')}
+                          onValueChange={(value) => setDaysFor(person.user_email, value)}
+                        >
+                          <SelectTrigger className="w-32">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="default">{t('roster.daysDefaultOption')}</SelectItem>
+                            {DAYS_PER_WEEK_OPTIONS.map((days) => (
+                              <SelectItem key={days} value={String(days)}>
+                                {t('roster.daysOption').replace('{days}', String(days))}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
             </div>
 
             <div className="space-y-4">

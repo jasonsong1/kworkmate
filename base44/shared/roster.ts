@@ -20,6 +20,9 @@ const DAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
 // builder and the screens that quote it can never disagree.
 const FULL_TIME_WEEKLY_HOURS = 38;
 
+// How many days of one week a person is planned for, unless the store raised it for them.
+const DEFAULT_MAX_DAYS = 5;
+
 // A contract is served before spare hours are handed out.
 const EMPLOYMENT_RANK = { full_time: 0, part_time: 1, casual: 2 };
 
@@ -144,6 +147,17 @@ export async function buildDraft(base44, branch, weekStart) {
     return { error: 'no_settings' };
   }
   const minRest = Number(setting.min_rest_hours) >= 0 ? Number(setting.min_rest_hours) : 10;
+  // A week is five days by default. The people the store agreed more with carry their own number,
+  // set beside the shift patterns, and everybody else keeps the default.
+  const maxDaysDefault = Number(setting.max_days_per_week) > 0 ? Number(setting.max_days_per_week) : DEFAULT_MAX_DAYS;
+  const daysOverrideByEmail = {};
+  for (const row of Array.isArray(setting.day_overrides) ? setting.day_overrides : []) {
+    const email = lower(row && row.email);
+    const days = Number(row && row.max_days);
+    if (!email || !(days > 0)) continue;
+    daysOverrideByEmail[email] = days;
+  }
+  const dayCapFor = (email) => daysOverrideByEmail[email] || maxDaysDefault;
 
   // What the week already holds, counted per day and position.
   const keptShifts = rowsOf(weekPage).filter((shift) => shift && shift.employee_email);
@@ -185,6 +199,14 @@ export async function buildDraft(base44, branch, weekStart) {
 
   const assignedMinutes = {};
   const intervals = {};
+  // The days each person is already planned for, kept as dates so two shifts on one day still
+  // count as one working day.
+  const daysPlaced = {};
+  const noteDay = (email, date) => {
+    if (!email) return;
+    daysPlaced[email] = daysPlaced[email] || new Set();
+    daysPlaced[email].add(date);
+  };
   // A person the employer pinned to a day is not planned again on that day.
   const pinnedPlaced = {};
 
@@ -196,6 +218,7 @@ export async function buildDraft(base44, branch, weekStart) {
     const end = toMin(shift.end_time);
     assignedMinutes[shift.employee_email] = (assignedMinutes[shift.employee_email] || 0) + lengthOf(shift);
     pinnedPlaced[`${shift.employee_email}|${date}`] = true;
+    noteDay(shift.employee_email, date);
     if (start === null || end === null || end <= start) continue;
     intervals[shift.employee_email] = [
       ...(intervals[shift.employee_email] || []),
@@ -242,6 +265,8 @@ export async function buildDraft(base44, branch, weekStart) {
         continue;
       }
       if (pinnedPlaced[`${email}|${date}`]) continue;
+      // Nobody is planned past their number of days in the week.
+      if ((daysPlaced[email] || new Set()).size >= dayCapFor(email)) continue;
 
       const fixedHere = Boolean(fixedByDay[dayIndex] && fixedByDay[dayIndex].has(lower(email)));
       const submitted = availByEmail[email] || null;
@@ -306,6 +331,7 @@ export async function buildDraft(base44, branch, weekStart) {
         notes: ''
       });
       assignedMinutes[pick.email] = (assignedMinutes[pick.email] || 0) + lengthMin;
+      noteDay(pick.email, date);
       intervals[pick.email] = [
         ...(intervals[pick.email] || []),
         { start: absMinutes(date, start), end: absMinutes(date, end) }
