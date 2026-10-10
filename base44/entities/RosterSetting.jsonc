@@ -39,6 +39,16 @@
       "items": {
         "type": "object"
       }
+    },
+    "max_shifts_per_day": {
+      "type": "number",
+      "default": 2
+    },
+    "shift_overrides": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
     }
   },
   "required": [

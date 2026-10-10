@@ -14,6 +14,11 @@ import { base44 } from '@/api/base44Client';
 // A week everyone gets, and the numbers a person can be raised to.
 const DAYS_PER_WEEK_OPTIONS = [5, 6, 7];
 
+// Two shifts a day is the default, so one person can take a morning and an afternoon. Whoever is
+// set to one shift is never planned for a second shift on the same day.
+const DEFAULT_SHIFTS_PER_DAY = 2;
+const SHIFTS_PER_DAY_OPTIONS = [1, 2];
+
 const DEFAULT_SHIFTS = [
   { key: 'open', label: 'Open', start_time: '08:00', end_time: '15:00' },
   { key: 'close', label: 'Close', start_time: '15:00', end_time: '22:00' }
@@ -39,6 +44,8 @@ export default function RosterSettingsDialog({ open, onOpenChange, branch, onSav
   // own number here.
   const [maxDays, setMaxDays] = useState(5);
   const [dayOverrides, setDayOverrides] = useState({});
+  const [maxShifts, setMaxShifts] = useState(DEFAULT_SHIFTS_PER_DAY);
+  const [shiftOverrides, setShiftOverrides] = useState({});
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -69,6 +76,15 @@ export default function RosterSettingsDialog({ open, onOpenChange, branch, onSav
           if (row && row.email && days > 0) perPerson[row.email] = days;
         });
         setDayOverrides(perPerson);
+        setMaxShifts(
+          Number(found.max_shifts_per_day) > 0 ? Number(found.max_shifts_per_day) : DEFAULT_SHIFTS_PER_DAY
+        );
+        const perPersonShifts = {};
+        (found.shift_overrides || []).forEach((row) => {
+          const count = Number(row && row.max_shifts);
+          if (row && row.email && count > 0) perPersonShifts[row.email] = count;
+        });
+        setShiftOverrides(perPersonShifts);
         const next = {};
         (found.requirements || []).forEach((req) => {
           next[cellKey(req.shift_key, req.day, req.position)] = req.count;
@@ -89,6 +105,8 @@ export default function RosterSettingsDialog({ open, onOpenChange, branch, onSav
         setMinRest(10);
         setMaxDays(5);
         setDayOverrides({});
+        setMaxShifts(DEFAULT_SHIFTS_PER_DAY);
+        setShiftOverrides({});
       }
       setLoading(false);
     };
@@ -107,6 +125,14 @@ export default function RosterSettingsDialog({ open, onOpenChange, branch, onSav
 
   const setDaysFor = (email, value) =>
     setDayOverrides((prev) => {
+      const next = { ...prev };
+      if (value === 'default') delete next[email];
+      else next[email] = Number(value);
+      return next;
+    });
+
+  const setShiftsFor = (email, value) =>
+    setShiftOverrides((prev) => {
       const next = { ...prev };
       if (value === 'default') delete next[email];
       else next[email] = Number(value);
@@ -147,7 +173,12 @@ export default function RosterSettingsDialog({ open, onOpenChange, branch, onSav
       fixed_staff: fixedStaff,
       min_rest_hours: Number(minRest) || 0,
       max_days_per_week: Number(maxDays) || 5,
-      day_overrides: Object.entries(dayOverrides).map(([email, days]) => ({ email, max_days: Number(days) }))
+      day_overrides: Object.entries(dayOverrides).map(([email, days]) => ({ email, max_days: Number(days) })),
+      max_shifts_per_day: Number(maxShifts) || DEFAULT_SHIFTS_PER_DAY,
+      shift_overrides: Object.entries(shiftOverrides).map(([email, count]) => ({
+        email,
+        max_shifts: Number(count)
+      }))
     };
     if (settingId) await base44.entities.RosterSetting.update(settingId, payload);
     else await base44.entities.RosterSetting.create(payload);
@@ -223,47 +254,92 @@ export default function RosterSettingsDialog({ open, onOpenChange, branch, onSav
                 <Label>{t('roster.maxDaysTitle')}</Label>
                 <p className="mt-1 text-xs text-muted-foreground">{t('roster.maxDaysHint')}</p>
               </div>
-              <div className="max-w-xs">
-                <Label className="mb-1 block text-xs">{t('roster.maxDaysDefault')}</Label>
-                <Select value={String(maxDays)} onValueChange={(value) => setMaxDays(Number(value))}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {DAYS_PER_WEEK_OPTIONS.map((days) => (
-                      <SelectItem key={days} value={String(days)}>
-                        {t('roster.daysOption').replace('{days}', String(days))}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              <div className="grid max-w-xl gap-3 sm:grid-cols-2">
+                <div>
+                  <Label className="mb-1 block text-xs">{t('roster.maxDaysDefault')}</Label>
+                  <Select value={String(maxDays)} onValueChange={(value) => setMaxDays(Number(value))}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {DAYS_PER_WEEK_OPTIONS.map((days) => (
+                        <SelectItem key={days} value={String(days)}>
+                          {t('roster.daysOption').replace('{days}', String(days))}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="mb-1 block text-xs">{t('roster.shiftsDefaultLabel')}</Label>
+                  <Select value={String(maxShifts)} onValueChange={(value) => setMaxShifts(Number(value))}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {SHIFTS_PER_DAY_OPTIONS.map((count) => (
+                        <SelectItem key={count} value={String(count)}>
+                          {t('roster.shiftsOption').replace('{count}', String(count))}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
               {staff.length > 0 ? (
                 <div className="space-y-2">
                   <Label className="text-xs">{t('roster.maxDaysPerPerson')}</Label>
-                  <div className="grid max-h-64 gap-2 overflow-y-auto sm:grid-cols-2">
+                  <p className="text-[11px] text-muted-foreground">{t('roster.shiftsPerDayHint')}</p>
+                  <div className="grid max-h-72 gap-2 overflow-y-auto sm:grid-cols-2">
                     {staff.map((person) => (
-                      <div
-                        key={person.id}
-                        className="flex items-center justify-between gap-2 rounded-lg border px-3 py-1.5"
-                      >
-                        <span className="truncate text-sm">{person.full_name}</span>
-                        <Select
-                          value={String(dayOverrides[person.user_email] || 'default')}
-                          onValueChange={(value) => setDaysFor(person.user_email, value)}
-                        >
-                          <SelectTrigger className="w-32">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="default">{t('roster.daysDefaultOption')}</SelectItem>
-                            {DAYS_PER_WEEK_OPTIONS.map((days) => (
-                              <SelectItem key={days} value={String(days)}>
-                                {t('roster.daysOption').replace('{days}', String(days))}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                      <div key={person.id} className="space-y-1.5 rounded-lg border px-3 py-2">
+                        <span className="block truncate text-sm">{person.full_name}</span>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <Label className="mb-1 block text-[11px] text-muted-foreground">
+                              {t('roster.daysPerPersonLabel')}
+                            </Label>
+                            <Select
+                              value={String(dayOverrides[person.user_email] || 'default')}
+                              onValueChange={(value) => setDaysFor(person.user_email, value)}
+                            >
+                              <SelectTrigger className="h-8 w-full">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="default">{t('roster.daysDefaultOption')}</SelectItem>
+                                {DAYS_PER_WEEK_OPTIONS.map((days) => (
+                                  <SelectItem key={days} value={String(days)}>
+                                    {t('roster.daysOption').replace('{days}', String(days))}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div>
+                            <Label className="mb-1 block text-[11px] text-muted-foreground">
+                              {t('roster.shiftsPerPersonLabel')}
+                            </Label>
+                            <Select
+                              value={String(shiftOverrides[person.user_email] || 'default')}
+                              onValueChange={(value) => setShiftsFor(person.user_email, value)}
+                            >
+                              <SelectTrigger className="h-8 w-full">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="default">
+                                  {t('roster.shiftsDefaultOption').replace('{count}', String(maxShifts))}
+                                </SelectItem>
+                                {SHIFTS_PER_DAY_OPTIONS.map((count) => (
+                                  <SelectItem key={count} value={String(count)}>
+                                    {t('roster.shiftsOption').replace('{count}', String(count))}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
                       </div>
                     ))}
                   </div>

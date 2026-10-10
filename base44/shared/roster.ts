@@ -1,8 +1,8 @@
 // Building a week of shifts out of the store's own settings, in the order a store thinks about it:
 //
 //  1. the store's own demand — its shift patterns and the headcount each day and position needs;
-//  2. the people the employer pinned to a weekday: they are nailed into the week first, and then
-//     left out of the rest of that day's sums so nobody is planned twice;
+//  2. the people the employer pinned to a weekday: they are nailed into the week first, and the
+//     rest of that day is filled around them, never past the shifts a day each person is allowed;
 //  3. the team's submitted availability for what is still open — somebody free for both the
 //     morning and the afternoon of a day is the store's split-shift person and is planned ahead of
 //     somebody who can only take one of them — then a full-time contract before a part-time one and
@@ -24,6 +24,11 @@ const FULL_TIME_WEEKLY_HOURS = 38;
 
 // How many days of one week a person is planned for, unless the store raised it for them.
 const DEFAULT_MAX_DAYS = 5;
+
+// How many shifts of one day a person is planned for, unless the store set their own number: two
+// by default, so one person can take both the morning and the afternoon. Somebody the store put on
+// one shift is never planned for that day's second shift — it goes to another person or stays open.
+const DEFAULT_MAX_SHIFTS_PER_DAY = 2;
 
 // A contract is served before spare hours are handed out.
 const EMPLOYMENT_RANK = { full_time: 0, part_time: 1, casual: 2 };
@@ -161,6 +166,19 @@ export async function buildDraft(base44, branch, weekStart) {
   }
   const dayCapFor = (email) => daysOverrideByEmail[email] || maxDaysDefault;
 
+  // Two shifts a day is the store's standing answer; the people it agreed otherwise with carry
+  // their own number and everybody else keeps the default.
+  const maxShiftsDefault =
+    Number(setting.max_shifts_per_day) > 0 ? Number(setting.max_shifts_per_day) : DEFAULT_MAX_SHIFTS_PER_DAY;
+  const shiftsOverrideByEmail = {};
+  for (const row of Array.isArray(setting.shift_overrides) ? setting.shift_overrides : []) {
+    const email = lower(row && row.email);
+    const shifts = Number(row && row.max_shifts);
+    if (!email || !(shifts > 0)) continue;
+    shiftsOverrideByEmail[email] = shifts;
+  }
+  const shiftCapFor = (email) => shiftsOverrideByEmail[email] || maxShiftsDefault;
+
   // What the week already holds, counted per day and position.
   const keptShifts = rowsOf(weekPage).filter((shift) => shift && shift.employee_email);
   const keptByDayPosition = {};
@@ -224,8 +242,9 @@ export async function buildDraft(base44, branch, weekStart) {
     daysPlaced[email] = daysPlaced[email] || new Set();
     daysPlaced[email].add(date);
   };
-  // A person the employer pinned to a day is not planned again on that day.
-  const pinnedPlaced = {};
+  // The shifts each person already holds on each day. A pinned or kept shift counts as one of them,
+  // and that person's own limit for the day decides whether a second one can follow.
+  const shiftsOnDay = {};
 
   // Somebody already on a saved or sent shift in this week is counted in, and is not planned
   // again on that day.
@@ -234,7 +253,8 @@ export async function buildDraft(base44, branch, weekStart) {
     const start = toMin(shift.start_time);
     const end = toMin(shift.end_time);
     assignedMinutes[shift.employee_email] = (assignedMinutes[shift.employee_email] || 0) + lengthOf(shift);
-    pinnedPlaced[`${shift.employee_email}|${date}`] = true;
+    const keptKey = `${shift.employee_email}|${date}`;
+    shiftsOnDay[keptKey] = (shiftsOnDay[keptKey] || 0) + 1;
     noteDay(shift.employee_email, date);
     if (start === null || end === null || end <= start) continue;
     intervals[shift.employee_email] = [
@@ -281,8 +301,8 @@ export async function buildDraft(base44, branch, weekStart) {
         leaveSkips += 1;
         continue;
       }
-      if (pinnedPlaced[`${email}|${date}`]) continue;
-      // Nobody is planned past their number of days in the week.
+      // Nobody is planned past the shifts their own day holds, nor past their days in the week.
+      if ((shiftsOnDay[`${email}|${date}`] || 0) >= shiftCapFor(email)) continue;
       if ((daysPlaced[email] || new Set()).size >= dayCapFor(email)) continue;
 
       const fixedHere = Boolean(fixedByDay[dayIndex] && fixedByDay[dayIndex].has(lower(email)));
@@ -366,7 +386,8 @@ export async function buildDraft(base44, branch, weekStart) {
         ...(intervals[pick.email] || []),
         { start: absMinutes(date, start), end: absMinutes(date, end), date }
       ];
-      if (pick.fixed) pinnedPlaced[`${pick.email}|${date}`] = true;
+      const pickKey = `${pick.email}|${date}`;
+      shiftsOnDay[pickKey] = (shiftsOnDay[pickKey] || 0) + 1;
       filled += 1;
     }
 
