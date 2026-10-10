@@ -9,8 +9,8 @@
 import {
   MANAGER_PRESETS,
   mergePresets,
-  positionsOf,
   presetFor,
+  primaryPositionOf,
   resolveAccess,
   resolvePresetKey
 } from './access.ts';
@@ -317,8 +317,9 @@ export async function accessFor(base44: any, me: any, everyModule = false) {
   const customRoles = company && Array.isArray(company.custom_roles) ? company.custom_roles : [];
   const baseKey = resolvePresetKey({ roleKey, customRoles, isCompanyAdmin });
   let presetKey = baseKey;
-  // A manager position the employer set on the staff record carries the manager preset, so the
-  // screens and the rows they may touch agree: the person's own record decides, not the key.
+  // The position an employer set as the person's own carries the preset it is linked to, so the
+  // screens and the rows they may touch agree: the main position decides, never the secondary one
+  // they can also cover shifts in.
   if (!isAdmin && !MANAGER_PRESETS.includes(baseKey)) {
     const person = rowsOf(
       await base44.asServiceRole.entities.EmployeeProfile.filter(
@@ -326,7 +327,7 @@ export async function accessFor(base44: any, me: any, everyModule = false) {
         { limit: 1 }
       ).catch(() => [])
     )[0];
-    presetKey = resolvePresetKey({ roleKey, customRoles, isCompanyAdmin, positions: positionsOf(person) });
+    presetKey = resolvePresetKey({ roleKey, customRoles, isCompanyAdmin, positions: primaryPositionOf(person) });
   }
   const preset = presetFor(presetKey, presets);
   const branchId = clean(me && me.branch_id);

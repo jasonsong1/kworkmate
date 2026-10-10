@@ -69,7 +69,9 @@ export const EMPLOYMENT_TYPES = [
   { value: 'part_time', label: 'Part time' },
   { value: 'full_time', label: 'Full time' },
   // A permanent contract carries full-time entitlements, agreed at up to 50 hours a week.
-  { value: 'permanent', label: 'Permanent' }
+  { value: 'permanent', label: 'Permanent' },
+  // The person who runs the store: the roster applies no hour limit of any kind to them.
+  { value: 'owner', label: 'Owner' }
 ];
 
 // The label each list shows, in the language the reader chose.
@@ -77,7 +79,8 @@ export const EMPLOYMENT_LABEL_KEYS = {
   casual: 'emp.casual',
   part_time: 'emp.part_time',
   full_time: 'emp.full_time',
-  permanent: 'emp.permanent'
+  permanent: 'emp.permanent',
+  owner: 'emp.owner'
 };
 
 export const VISA_LABEL_KEYS = {

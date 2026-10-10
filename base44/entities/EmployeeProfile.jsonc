@@ -53,7 +53,8 @@
         "casual",
         "part_time",
         "full_time",
-        "permanent"
+        "permanent",
+        "owner"
       ],
       "default": "casual"
     },

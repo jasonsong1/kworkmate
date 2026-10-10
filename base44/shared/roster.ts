@@ -34,6 +34,11 @@ const DEFAULT_MAX_SHIFTS_PER_DAY = 2;
 // A contract is served before spare hours are handed out.
 const EMPLOYMENT_RANK = { full_time: 0, part_time: 1, casual: 2 };
 
+// The person who runs the store. None of the limits the store sets for its crew — the contract
+// and visa hours, the days a week and the shifts a day — are applied to an owner: whatever the
+// week needs is open to them.
+const UNLIMITED_EMPLOYMENT = ['owner'];
+
 export function rowsOf(result) {
   return Array.isArray(result) ? result : (result && result.items) || [];
 }
@@ -92,6 +97,7 @@ function lengthOf(shift) {
 // may not be planned past a 38 hour week, and a visa with a weekly limit of its own — a student
 // visa's 24 hours — is never planned past that, however the week is put together.
 function remainingMinutes(person, weekMinutes) {
+  if (UNLIMITED_EMPLOYMENT.includes(lower(person.employment_type))) return null;
   const contractCap = CONTRACT_WEEKLY_HOURS[lower(person.employment_type)];
   const caps = [
     typeof contractCap === 'number' ? contractCap : null,
@@ -146,6 +152,13 @@ export async function buildDraft(base44, branch, weekStart) {
 
   const setting = rowsOf(settingPage)[0] || null;
   const staff = rowsOf(staffPage);
+  // An owner is free of the week's hour, day and shift limits, so their address is looked up once
+  // here and every cap below steps aside for them.
+  const unlimitedStaff = new Set(
+    staff
+      .filter((person) => person && UNLIMITED_EMPLOYMENT.includes(lower(person.employment_type)))
+      .map((person) => lower(person.user_email))
+  );
   const shifts = (setting && Array.isArray(setting.shifts) ? setting.shifts : []).filter(
     (s) => s && s.key && toMin(s.start_time) !== null && toMin(s.end_time) !== null
   );
@@ -166,7 +179,8 @@ export async function buildDraft(base44, branch, weekStart) {
     if (!email || !(days > 0)) continue;
     daysOverrideByEmail[email] = days;
   }
-  const dayCapFor = (email) => daysOverrideByEmail[email] || maxDaysDefault;
+  const dayCapFor = (email) =>
+    unlimitedStaff.has(lower(email)) ? Infinity : daysOverrideByEmail[email] || maxDaysDefault;
 
   // Two shifts a day is the store's standing answer; the people it agreed otherwise with carry
   // their own number and everybody else keeps the default.
@@ -179,7 +193,8 @@ export async function buildDraft(base44, branch, weekStart) {
     if (!email || !(shifts > 0)) continue;
     shiftsOverrideByEmail[email] = shifts;
   }
-  const shiftCapFor = (email) => shiftsOverrideByEmail[email] || maxShiftsDefault;
+  const shiftCapFor = (email) =>
+    unlimitedStaff.has(lower(email)) ? Infinity : shiftsOverrideByEmail[email] || maxShiftsDefault;
 
   // What the week already holds, counted per day and position.
   const keptShifts = rowsOf(weekPage).filter((shift) => shift && shift.employee_email);

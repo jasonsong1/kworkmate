@@ -282,11 +282,12 @@ export default function CompanySettings() {
               <div>
                 <Label className="mb-1 block">{t('role.title')}</Label>
                 <p className="mb-3 text-xs text-muted-foreground">{t('role.hint')}</p>
+                {/* Whoever the company lets save its settings also names its job titles. */}
                 <CompanyRolesManager
                   value={form.custom_roles}
                   onChange={setCustomRoles}
                   presets={presets}
-                  disabled={role !== 'company_admin'} />
+                  disabled={!canSave} />
                 
               </div>
               <div>
@@ -317,7 +318,7 @@ export default function CompanySettings() {
             <PayMultipliersCard
               value={form.pay_multipliers}
               onChange={(next) => set('pay_multipliers', next)}
-              disabled={role !== 'company_admin'} />
+              disabled={!canSave} />
             <PublicHolidayCard multiplier={payMultipliers(form.pay_multipliers).public_holiday} />
           </div>
         </TabsContent>

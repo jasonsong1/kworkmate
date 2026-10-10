@@ -18,7 +18,9 @@ export const STATUS_TONES = {
 export const EMPLOYMENT_KEYS = {
   full_time: 'leave.emp.full',
   part_time: 'leave.emp.part',
-  casual: 'leave.emp.casual'
+  casual: 'leave.emp.casual',
+  permanent: 'leave.emp.permanent',
+  owner: 'leave.emp.owner'
 };
 
 export const HOURS_PER_DAY = 7.6;

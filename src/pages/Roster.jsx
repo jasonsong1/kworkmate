@@ -319,9 +319,6 @@ export default function Roster() {
   const visibleSubmissions = canManageRoster
     ? submissions
     : submissions.filter((item) => item.employee_email === ((me && me.email) || ''));
-  const boardEmployees = canManageRoster
-    ? employees
-    : employees.filter((employee) => employee.user_email === ((me && me.email) || ''));
   // Who gets a row. A manager reads the crew list; the crew's copy is built from the week's
   // shifts, exactly the way the All shifts view works, so every working employee has a row.
   const gridRows = canManageRoster
@@ -362,6 +359,26 @@ export default function Roster() {
   const publishedCount = shifts.filter((s) => s.status === 'published').length;
   const draftCount = shifts.filter((s) => s.status === 'draft').length;
   const savedCount = shifts.filter((s) => s.status === 'saved').length;
+  // A shift the manager places by hand takes one of the seats the last build could not fill, so
+  // the day's open-seat note comes down with it instead of staying on the screen.
+  const relieveUnassigned = (date, position) => {
+    if (!date) return;
+    setUnassigned((prev) => {
+      let left = 1;
+      const next = [];
+      for (const item of prev) {
+        if (left > 0 && item.date === date && (!position || item.position === position)) {
+          left -= 1;
+          const missing = (Number(item.missing) || 0) - 1;
+          if (missing > 0) next.push({ ...item, missing });
+          continue;
+        }
+        next.push(item);
+      }
+      return next;
+    });
+  };
+
   // What the last build could not fill on one day, named by position, so the day itself says which
   // seat is open ("Manager unfilled 1") and the next build can be aimed at it.
   const unfilledByDay = (date) => {
@@ -515,12 +532,14 @@ export default function Roster() {
               roster itself and enters their own hours from their own space. */}
           {canManageRoster ? (
             <AvailabilityBoard
-              employees={boardEmployees}
+              employees={gridEmployees}
               submissions={visibleSubmissions}
               days={days}
               branch={activeBranch}
               weekStart={weekStart}
               canEdit={canEditAvailability}
+              canReorder={canManageRoster}
+              onReorder={reorderEmployees}
               onSaved={load}
             />
           ) : null}
@@ -542,7 +561,10 @@ export default function Roster() {
         defaultDate={dialogDate}
         defaultEmployee={dialogEmployee}
         shift={editingShift}
-        onSaved={load}
+        onSaved={({ date, position } = {}) => {
+          relieveUnassigned(date, position);
+          load();
+        }}
       />
       <RosterSettingsDialog
         open={settingsOpen}

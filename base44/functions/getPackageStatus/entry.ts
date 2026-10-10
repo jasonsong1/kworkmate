@@ -9,7 +9,7 @@ import {
   resolveLimit,
   today
 } from '../../shared/packages.ts';
-import { mergePresets, positionsOf, presetFor, resolveAccess, resolvePresetKey } from '../../shared/access.ts';
+import { mergePresets, presetFor, primaryPositionOf, resolveAccess, resolvePresetKey } from '../../shared/access.ts';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -91,8 +91,9 @@ export default async function (req) {
     // Who is signed in, and which position preset that is.
     const isCompanyAdmin = isSuperAdmin || roleKey === 'company_admin';
     const customRoles = Array.isArray(company.custom_roles) ? company.custom_roles : [];
-    // A position the employer set on the staff record — "매니저" — works as a manager here even
-    // when the role key behind it was never built for it, so the record itself decides.
+    // The position the employer set as the person's own — "매니저" — opens the manager screens even
+    // when the role key behind it was never built for it, so the main position decides. A
+    // secondary position is what they can also cover shifts in, not what their screens are.
     const person = isSuperAdmin
       ? null
       : rowsOf(
@@ -105,7 +106,7 @@ export default async function (req) {
       roleKey,
       customRoles,
       isCompanyAdmin,
-      positions: positionsOf(person)
+      positions: primaryPositionOf(person)
     });
     const preset = presetFor(presetKey, presets);
 

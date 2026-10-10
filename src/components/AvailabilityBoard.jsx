@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Pencil, Send } from 'lucide-react';
+import { GripVertical, Pencil, Send } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -10,10 +10,24 @@ import { DAYS, isDayAvailable, normalizeAvailability } from '@/lib/bh';
 
 // The availability the team submitted this week, laid out like the roster so a manager can
 // line up who is free against the shifts they are about to place.
-export default function AvailabilityBoard({ employees, submissions, days, branch, weekStart, canEdit, onSaved }) {
+export default function AvailabilityBoard({
+  employees,
+  submissions,
+  days,
+  branch,
+  weekStart,
+  canEdit,
+  canReorder,
+  onReorder,
+  onSaved
+}) {
   const { t } = useI18n();
   const [editTarget, setEditTarget] = useState(null);
   const [requestOpen, setRequestOpen] = useState(false);
+  // The row being carried onto another line, exactly as the roster's own grid moves one, so the
+  // team is listed in the order the manager reads on both tables.
+  const [dragRow, setDragRow] = useState('');
+  const canMove = Boolean(canReorder && onReorder);
 
   const list = Array.isArray(employees) ? employees : [];
   const dayList = days && days.length > 0 ? days : DAYS.map((day) => ({ ...day, date: '' }));
@@ -71,17 +85,54 @@ export default function AvailabilityBoard({ employees, submissions, days, branch
                     const record = byEmail[employee.user_email];
                     const matrix = record ? normalizeAvailability(record.availability) : null;
                     return (
-                      <tr key={employee.id}>
+                      <tr
+                        key={employee.id}
+                        className={dragRow === employee.user_email ? 'opacity-50' : undefined}
+                        onDragOver={
+                          canMove
+                            ? (event) => {
+                                if (dragRow) event.preventDefault();
+                              }
+                            : undefined
+                        }
+                        onDrop={
+                          canMove
+                            ? (event) => {
+                                if (!dragRow) return;
+                                event.preventDefault();
+                                onReorder(dragRow, employee.user_email);
+                                setDragRow('');
+                              }
+                            : undefined
+                        }
+                      >
                         <td className="sticky left-0 z-10 border-t bg-card px-3 py-2">
-                          <p className="text-sm font-medium">{employee.full_name}</p>
-                          <p className="flex items-center gap-2 text-xs text-muted-foreground">
-                            {employee.position || '—'}
-                            {record && record.manager_edited ? (
-                              <Badge variant="secondary" className="text-[10px]">
-                                {t('roster.managerEdited')}
-                              </Badge>
+                          <div className="flex items-start gap-1.5">
+                            {canMove ? (
+                              <button
+                                type="button"
+                                draggable
+                                onDragStart={() => setDragRow(employee.user_email)}
+                                onDragEnd={() => setDragRow('')}
+                                title={t('roster.dragRowHint')}
+                                aria-label={t('roster.dragRowHint')}
+                                className="mt-0.5 cursor-grab text-muted-foreground"
+                              >
+                                <GripVertical className="h-4 w-4" />
+                              </button>
                             ) : null}
-                          </p>
+                            <div>
+                              <p className="text-sm font-medium">{employee.full_name}</p>
+                              <p className="flex items-center gap-2 text-xs text-muted-foreground">
+                                {employee.position || '—'}
+                                {record && record.manager_edited ? (
+                                  <Badge variant="secondary" className="text-[10px]">
+                                    {t('roster.managerEdited')}
+                                  </Badge>
+                                ) : null}
+                              </p>
+                            </div>
+                          </div>
                         </td>
                         {dayList.map((day) => {
                           const entry = matrix ? matrix[day.key] : null;

@@ -260,6 +260,13 @@ export function managerPositionLabels(customRoles, presets) {
   return labels;
 }
 
+// The position an employer made the person's own — the one in the record's main position field.
+// That is what their sign-in opens as: a secondary or extra position is what they can also cover,
+// never what their screens are.
+export function primaryPositionOf(person) {
+  return [person && person.position].filter(Boolean);
+}
+
 // Every position the employer recorded on one person's own staff record.
 export function positionsOf(person) {
   return [

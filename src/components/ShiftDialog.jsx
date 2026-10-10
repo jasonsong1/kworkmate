@@ -153,7 +153,9 @@ export default function ShiftDialog({
     }
     setSaving(false);
     onOpenChange(false);
-    onSaved && onSaved();
+    // The day and the position the shift was placed in, so the roster can take that day's open
+    // seat off the screen.
+    onSaved && onSaved({ date: form.date, position: form.position });
   };
 
   const cancelShift = async () => {
