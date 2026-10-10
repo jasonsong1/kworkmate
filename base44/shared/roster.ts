@@ -3,9 +3,11 @@
 //  1. the store's own demand — its shift patterns and the headcount each day and position needs;
 //  2. the people the employer pinned to a weekday: they are nailed into the week first, and then
 //     left out of the rest of that day's sums so nobody is planned twice;
-//  3. the team's submitted availability for what is still open, with a full-time contract served
-//     before a part-time one and a part-time one before spare casual hours, visa limits respected,
-//     and the minimum rest between shifts never broken;
+//  3. the team's submitted availability for what is still open — somebody free for both the
+//     morning and the afternoon of a day is the store's split-shift person and is planned ahead of
+//     somebody who can only take one of them — then a full-time contract before a part-time one and
+//     a part-time one before spare casual hours, visa limits respected, and the minimum rest
+//     between shifts never broken;
 //  4. whatever nobody can take comes back as an open shift instead of being quietly dropped, so
 //     the screen can mark it and the manager decides.
 //
@@ -197,6 +199,21 @@ export async function buildDraft(base44, branch, weekStart) {
   const shiftByKey = {};
   for (const shift of shifts) shiftByKey[shift.key] = shift;
 
+  // Every shift pattern the day's headcount calls for, so the builder can see who is free for more
+  // than one of them — the split-shift people a store plans a morning and an afternoon for.
+  const dayDemand = {};
+  for (const row of requirements) {
+    const template = shiftByKey[row.shift_key];
+    if (!template) continue;
+    const start = toMin(template.start_time);
+    const end = toMin(template.end_time);
+    if (start === null || end === null || end <= start) continue;
+    const day = Number(row.day);
+    const list = (dayDemand[day] = dayDemand[day] || []);
+    if (list.some((item) => item.position === row.position && item.start === start && item.end === end)) continue;
+    list.push({ position: row.position, start, end });
+  }
+
   const assignedMinutes = {};
   const intervals = {};
   // The days each person is already planned for, kept as dates so two shifts on one day still
@@ -272,6 +289,12 @@ export async function buildDraft(base44, branch, weekStart) {
       const submitted = availByEmail[email] || null;
       const window = availableWindow(submitted, dayKey);
       const freeForShift = Boolean(window && window.from <= start && window.to >= end);
+      // How many of that day's own shifts this person's submitted hours cover: two or more makes
+      // them the person the day is built on, so both the morning and the afternoon go to them.
+      const coversDay = (dayDemand[dayIndex] || []).filter(
+        (item) =>
+          positions.includes(item.position) && window && window.from <= item.start && window.to >= item.end
+      ).length;
       // A fixed placement is the employer's own instruction, so it stands when the person has not
       // said anything about that day. Once they have told us they cannot work those hours, the
       // shift goes to somebody who can instead of being planned on top of them.
@@ -302,15 +325,19 @@ export async function buildDraft(base44, branch, weekStart) {
         used: assignedMinutes[email] || 0,
         rank: EMPLOYMENT_RANK[lower(person.employment_type)] ?? EMPLOYMENT_RANK.casual,
         primary: person.position === req.position,
-        fixed: fixedHere
+        fixed: fixedHere,
+        split: coversDay >= 2
       });
     }
 
-    // The pinned people come first, then a full-time contract before a part-time one and a
-    // part-time one before casual hours, then fairness — fewest hours so far — then main position.
+    // The pinned people come first, then the people whose submitted hours take both of the day's
+    // shifts — the split-shift person the day is built on — then a full-time contract before a
+    // part-time one and a part-time one before casual hours, then fairness — fewest hours so far —
+    // then main position.
     candidates.sort(
       (a, b) =>
         (b.fixed ? 1 : 0) - (a.fixed ? 1 : 0) ||
+        (b.split ? 1 : 0) - (a.split ? 1 : 0) ||
         a.rank - b.rank ||
         a.used - b.used ||
         (b.primary ? 1 : 0) - (a.primary ? 1 : 0) ||
