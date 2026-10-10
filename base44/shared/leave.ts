@@ -210,3 +210,36 @@ export function periodDays(startIso: string, endIso: string) {
   if (Number.isNaN(start) || Number.isNaN(end) || end < start) return 1;
   return Math.round((end - start) / 86400000) + 1;
 }
+
+// One stored leave type in the shape every leave screen and function reads it in.
+export function normaliseLeaveType(type: any) {
+  return {
+    key: String(type.key || ''),
+    name: type.name || type.key,
+    name_ko: type.name_ko || '',
+    emoji: type.emoji || '',
+    paid: type.paid !== false,
+    accrual_method: type.accrual_method === 'ordinary_hours' ? 'ordinary_hours' : 'none',
+    accrual_rate: Number(type.accrual_rate) || 0,
+    employment_types: Array.isArray(type.employment_types) ? type.employment_types : [],
+    grant_enabled: Boolean(type.grant_enabled),
+    grant_hours: Number(type.grant_hours) || 0,
+    grant_period: type.grant_period === 'monthly' ? 'monthly' : 'yearly',
+    grant_anchor: type.grant_anchor === 'anniversary' ? 'anniversary' : 'calendar_year',
+    grant_employment_types: Array.isArray(type.grant_employment_types) ? type.grant_employment_types : [],
+    expiry_enabled: Boolean(type.expiry_enabled),
+    expiry_months: Number(type.expiry_months) || 12,
+    requires_certificate: Boolean(type.requires_certificate),
+    // From this many hours held, this leave's balance is shown in red.
+    flag_hours: Math.max(0, Number(type.flag_hours) || 0),
+    custom: Boolean(type.custom),
+    active: type.active !== false,
+    order: Number(type.order) || 10
+  };
+}
+
+// Every leave the company has set up, or the platform's own defaults when it has set up none.
+export function leaveTypesFrom(stored: any[]) {
+  const rows = Array.isArray(stored) ? stored : [];
+  return (rows.length > 0 ? rows : DEFAULT_LEAVE_TYPES).map(normaliseLeaveType);
+}

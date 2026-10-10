@@ -1,10 +1,11 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { CalendarPlus, Flag, Loader2, Settings2 } from 'lucide-react';
+import { CalendarPlus, Flag, Loader2, Settings2, Wallet } from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
 import LeaveBalanceCard from '@/components/leave/LeaveBalanceCard';
 import LeaveRequestDialog from '@/components/leave/LeaveRequestDialog';
 import LeaveRequestsTable from '@/components/leave/LeaveRequestsTable';
 import LeaveTypeSettingsDialog from '@/components/leave/LeaveTypeSettingsDialog';
+import LeaveBalancesAdminDialog from '@/components/leave/LeaveBalancesAdminDialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -19,13 +20,15 @@ import { base44 } from '@/api/base44Client';
 // is waiting, what everyone holds, and the settings behind it.
 export default function Leave() {
   const { t, lang } = useI18n();
-  const { activeBranch, isManager } = useWorkspace();
+  const { activeBranch, isManager, isPlatformAdmin, company } = useWorkspace();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   // A manager opens this screen to answer what is waiting, so the requests show first.
   const [tab, setTab] = useState('approvals');
   const [requestOpen, setRequestOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // The platform owner moves a store onto KWorkMate with the leave balances it already has.
+  const [adminOpen, setAdminOpen] = useState(false);
 
   const load = useCallback(async () => {
     if (!activeBranch) {
@@ -83,6 +86,11 @@ export default function Leave() {
         subtitle={activeBranch ? activeBranch.name : t('leave.subtitle')}
         actions={
           <>
+            {isPlatformAdmin ? (
+              <Button variant="outline" onClick={() => setAdminOpen(true)} disabled={!company}>
+                <Wallet className="mr-2 h-4 w-4" /> {t('leave.adminBalances')}
+              </Button>
+            ) : null}
             {data && data.can_configure ? (
               <Button variant="outline" onClick={() => setSettingsOpen(true)} disabled={allTypes.length === 0}>
                 <Settings2 className="mr-2 h-4 w-4" /> {t('leave.settings')}
@@ -211,6 +219,15 @@ export default function Leave() {
         types={allTypes}
         onSaved={load}
       />
+      {isPlatformAdmin ? (
+        <LeaveBalancesAdminDialog
+          open={adminOpen}
+          onOpenChange={setAdminOpen}
+          companyId={company ? company.id : ''}
+          companyName={company ? company.name : ''}
+          onSaved={load}
+        />
+      ) : null}
     </div>
   );
 }

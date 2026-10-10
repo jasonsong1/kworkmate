@@ -222,7 +222,7 @@ export async function buildDraft(base44, branch, weekStart) {
     if (start === null || end === null || end <= start) continue;
     intervals[shift.employee_email] = [
       ...(intervals[shift.employee_email] || []),
-      { start: absMinutes(date, start), end: absMinutes(date, end) }
+      { start: absMinutes(date, start), end: absMinutes(date, end), date }
     ];
   }
   const draft = [];
@@ -286,7 +286,10 @@ export async function buildDraft(base44, branch, weekStart) {
       for (const iv of intervals[email] || []) {
         const overlaps = newStart < iv.end && iv.start < newEnd;
         const gap = newStart >= iv.end ? newStart - iv.end : iv.start - newEnd;
-        if (overlaps || gap < minRest * 60) {
+        // A day is the unit the store plans in: two shifts on the same day are one split shift,
+        // so the minimum rest protects the gap between one day's work and the next, not the
+        // break inside a day. That is what lets a two-shift day give somebody up to ten shifts.
+        if (overlaps || (iv.date !== date && gap < minRest * 60)) {
           allowed = false;
           break;
         }
@@ -334,7 +337,7 @@ export async function buildDraft(base44, branch, weekStart) {
       noteDay(pick.email, date);
       intervals[pick.email] = [
         ...(intervals[pick.email] || []),
-        { start: absMinutes(date, start), end: absMinutes(date, end) }
+        { start: absMinutes(date, start), end: absMinutes(date, end), date }
       ];
       if (pick.fixed) pinnedPlaced[`${pick.email}|${date}`] = true;
       filled += 1;

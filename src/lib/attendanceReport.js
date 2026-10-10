@@ -51,17 +51,32 @@ function hourInZone(value, state) {
   return Number.isNaN(number) ? null : number;
 }
 
-// A late start, a finish in the small hours or a punch that runs past midnight earns the
-// overnight penalty.
-function isOvernight(row, options) {
+function minutesOfDay(value) {
+  const parts = String(value || '').split(':');
+  const hours = Number(parts[0]);
+  const minutes = Number(parts[1]);
+  if (Number.isNaN(hours) || Number.isNaN(minutes)) return null;
+  return hours * 60 + minutes;
+}
+
+// The penalties the store named itself, each with the clock time it starts at: a punch that
+// begins at or after that time, or one that runs past midnight, earns it. The biggest one wins.
+function penaltyFor(row, options) {
+  const list = Array.isArray(options.penalties) ? options.penalties : [];
+  if (list.length === 0) return null;
   const startHour = hourInZone(row.clock_in_at, options.state);
-  const endHour = hourInZone(row.clock_out_at, options.state);
-  const startsLate = startHour !== null && startHour >= options.overnightFrom;
-  const endsEarly = endHour !== null && endHour < options.overnightUntil;
   const crossesMidnight =
     Boolean(row.clock_out_at) &&
     dayPart(row.clock_out_at, options.state) !== dayPart(row.clock_in_at, options.state);
-  return startsLate || endsEarly || crossesMidnight;
+  let best = null;
+  list.forEach((penalty) => {
+    const from = minutesOfDay(penalty.from_time);
+    const startsIn = startHour !== null && from !== null && startHour * 60 >= from;
+    if (!startsIn && !crossesMidnight) return;
+    const multiplier = Number(penalty.multiplier) || 1;
+    if (!best || multiplier > best.multiplier) best = { name: penalty.name, multiplier };
+  });
+  return best;
 }
 
 // The date worked gives the weekday and the branch state gives the public holidays,
@@ -73,10 +88,9 @@ function payRow(row, options) {
   // The person's own penalties, where the store set them, stand in for the company's.
   const table = (options.overridesByEmail && options.overridesByEmail[email]) || options.multipliers;
   const dayMultiplier = multiplierFor(type.key, table);
-  const overnight = isOvernight(row, options);
-  const nightMultiplier = multiplierFor('overnight', table);
-  // Penalties do not stack: the higher of the two applies.
-  const multiplier = overnight && nightMultiplier > dayMultiplier ? nightMultiplier : dayMultiplier;
+  const penalty = penaltyFor(row, options);
+  // Penalties do not stack: the higher of the day rate and the penalty earned applies.
+  const multiplier = penalty && penalty.multiplier > dayMultiplier ? penalty.multiplier : dayMultiplier;
   const rate = options.rates[email];
   const pay = row.minutes && rate ? (row.minutes / 60) * Number(rate) * multiplier : null;
   const dayLabel =
@@ -85,7 +99,7 @@ function payRow(row, options) {
       : DAY_TYPE_LABEL[type.key] || DAY_TYPE_LABEL.weekday;
   return {
     date,
-    dayType: overnight ? `${dayLabel} · Overnight` : dayLabel,
+    dayType: penalty ? `${dayLabel} · ${penalty.name}` : dayLabel,
     rateText: `×${multiplier}`,
     pay
   };
@@ -98,8 +112,7 @@ export function reportRows(entries, options = {}) {
     overridesByEmail: {},
     rates: {},
     regional: {},
-    overnightFrom: 22,
-    overnightUntil: 6,
+    penalties: [],
     ...options
   };
   return entries.map((row) => {
@@ -131,8 +144,7 @@ export function estimatedPay(entries, options = {}) {
     overridesByEmail: {},
     rates: {},
     regional: {},
-    overnightFrom: 22,
-    overnightUntil: 6,
+    penalties: [],
     ...options
   };
   return entries.reduce((total, row) => {

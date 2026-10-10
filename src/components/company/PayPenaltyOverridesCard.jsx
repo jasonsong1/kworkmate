@@ -14,8 +14,7 @@ const FIELDS = [
   { key: 'weekday', label: 'settings.payWeekday' },
   { key: 'saturday', label: 'settings.paySaturday' },
   { key: 'sunday', label: 'settings.paySunday' },
-  { key: 'public_holiday', label: 'settings.payHoliday' },
-  { key: 'overnight', label: 'settings.payOvernight' }
+  { key: 'public_holiday', label: 'settings.payHoliday' }
 ];
 
 // A person the store pays differently gets a row of their own: these rates stand in for the
@@ -119,7 +118,7 @@ export default function PayPenaltyOverridesCard({ value, onChange, baseRates, di
                     </Button>
                   </div>
 
-                  <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                  <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                     {FIELDS.map((field) => (
                       <div key={field.key}>
                         <Label className="text-xs">{t(field.label)}</Label>

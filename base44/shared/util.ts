@@ -70,3 +70,12 @@ export function escapeHtml(value) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
 }
+
+// A list call answers either an array or a page, and every reader wants the rows.
+export function rowsOf(result: any) {
+  return Array.isArray(result) ? result : (result && result.items) || [];
+}
+
+export function todayIso() {
+  return new Date().toISOString().slice(0, 10);
+}

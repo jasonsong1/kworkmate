@@ -2,54 +2,21 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.52';
 import { resolveCaller } from '../../shared/kwAuth.ts';
 import { holdsManagerPosition, managerPositionLabels } from '../../shared/access.ts';
 import {
-  DEFAULT_LEAVE_TYPES,
   activeTypes,
   availableHours,
   eligibleFor,
   expiresOn,
   grantPeriod,
   grantsFor,
+  leaveTypesFrom,
   round2
 } from '../../shared/leave.ts';
-
-function rowsOf(result: any) {
-  return Array.isArray(result) ? result : (result && result.items) || [];
-}
-
-function todayIso() {
-  return new Date().toISOString().slice(0, 10);
-}
+import { rowsOf, todayIso } from '../../shared/util.ts';
 
 function monthsAgoIso(months: number) {
   const date = new Date();
   date.setUTCMonth(date.getUTCMonth() - months);
   return date.toISOString().slice(0, 10);
-}
-
-function normaliseType(type: any) {
-  return {
-    key: String(type.key || ''),
-    name: type.name || type.key,
-    name_ko: type.name_ko || '',
-    emoji: type.emoji || '',
-    paid: type.paid !== false,
-    accrual_method: type.accrual_method === 'ordinary_hours' ? 'ordinary_hours' : 'none',
-    accrual_rate: Number(type.accrual_rate) || 0,
-    employment_types: Array.isArray(type.employment_types) ? type.employment_types : [],
-    grant_enabled: Boolean(type.grant_enabled),
-    grant_hours: Number(type.grant_hours) || 0,
-    grant_period: type.grant_period === 'monthly' ? 'monthly' : 'yearly',
-    grant_anchor: type.grant_anchor === 'anniversary' ? 'anniversary' : 'calendar_year',
-    grant_employment_types: Array.isArray(type.grant_employment_types) ? type.grant_employment_types : [],
-    expiry_enabled: Boolean(type.expiry_enabled),
-    expiry_months: Number(type.expiry_months) || 12,
-    requires_certificate: Boolean(type.requires_certificate),
-    // From this many hours held, this leave's balance is shown in red.
-    flag_hours: Math.max(0, Number(type.flag_hours) || 0),
-    custom: Boolean(type.custom),
-    active: type.active !== false,
-    order: Number(type.order) || 10
-  };
 }
 
 // The leave balances in force right now: the hours that have accrued from the ordinary hours
@@ -103,7 +70,7 @@ export default async function (req: Request) {
     );
     // Every leave the company has set up, and the ones it is offering right now. A leave
     // switched off keeps its settings and its balances, so it can be switched back on.
-    const allTypes = (stored.length > 0 ? stored : DEFAULT_LEAVE_TYPES).map(normaliseType);
+    const allTypes = leaveTypesFrom(stored);
     const types = activeTypes(allTypes);
 
     if (staff.length === 0) {

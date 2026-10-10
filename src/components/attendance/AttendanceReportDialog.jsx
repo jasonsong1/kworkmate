@@ -15,7 +15,7 @@ import { useI18n } from '@/lib/i18n';
 import { addDaysIso, todayIso } from '@/lib/bh';
 import { downloadCsv, downloadPdf, estimatedPay, reportRows, REPORT_HEADERS } from '@/lib/attendanceReport';
 import { regionalMap, stateFromBranch, stateLabel } from '@/lib/holidays';
-import { payMultipliers } from '@/components/company/PayMultipliersCard';
+import { payMultipliers, payPenalties } from '@/components/company/PayMultipliersCard';
 import { useWorkspace } from '@/lib/WorkspaceContext';
 import { base44 } from '@/api/base44Client';
 
@@ -84,6 +84,7 @@ export default function AttendanceReportDialog({ open, onOpenChange, branch }) {
   const options = {
     state,
     multipliers: payMultipliers(company ? company.pay_multipliers : null),
+    penalties: payPenalties(company ? company.pay_multipliers : null),
     overridesByEmail,
     rates,
     regional

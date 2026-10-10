@@ -5,7 +5,7 @@ import PageHeader from '@/components/PageHeader';
 import PackageCard from '@/components/package/PackageCard';
 import OnboardingDocsCard from '@/components/company/OnboardingDocsCard';
 import OnboardingQuestionsCard from '@/components/company/OnboardingQuestionsCard';
-import PayMultipliersCard, { payMultipliers } from '@/components/company/PayMultipliersCard';
+import PayMultipliersCard, { payMultipliers, paySettings } from '@/components/company/PayMultipliersCard';
 import PayPenaltyOverridesCard from '@/components/company/PayPenaltyOverridesCard';
 import PublicHolidayCard from '@/components/company/PublicHolidayCard';
 import CompanyRolesManager from '@/components/CompanyRolesManager';
@@ -66,7 +66,7 @@ export default function CompanySettings() {
       mini_interview_enabled: company.mini_interview_enabled !== false,
       video_interview_enabled: company.video_interview_enabled !== false,
       screening_criteria: company.screening_criteria || '',
-      pay_multipliers: payMultipliers(company.pay_multipliers),
+      pay_multipliers: paySettings(company.pay_multipliers),
       pay_overrides: Array.isArray(company.pay_overrides) ? company.pay_overrides : [],
       // A grant saved before an area stopped offering create-and-delete is pulled back to
       // what the table now offers, so the screen never shows a level it cannot explain.
@@ -130,9 +130,7 @@ export default function CompanySettings() {
     const payload = {
       ...form,
       ai_top_n: Number(form.ai_top_n) || 10,
-      pay_multipliers: Object.fromEntries(
-        Object.entries(payMultipliers(form.pay_multipliers)).map(([key, value]) => [key, Number(value) || 1])
-      ),
+      pay_multipliers: paySettings(form.pay_multipliers),
       // Each person's own rates are stored whole, so the export never has to guess a missing one.
       pay_overrides: (form.pay_overrides || [])
         .filter((row) => row && row.email)
