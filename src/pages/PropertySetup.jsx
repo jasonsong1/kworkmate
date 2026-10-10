@@ -133,14 +133,21 @@ export default function PropertySetup() {
       MODULES.forEach((module) => {
         const cap = presetAccess[module];
         if (!cap) return;
+        const capScope = cap.scope || 'branch';
         const saved = companyGrant[module];
+        // The company has no answer of its own for this area, so the position's preset is what
+        // the branch starts on and moves from.
+        if (!saved) {
+          merged[module] = { level: cap.level, scope: capScope };
+          return;
+        }
         const cell = normalizeCell(saved);
         // The company already closed this module for the position: the branch cannot reopen it.
-        if (saved && cell.level === 'none') return;
-        const level = cell.level && levelRank(cell.level) <= levelRank(cap.level) ? cell.level : cap.level;
-        const capScope = cap.scope || 'branch';
-        const scope = !cell.scope || scopeRank(cell.scope) <= scopeRank(capScope) ? cell.scope || capScope : capScope;
-        merged[module] = { level, scope };
+        if (cell.level === 'none') return;
+        merged[module] = {
+          level: levelRank(cell.level) <= levelRank(cap.level) ? cell.level : cap.level,
+          scope: !cell.scope || scopeRank(cell.scope) <= scopeRank(capScope) ? cell.scope || capScope : capScope
+        };
       });
       return [role.key, merged];
     })
