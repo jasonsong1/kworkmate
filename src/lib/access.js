@@ -138,6 +138,22 @@ export function clampAccess(access) {
   return out;
 }
 
+// A branch grant is a role → area → cell map, so each role's own cells are what get clamped.
+// The role keys are not areas: reading them as one would throw away everything the role holds.
+export function clampRoleMatrix(matrix) {
+  const out = {};
+  Object.entries(matrix || {}).forEach(([roleKey, cells]) => {
+    const kept = {};
+    MODULES.forEach((module) => {
+      const raw = cells ? cells[module] : undefined;
+      const cell = clampCell(module, raw);
+      if (raw !== undefined && raw !== null && cell.level) kept[module] = { level: cell.level, scope: cell.scope };
+    });
+    out[roleKey] = kept;
+  });
+  return out;
+}
+
 export function scopeOptions(ceiling) {
   return SCOPES.filter((scope) => !ceiling || scopeRank(scope) <= scopeRank(ceiling));
 }

@@ -1,9 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { Loader2, MapPin } from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
 import AccessMatrixEditor from '@/components/access/AccessMatrixEditor';
-import { MODULES, clampAccess, levelRank, normalizeCell, scopeRank } from '@/lib/access';
+import { MODULES, clampRoleMatrix, levelRank, normalizeCell, scopeRank } from '@/lib/access';
 import TradingHoursEditor, { hasOverlappingTradingHours } from '@/components/TradingHoursEditor';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -19,7 +19,6 @@ export default function PropertySetup() {
   const { t } = useI18n();
   const { branches, activeBranch, patchBranch, company, pkg, presets, role, presetKey } = useWorkspace();
   const { toast } = useToast();
-  const navigate = useNavigate();
   const [params] = useSearchParams();
   const branchId = params.get('branch') || (activeBranch && activeBranch.id);
   const branch = branches.find((b) => b.id === branchId) || activeBranch;
@@ -46,8 +45,8 @@ export default function PropertySetup() {
       gps_lng: branch.gps_lng ?? '',
       gps_radius_m: branch.gps_radius_m || 100,
       // A grant saved before an area stopped offering create-and-delete is pulled back to what
-      // the table now offers.
-      role_permissions: clampAccess(branch.role_permissions || {})
+      // the table now offers. The map is read role by role, so a saved answer survives a reload.
+      role_permissions: clampRoleMatrix(branch.role_permissions || {})
     });
   }, [branch]);
 
@@ -92,7 +91,6 @@ export default function PropertySetup() {
       // Keep the shared branch list in step so re-opening settings shows what was just saved.
       patchBranch(branch.id, payload);
       toast({ title: t('property.saved') });
-      navigate('/branches');
     } catch {
       toast({ title: t('property.saveFailed'), variant: 'destructive' });
     } finally {
