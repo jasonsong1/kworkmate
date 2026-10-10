@@ -16,6 +16,10 @@ import {
 // One card per position: only the modules the position's preset opens for it appear, and
 // inside that ceiling the employer sets the level (read / update / write) and, where rows are
 // involved, the data range. Anything wider than the ceiling is never offered.
+//
+// On a branch screen the preset's own level is what every row starts on, so the position's
+// permissions are listed as they stand and the branch can move them down or up inside that
+// range. A row is only written to the branch once it is given an answer of its own.
 export default function AccessMatrixEditor({
   value,
   onChange,
@@ -23,7 +27,7 @@ export default function AccessMatrixEditor({
   roleLabels,
   ceilings = {},
   modules = MODULES,
-  allowInherit = false,
+  presetBaseline = false,
   disabled = false
 }) {
   const { t } = useI18n();
@@ -58,9 +62,8 @@ export default function AccessMatrixEditor({
                 {rows.map((module) => {
                   const cap = ceiling[module];
                   const stored = matrix[role] ? matrix[role][module] : undefined;
-                  const inherited = allowInherit && stored === undefined;
                   const cell = normalizeCell(stored);
-                  const level = inherited ? 'inherit' : cell.level;
+                  const level = stored === undefined && presetBaseline ? cap.level : cell.level;
                   const scope =
                     cell.scope || cap.scope || 'branch';
 
@@ -70,8 +73,7 @@ export default function AccessMatrixEditor({
                       <Select
                         value={level}
                         onValueChange={(next) => {
-                          if (next === 'inherit') setCell(role, module, null);
-                          else setCell(role, module, { level: next, scope });
+                          setCell(role, module, { level: next, scope });
                         }}
                         disabled={disabled}
                       >
@@ -79,7 +81,6 @@ export default function AccessMatrixEditor({
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          {allowInherit && <SelectItem value="inherit">{t('perm.inherit')}</SelectItem>}
                           {moduleLevelOptions(module, cap.level).map((option) => (
                             <SelectItem key={option} value={option}>
                               {t(levelLabelKey(option))}
@@ -88,7 +89,7 @@ export default function AccessMatrixEditor({
                         </SelectContent>
                       </Select>
 
-                      {isScoped(module) && !inherited && level !== 'none' && (
+                      {isScoped(module) && level !== 'none' && (
                         <Select
                           value={scope}
                           onValueChange={(next) => setCell(role, module, { level, scope: next })}

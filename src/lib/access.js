@@ -127,11 +127,13 @@ export function clampCell(module, cell) {
   return next;
 }
 
+// An area the employer closed ("no access") is kept as it stands: it is an answer of its own,
+// not an empty row, so a screen that carries the answer through never hands the area back.
 export function clampAccess(access) {
   const out = {};
   Object.entries(access || {}).forEach(([module, raw]) => {
     const cell = clampCell(module, raw);
-    if (cell.level && cell.level !== 'none') out[module] = { level: cell.level, scope: cell.scope };
+    if (cell.level) out[module] = { level: cell.level, scope: cell.scope };
   });
   return out;
 }

@@ -5,7 +5,6 @@ import PageHeader from '@/components/PageHeader';
 import AccessMatrixEditor from '@/components/access/AccessMatrixEditor';
 import { MODULES, clampAccess, levelRank, normalizeCell, scopeRank } from '@/lib/access';
 import TradingHoursEditor, { hasOverlappingTradingHours } from '@/components/TradingHoursEditor';
-import BranchPayPenaltiesCard from '@/components/company/BranchPayPenaltiesCard';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -18,7 +17,7 @@ import { base44 } from '@/api/base44Client';
 
 export default function PropertySetup() {
   const { t } = useI18n();
-  const { branches, activeBranch, patchBranch, company, pkg, presets } = useWorkspace();
+  const { branches, activeBranch, patchBranch, company, pkg, presets, role, presetKey } = useWorkspace();
   const { toast } = useToast();
   const navigate = useNavigate();
   const [params] = useSearchParams();
@@ -48,9 +47,7 @@ export default function PropertySetup() {
       gps_radius_m: branch.gps_radius_m || 100,
       // A grant saved before an area stopped offering create-and-delete is pulled back to what
       // the table now offers.
-      role_permissions: clampAccess(branch.role_permissions || {}),
-      // The penalties this store pays under its own names, set here by whoever runs the branch.
-      pay_penalties: Array.isArray(branch.pay_penalties) ? branch.pay_penalties : []
+      role_permissions: clampAccess(branch.role_permissions || {})
     });
   }, [branch]);
 
@@ -108,6 +105,9 @@ export default function PropertySetup() {
     return <p className="text-sm text-muted-foreground">{t('common.loading')}</p>;
   }
 
+  // Branch-level permissions are set from the top: the company admin, or the position the
+  // platform presets as the one that runs the company's stores.
+  const canConfigureBranchAccess = role === 'company_admin' || presetKey === 'pro_director';
   const customRoles = (company && company.custom_roles) || [];
   const branchMatrixRoles = customRoles.map((role) => role.key);
   // The platform position preset a company role sits under is shown next to it, so the ceiling
@@ -119,8 +119,8 @@ export default function PropertySetup() {
       return [role.key, presetLabel ? `${role.label} · ${presetLabel}` : role.label];
     })
   );
-  // This branch can only narrow what the company (and the package, and the position preset)
-  // already allows, so only those modules and ceilings are offered.
+  // A branch moves inside what the company (and the package, and the position preset) already
+  // allows, so only those modules appear and every row stops at that ceiling.
   const branchPackageModules = MODULES.filter(
     (module) => !pkg || !pkg.package || (pkg.modules || []).includes(module)
   );
@@ -257,13 +257,13 @@ export default function PropertySetup() {
             </CardContent>
           </Card>
 
-          <BranchPayPenaltiesCard
-            value={form.pay_penalties}
-            onChange={(next) => set('pay_penalties', next)} />
         </div>
       </div>
 
-      {/* Full width so every job title fits on one screen of the permission table. */}
+      {/* Every position's permissions are the ones its platform preset grants, and this branch
+          moves them from there — up or down inside that range. Full width so every job title
+          fits on one screen. */}
+      {canConfigureBranchAccess && (
       <Card className="mt-6">
         <CardHeader>
           <CardTitle className="text-base">{t('perm.branchTitle')}</CardTitle>
@@ -282,11 +282,12 @@ export default function PropertySetup() {
               roleLabels={branchRoleLabels}
               ceilings={branchCeilings}
               modules={branchPackageModules}
-              allowInherit
+              presetBaseline
             />
           )}
         </CardContent>
       </Card>
+      )}
 
       <Button className="mt-6" onClick={save} disabled={saving}>
         {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

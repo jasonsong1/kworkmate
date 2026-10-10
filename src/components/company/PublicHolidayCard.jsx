@@ -31,7 +31,7 @@ function formatDay(dateIso, lang) {
 // off the list when the store does not observe it.
 export default function PublicHolidayCard({ multiplier }) {
   const { t, lang } = useI18n();
-  const { company, branches, role, presetKey, isManager, levelOf, patchCompany } = useWorkspace();
+  const { company, branches, activeBranch, role, presetKey, isManager, levelOf, patchCompany } = useWorkspace();
   const { toast } = useToast();
   const [records, setRecords] = useState([]);
   const today = todayIso();
@@ -70,6 +70,13 @@ export default function PublicHolidayCard({ multiplier }) {
 
   const applied = regionalMap(records, exclusions);
 
+  // The calendar belongs to the branch being looked at: only the region that store trades in is
+  // listed, so a Melbourne store never mixes Sydney dates into its settings.
+  const activeState = stateFromBranch(activeBranch);
+  const shown = groups.some((group) => group.state === activeState)
+    ? groups.filter((group) => group.state === activeState)
+    : groups;
+
   const removeHoliday = async (state, date) => {
     if (!company || !canEdit) return;
     const next = [
@@ -90,7 +97,7 @@ export default function PublicHolidayCard({ multiplier }) {
         <p className="text-sm text-muted-foreground">{t('settings.holidayHint')}</p>
       </CardHeader>
       <CardContent className="space-y-4">
-        {groups.map((group) => (
+        {shown.map((group) => (
           <div key={group.state} className="rounded-lg border px-4 py-3">
             <div className="flex flex-wrap items-center gap-2">
               <MapPin className="h-4 w-4 text-muted-foreground" />

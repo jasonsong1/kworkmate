@@ -8,7 +8,6 @@ import OnboardingQuestionsCard from '@/components/company/OnboardingQuestionsCar
 import PayMultipliersCard, { payMultipliers, paySettings } from '@/components/company/PayMultipliersCard';
 import PublicHolidayCard from '@/components/company/PublicHolidayCard';
 import CompanyRolesManager from '@/components/CompanyRolesManager';
-import AccessMatrixEditor from '@/components/access/AccessMatrixEditor';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -20,7 +19,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { useI18n } from '@/lib/i18n';
 import { useWorkspace } from '@/lib/WorkspaceContext';
 import { videoInterviewAllowed } from '@/lib/packages';
-import { MODULES, clampAccess, grantedModules, levelRank, moduleLabelKey, normalizeCell, scopeRank } from '@/lib/access';
+import { clampAccess, grantedModules, levelRank, moduleLabelKey, normalizeCell, scopeRank } from '@/lib/access';
 import CompanyPicker from '@/components/platform/CompanyPicker';
 import { base44 } from '@/api/base44Client';
 
@@ -39,11 +38,6 @@ export default function CompanySettings() {
   // Saving follows what this person's company settings area allows, not the title on their
   // account: a role the company itself defined can hold it without being the company admin.
   const canSave = role === 'company_admin' || ['update', 'write'].includes(levelOf('settings'));
-  // Only the modules the company's package actually includes are offered here; the rest are
-  // not part of this company and never appear in the table.
-  const packageModules = MODULES.filter(
-    (module) => !pkg || !pkg.package || (pkg.modules || []).includes(module)
-  );
   const { toast } = useToast();
   const [tab, setTab] = useState('company');
   const [form, setForm] = useState(null);
@@ -74,13 +68,6 @@ export default function CompanySettings() {
   }, [company]);
 
   const set = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
-
-  // The ceiling a job title may move inside: the preset its created link points at.
-  const ceilingFor = (roleKey) => {
-    const entry = (form.custom_roles || []).find((item) => item.key === roleKey);
-    const preset = presets.find((item) => item.key === (entry && entry.preset_key));
-    return (preset && preset.access) || {};
-  };
 
   // Anything wider than the linked preset allows is cut back to the ceiling.
   const clampToCeiling = (access, ceiling) => {
@@ -150,11 +137,6 @@ export default function CompanySettings() {
   }
 
   if (!form) return <p className="text-sm text-muted-foreground">{t('common.loading')}</p>;
-
-  const customRoles = form.custom_roles || [];
-  // Only the roles the company itself defined get a permission column.
-  const matrixRoles = customRoles.map((role) => role.key);
-  const roleLabels = Object.fromEntries(customRoles.map((role) => [role.key, role.label]));
 
   const CATEGORIES = [
     { key: 'company', label: t('settings.cat.company') },
@@ -289,25 +271,6 @@ export default function CompanySettings() {
                   presets={presets}
                   disabled={!canSave} />
                 
-              </div>
-              <div>
-                <p className="mb-3 text-xs text-muted-foreground">{t('perm.companyHint')}</p>
-                {matrixRoles.length === 0 ?
-                <p className="rounded-lg border border-dashed px-4 py-6 text-center text-sm text-muted-foreground">
-                    {t('perm.noRoles')}
-                  </p> :
-
-                <AccessMatrixEditor
-                  value={form.role_permissions}
-                  onChange={(next) => set('role_permissions', next)}
-                  roles={matrixRoles}
-                  roleLabels={roleLabels}
-                  ceilings={Object.fromEntries(matrixRoles.map((key) => [key, ceilingFor(key)]))}
-                  modules={packageModules}
-                  disabled={role !== 'company_admin'} />
-
-                }
-                <p className="mt-3 text-xs text-muted-foreground">{t('perm.locked')}</p>
               </div>
             </CardContent>
           </Card>
