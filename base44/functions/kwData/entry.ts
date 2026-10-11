@@ -68,7 +68,10 @@ export default async function (req) {
       if (READ_OPS.includes(op) && op !== 'get') return ok({ items: [], next_cursor: null, has_more: false });
       return forbidden();
     }
-    const patch = (data) => (writes === 'fields' ? pickFields(data, rule.staff_fields) : scopeData(me, rule, data, access));
+    // `existing` is the row a write lands on: an edit keeps the store that row already sits in,
+    // so a save never moves a record into the branch whoever is editing happens to work in.
+    const patch = (data, existing) =>
+      writes === 'fields' ? pickFields(data, rule.staff_fields) : scopeData(me, rule, data, access, existing);
 
     switch (op) {
       case 'list': {
@@ -120,25 +123,32 @@ export default async function (req) {
         const id = String(body.id || '');
         const record = await store.get(id).catch(() => null);
         if (!record || !inScope(record, scope)) return forbidden();
-        return ok(seal(entity, await store.update(id, patch(body.data))));
+        return ok(seal(entity, await store.update(id, patch(body.data, record))));
       }
       case 'bulkUpdate': {
         const records = body.records || [];
         const ids = records.map((record) => String(record.id || '')).filter(Boolean);
+        const fields = rule.branch_field ? ['id', rule.branch_field] : ['id'];
         const allowed = await store
-          .filter({ id: { $in: ids }, ...scope }, { limit: Math.min(ids.length, 500), fields: ['id'] })
+          .filter({ id: { $in: ids }, ...scope }, { limit: Math.min(ids.length, 500), fields })
           .catch(() => []);
-        const allowedIds = new Set((Array.isArray(allowed) ? allowed : allowed.items || []).map((row) => row.id));
-        if (ids.some((id) => !allowedIds.has(id))) return forbidden();
+        const allowedRows = Array.isArray(allowed) ? allowed : allowed.items || [];
+        const held = new Map(allowedRows.map((row) => [row.id, row]));
+        if (ids.some((id) => !held.has(id))) return forbidden();
         return ok(
           seal(
             entity,
-            await store.bulkUpdate(records.map((record) => ({ id: record.id, ...patch(record) })))
+            await store.bulkUpdate(records.map((record) => ({ id: record.id, ...patch(record, held.get(record.id)) })))
           )
         );
       }
       case 'updateMany': {
-        const changes = body.data && body.data.$set ? { $set: patch(body.data.$set) } : patch(body.data);
+        // A bulk change to rows we do not hold one by one: each keeps the store it is already
+        // filed under unless the change names the branch itself.
+        const changes =
+          body.data && body.data.$set
+            ? { $set: patch(body.data.$set, null) }
+            : patch(body.data, null);
         return ok(await store.updateMany(mergeScope(body.query, scope), changes));
       }
       case 'delete': {

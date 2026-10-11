@@ -426,9 +426,15 @@ export function pickFields(data: any, fields: any) {
   return out;
 }
 
-// Every row a person writes is stamped with their own identity and their own branch, whatever
-// the browser sent.
-export function scopeData(me: any, rule: any, data: any, access: any) {
+// Every row a person writes is stamped with their own identity and the store it belongs to,
+// whatever the browser sent.
+//
+// `existing` is the row an edit is being applied to, and the three cases differ on purpose:
+// a new row (undefined) lands in the store the caller works in, an edit (the row) keeps the store
+// that row is already filed under — a save that says nothing about the branch edits an ad, it does
+// not move it to whoever is editing — and an edit of rows we do not hold one by one (null) has no
+// store invented for it at all.
+export function scopeData(me: any, rule: any, data: any, access: any, existing?: any) {
   const out = { ...(data || {}) };
   if (!rule || rule.scope === 'global') return out;
   const scope = scopeOf(rule, access);
@@ -438,8 +444,14 @@ export function scopeData(me: any, rule: any, data: any, access: any) {
   } else {
     out.company_id = me.company_id;
     if (rule.branch_field) {
-      const wanted = clean(out[rule.branch_field]) || me.branch_id || branches[0] || '';
-      out[rule.branch_field] = branches.includes(wanted) ? wanted : me.branch_id || branches[0] || '';
+      const asked = clean(out[rule.branch_field]);
+      const held = existing ? clean(existing[rule.branch_field]) : '';
+      const wanted =
+        (branches.includes(asked) ? asked : '') ||
+        held ||
+        (existing === undefined ? me.branch_id || branches[0] || '' : '');
+      if (wanted) out[rule.branch_field] = wanted;
+      else delete out[rule.branch_field];
     }
   }
   if (scope === 'self' && rule.self_field) out[rule.self_field] = lower(me.email);

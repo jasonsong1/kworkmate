@@ -23,7 +23,7 @@ import { base44 } from '@/api/base44Client';
 export default function JobDetail() {
   const { jobId } = useParams();
   const { t } = useI18n();
-  const { branches, company, pkg, reloadPackage, hasModule } = useWorkspace();
+  const { activeBranch, branches, company, pkg, reloadPackage, hasModule } = useWorkspace();
   const { toast } = useToast();
   const videoAllowed = videoInterviewAllowed(pkg);
   // The step and the questions are their own parts of the package, so an ad on a package
@@ -54,8 +54,12 @@ export default function JobDetail() {
     if (!job) return;
     setSaving(true);
     const openings = Math.max(1, Number(job.openings) || 1);
+    // The store the header shows is the store the ad is filed under, so a save made while that
+    // store is on screen lands there — never in the branch the account itself was set up in.
+    const target = activeBranch || branch;
     try {
       await base44.entities.Job.update(job.id, {
+        ...(target ? { branch_id: target.id } : {}),
         title: job.title,
         position: job.position,
         employment_type: job.employment_type,
@@ -85,8 +89,11 @@ export default function JobDetail() {
       // The ad is read back before anything is reported, so a save that did not land — a position
       // without write access, say — is never announced as one that did.
       const saved = await base44.entities.Job.get(job.id).catch(() => null);
-      if (!saved) throw new Error(t('jobs.saveFailed'));
-      patch({ openings });
+      // A save is only reported once the ad has been read back in the store on screen: one that
+      // came to rest in another branch is a save that did not happen where the manager was working.
+      if (!saved || (target && saved.branch_id !== target.id)) throw new Error(t('jobs.saveFailed'));
+      patch({ openings, branch_id: saved.branch_id });
+      if (target) setBranch(target);
       toast({ title: 'Job ad saved' });
     } catch (error) {
       toast({ title: error.message || t('jobs.saveFailed'), variant: 'destructive' });
