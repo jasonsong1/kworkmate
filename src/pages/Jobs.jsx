@@ -24,8 +24,15 @@ const statusTone = {
 
 export default function Jobs() {
   const { t } = useI18n();
-  const { company, activeBranch, pkg, reloadPackage } = useWorkspace();
-  const canCreate = canCreateJob(pkg);
+  const { company, activeBranch, branches, access, pkg, reloadPackage, levelOf, scopeOf } = useWorkspace();
+  // A new ad is a create, and the position's own preset is what allows it: a position that may
+  // only view or edit the ads it already has is never handed the button.
+  const mayCreate = access ? levelOf('jobs') === 'write' : true;
+  // A position whose preset reaches the ads across the company works in every store, so the list
+  // is not pinned to the one branch the header happens to show.
+  const everyStore = access ? scopeOf('jobs') === 'company' : false;
+  const limitReached = !canCreateJob(pkg);
+  const canCreate = !limitReached && mayCreate;
   const { toast } = useToast();
   const navigate = useNavigate();
   const roleOptions = (company && company.custom_roles) || [];
@@ -44,11 +51,12 @@ export default function Jobs() {
     }
     setLoading(true);
     try {
+      const query = everyStore ? { company_id: activeBranch.company_id } : { branch_id: activeBranch.id };
       const [list, grouped] = await Promise.all([
         base44.entities.Job
-          .filter({ branch_id: activeBranch.id }, { sort: '-created_date', limit: 100 })
+          .filter(query, { sort: '-created_date', limit: 100 })
           .then((page) => page.items || []),
-        base44.entities.Applicant.aggregate({ query: { branch_id: activeBranch.id }, groupBy: 'job_id' }).catch(() => ({ rows: [] }))
+        base44.entities.Applicant.aggregate({ query, groupBy: 'job_id' }).catch(() => ({ rows: [] }))
       ]);
       setJobs(list);
       const map = {};
@@ -62,11 +70,16 @@ export default function Jobs() {
       // A screen that could not read the ads still stops loading and says so.
       setLoading(false);
     }
-  }, [activeBranch]);
+  }, [activeBranch, everyStore]);
 
   useEffect(() => {
     load();
   }, [load]);
+
+  const branchName = (id) => {
+    const found = branches.find((branch) => branch.id === id);
+    return found ? found.name : '';
+  };
 
   const create = async () => {
     if (!form.title.trim() || !activeBranch) return;
@@ -87,16 +100,19 @@ export default function Jobs() {
         auto_reject_email: company ? company.auto_reject_email !== false : true,
         mini_interview_enabled: company ? company.mini_interview_enabled !== false : true,
         video_interview_enabled: company ? company.video_interview_enabled !== false : false,
-        contact_email: company ? company.contact_email : '',
         brand_color: activeBranch.brand_color || '#4338ca',
         logo_url: activeBranch.logo_url || '',
         top_n_cycle: 1
       });
+      // The ad is read back before anything is reported, so a save that did not land is never
+      // announced as one that did.
+      const saved = job && job.id ? await base44.entities.Job.get(job.id).catch(() => null) : null;
+      if (!saved) throw new Error(t('jobs.createFailed'));
       setOpen(false);
       setForm({ title: '', position: '', employment_type: 'casual', hourly_rate: '' });
       toast({ title: 'Job ad created' });
       await load();
-      navigate(`/jobs/${job.id}`);
+      navigate(`/jobs/${saved.id}`);
     } catch (error) {
       // The dialog stays open with a reason instead of a button that turns forever.
       toast({ title: error.message || 'The job ad could not be created', variant: 'destructive' });
@@ -117,13 +133,22 @@ export default function Jobs() {
         }
       />
 
-      {!canCreate && (
+      {limitReached && (
         <Card className="mb-4 border-amber-200 bg-amber-50">
           <CardContent className="p-4 text-sm">
             <p className="font-semibold">{t('pkg.limitTitle')}</p>
             <p className="mt-1 text-muted-foreground">
               {pkg && pkg.job_lock ? t('pkg.jobLockHint') : t('pkg.limitBody')}
             </p>
+          </CardContent>
+        </Card>
+      )}
+
+      {!limitReached && !mayCreate && (
+        <Card className="mb-4">
+          <CardContent className="p-4 text-sm">
+            <p className="font-semibold">{t('jobs.noCreate')}</p>
+            <p className="mt-1 text-muted-foreground">{t('jobs.noCreateHint')}</p>
           </CardContent>
         </Card>
       )}
@@ -146,7 +171,9 @@ export default function Jobs() {
                   <div className="min-w-0">
                     <p className="truncate font-semibold">{job.title}</p>
                     <p className="text-xs text-muted-foreground">
-                      {job.position || '—'} · {job.employment_type || 'casual'}
+                      {[job.position || '—', job.employment_type || 'casual', everyStore ? branchName(job.branch_id) : '']
+                        .filter(Boolean)
+                        .join(' · ')}
                     </p>
                   </div>
                   <Badge className={statusTone[job.status] || statusTone.draft}>

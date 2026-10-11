@@ -54,37 +54,45 @@ export default function JobDetail() {
     if (!job) return;
     setSaving(true);
     const openings = Math.max(1, Number(job.openings) || 1);
-    await base44.entities.Job.update(job.id, {
-      title: job.title,
-      position: job.position,
-      employment_type: job.employment_type,
-      hourly_rate: Number(job.hourly_rate) || 0,
-      openings,
-      description: job.description || '',
-      contact_email: job.contact_email || '',
-      screening_min_score: Number(job.screening_min_score) || 60,
-      auto_reject_email: job.auto_reject_email !== false,
-      mini_interview_enabled: job.mini_interview_enabled !== false,
-      video_interview_enabled: job.video_interview_enabled !== false,
-      screening_criteria: job.screening_criteria || '',
-      required_questions: visibleRequiredQuestions(job.required_questions),
-      custom_questions: job.custom_questions || [],
-      brand_color: job.brand_color,
-      logo_url: job.logo_url || '',
-      poster_note: job.poster_note || ''
-    });
-    // A closed ad that was closed by its own hiring opens again as soon as there is room for
-    // another person.
-    if (job.status === 'closed') {
-      const hired = await base44.entities.Applicant.count({ job_id: job.id, status: 'hired' });
-      if (hired < openings) {
-        await base44.entities.Job.update(job.id, { status: 'open' });
-        patch({ status: 'open' });
+    try {
+      await base44.entities.Job.update(job.id, {
+        title: job.title,
+        position: job.position,
+        employment_type: job.employment_type,
+        hourly_rate: Number(job.hourly_rate) || 0,
+        openings,
+        description: job.description || '',
+        screening_min_score: Number(job.screening_min_score) || 60,
+        auto_reject_email: job.auto_reject_email !== false,
+        mini_interview_enabled: job.mini_interview_enabled !== false,
+        video_interview_enabled: job.video_interview_enabled !== false,
+        screening_criteria: job.screening_criteria || '',
+        required_questions: visibleRequiredQuestions(job.required_questions),
+        custom_questions: job.custom_questions || [],
+        brand_color: job.brand_color,
+        logo_url: job.logo_url || '',
+        poster_note: job.poster_note || ''
+      });
+      // A closed ad that was closed by its own hiring opens again as soon as there is room for
+      // another person.
+      if (job.status === 'closed') {
+        const hired = await base44.entities.Applicant.count({ job_id: job.id, status: 'hired' });
+        if (hired < openings) {
+          await base44.entities.Job.update(job.id, { status: 'open' });
+          patch({ status: 'open' });
+        }
       }
+      // The ad is read back before anything is reported, so a save that did not land — a position
+      // without write access, say — is never announced as one that did.
+      const saved = await base44.entities.Job.get(job.id).catch(() => null);
+      if (!saved) throw new Error(t('jobs.saveFailed'));
+      patch({ openings });
+      toast({ title: 'Job ad saved' });
+    } catch (error) {
+      toast({ title: error.message || t('jobs.saveFailed'), variant: 'destructive' });
+    } finally {
+      setSaving(false);
     }
-    patch({ openings });
-    setSaving(false);
-    toast({ title: 'Job ad saved' });
   };
 
   const toggleStatus = async () => {
@@ -205,10 +213,6 @@ export default function JobDetail() {
                       ))}
                     </SelectContent>
                   </Select>
-                </div>
-                <div>
-                  <Label>Notification email</Label>
-                  <Input value={job.contact_email || ''} onChange={(e) => patch({ contact_email: e.target.value })} />
                 </div>
                 <div className="sm:col-span-2">
                   <Label>Description</Label>

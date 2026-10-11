@@ -87,9 +87,6 @@
       "type": "boolean",
       "default": false
     },
-    "contact_email": {
-      "type": "string"
-    },
     "top_n_cycle": {
       "type": "number",
       "default": 1

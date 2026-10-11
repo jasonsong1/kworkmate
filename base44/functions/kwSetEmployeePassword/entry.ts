@@ -28,7 +28,7 @@ async function mayManage(base44, me, profile) {
   if (!profile.company_id || me.company_id !== profile.company_id) return false;
   if (clean(me.app_role) === 'company_admin') return true;
   const cell = (await accessFor(base44, me, true)).employees;
-  if (!cell || cell.level === 'read') return false;
+  if (!cell || cell.level === 'none' || cell.level === 'read') return false;
   if (cell.scope === 'company') return true;
   return (me.branch_ids || []).includes(profile.branch_id);
 }

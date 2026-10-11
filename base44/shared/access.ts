@@ -224,8 +224,11 @@ export function resolveAccess({ packageModules, preset, companyGrant, branchGran
     const companyCell = normalizeCell(companyGrant && companyGrant[module]);
     const branchCell = normalizeCell(branchGrant && branchGrant[module]);
     const cell = resolveCell(ceiling, companyCell, branchCell);
-    if (!cell.level || cell.level === 'none') return;
-    access[module] = cell;
+    if (!cell.level) return;
+    // An area the employer closed for a position is carried as that answer of its own rather
+    // than dropped: a screen hides it, and a query made on this person's behalf is refused
+    // instead of quietly falling back to their own rows.
+    access[module] = cell.level === 'none' ? { level: 'none', scope: cell.scope || DEFAULT_SCOPE } : cell;
   });
   // The dashboard is a read-only home for everyone, whatever package or position they hold,
   // so it never appears in the permission tables and cannot be widened or narrowed.
@@ -334,4 +337,17 @@ export function resolvePresetKey({ roleKey, customRoles, isCompanyAdmin, positio
   const role = (customRoles || []).find((item) => item && item.key === roleKey);
   if (role && role.preset_key) return role.preset_key;
   return ROLE_PRESET[roleKey] || DEFAULT_PRESET_KEY;
+}
+
+// The key a grant is saved under. The employer keeps their permission tables by the positions
+// they created, so a grant is found through the position on the person's own record — a grant
+// narrowed for "스타프" belongs to exactly the people who hold it, whatever the role key the
+// account itself carries. With no position on record the account's own role key is the answer.
+export function resolveRoleKey({ roleKey, customRoles, positions }: any) {
+  const wanted = (positions || []).filter(Boolean).map(labelKey);
+  if (wanted.length === 0) return roleKey;
+  const linked = (customRoles || []).find(
+    (role: any) => role && role.key && wanted.includes(labelKey(role.label))
+  );
+  return linked ? linked.key : roleKey;
 }

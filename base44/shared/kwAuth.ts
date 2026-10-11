@@ -11,7 +11,8 @@ import {
   presetFor,
   primaryPositionOf,
   resolveAccess,
-  resolvePresetKey
+  resolvePresetKey,
+  resolveRoleKey
 } from './access.ts';
 import { ALL_MODULES, applyModuleOverrides, loadModuleOverrides, packageState } from './packages.ts';
 import { companyBranchIds } from './companies.ts';
@@ -318,20 +319,23 @@ export async function accessFor(base44: any, me: any, everyModule = false) {
   const stored = rowsOf(await base44.asServiceRole.entities.PositionPreset.list().catch(() => []));
   const presets = mergePresets(stored);
   const customRoles = company && Array.isArray(company.custom_roles) ? company.custom_roles : [];
-  let presetKey = resolvePresetKey({ roleKey, customRoles, isCompanyAdmin });
-  // The position an employer set as the person's own carries the preset the company linked to it,
-  // so the screens and the rows they may touch agree: the main position decides, never the
-  // secondary one they can also cover shifts in.
+  // The position an employer set as the person's own carries the preset the company linked to it
+  // and is what their grant is saved under, so the screens and the rows they may touch agree:
+  // the main position decides, never the secondary one they can also cover shifts in.
+  let person = null;
   if (!isAdmin && !isCompanyAdmin) {
-    const person = rowsOf(
+    person = rowsOf(
       await base44.asServiceRole.entities.EmployeeProfile.filter(
         { user_email: me.email },
         { limit: 1 }
       ).catch(() => [])
     )[0];
-    presetKey = resolvePresetKey({ roleKey, customRoles, isCompanyAdmin, positions: primaryPositionOf(person) });
   }
+  const positions = primaryPositionOf(person);
+  const presetKey = resolvePresetKey({ roleKey, customRoles, isCompanyAdmin, positions });
   const preset = presetFor(presetKey, presets);
+  const grantKey =
+    isAdmin || isCompanyAdmin ? roleKey : resolveRoleKey({ roleKey, customRoles, positions });
   const branchId = clean(me && me.branch_id);
   const branch = branchId
     ? await base44.asServiceRole.entities.Branch.get(branchId).catch(() => null)
@@ -344,8 +348,8 @@ export async function accessFor(base44: any, me: any, everyModule = false) {
   return resolveAccess({
     packageModules: isAdmin || everyModule ? ALL_MODULES : modules,
     preset,
-    companyGrant: company && company.role_permissions ? company.role_permissions[roleKey] : null,
-    branchGrant: branch && branch.role_permissions ? branch.role_permissions[roleKey] : null,
+    companyGrant: company && company.role_permissions ? company.role_permissions[grantKey] : null,
+    branchGrant: branch && branch.role_permissions ? branch.role_permissions[grantKey] : null,
     isCompanyAdmin
   });
 }
@@ -364,6 +368,9 @@ function scopeOf(rule: any, access: any) {
     if (rule.self_field) return 'self';
     return rule.context ? 'context' : 'none';
   }
+  // The employer closed this area for the position: not one row of it is theirs to reach, not
+  // even the rows carrying their own name.
+  if (cell.level === 'none') return 'none';
   const scope = cell.scope || 'company';
   // An area whose rows belong to one person each: a read grant still only opens their own.
   if (scope === 'self' && !rule.self_field) return 'context';

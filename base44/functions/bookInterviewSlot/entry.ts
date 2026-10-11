@@ -128,9 +128,7 @@ export default async function (req) {
     });
     await sendEmail(base44, { to: applicant.email, subject: mail.subject, html: mail.html, attachments });
 
-    const recipients = [
-      ...new Set([...(branch && branch.manager_emails) || [], (job && job.contact_email) || ''].filter(Boolean))
-    ].slice(0, 3);
+    const recipients = [...new Set((branch && branch.manager_emails) || [])].filter(Boolean).slice(0, 3);
 
     if (previous) {
       // A change is worth the same email to the team plus a bell for the store, so the news

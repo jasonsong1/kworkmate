@@ -9,7 +9,14 @@ import {
   resolveLimit,
   today
 } from '../../shared/packages.ts';
-import { mergePresets, presetFor, primaryPositionOf, resolveAccess, resolvePresetKey } from '../../shared/access.ts';
+import {
+  mergePresets,
+  presetFor,
+  primaryPositionOf,
+  resolveAccess,
+  resolvePresetKey,
+  resolveRoleKey
+} from '../../shared/access.ts';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -102,13 +109,14 @@ export default async function (req) {
             { limit: 1 }
           ).catch(() => [])
         )[0];
-    const presetKey = resolvePresetKey({
-      roleKey,
-      customRoles,
-      isCompanyAdmin,
-      positions: primaryPositionOf(person)
-    });
+    const positions = primaryPositionOf(person);
+    const presetKey = resolvePresetKey({ roleKey, customRoles, isCompanyAdmin, positions });
     const preset = presetFor(presetKey, presets);
+    // The employer keeps their permission tables by the positions they created, so the grant is
+    // found through the position on the person's own record — the same key the screens and the
+    // server's own scope checks read.
+    const grantKey =
+      isSuperAdmin || isCompanyAdmin ? roleKey : resolveRoleKey({ roleKey, customRoles, positions });
 
     // The branch the workspace is working in narrows the company grant further.
     const branchId = String(body.branch_id || me.branch_id || '');
@@ -124,8 +132,8 @@ export default async function (req) {
     const access = resolveAccess({
       packageModules: isSuperAdmin ? ALL_MODULES : state.modules,
       preset,
-      companyGrant: company.role_permissions && company.role_permissions[roleKey],
-      branchGrant: branch && branch.role_permissions && branch.role_permissions[roleKey],
+      companyGrant: company.role_permissions && company.role_permissions[grantKey],
+      branchGrant: branch && branch.role_permissions && branch.role_permissions[grantKey],
       isCompanyAdmin
     });
 

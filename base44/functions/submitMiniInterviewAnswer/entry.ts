@@ -86,9 +86,9 @@ export default async function (req: Request) {
     });
 
     if (last) {
-      const recipients = [
-        ...new Set([...(((branch && branch.manager_emails) || []) as string[]), job && job.contact_email].filter(Boolean))
-      ].slice(0, 3) as string[];
+      const recipients = [...new Set(((branch && branch.manager_emails) || []) as string[])]
+        .filter(Boolean)
+        .slice(0, 3) as string[];
       for (const to of recipients) {
         await sendEmail(base44, {
           to,

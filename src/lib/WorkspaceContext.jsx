@@ -197,7 +197,9 @@ export function WorkspaceProvider({ children }) {
   const access = permissions.access;
 
   // With no answer from the server nothing is hidden — the back office says so and offers a retry.
-  const hasModule = (module) => (access ? Boolean(access[module]) : true);
+  // An area the employer closed for this person carries "no access" as its own answer, so it is
+  // hidden and its address does not open it.
+  const hasModule = (module) => (access ? Boolean(access[module] && access[module].level !== 'none') : true);
   const levelOf = (module) => (access && access[module] ? access[module].level : 'none');
   const scopeOf = (module) => (access && access[module] ? access[module].scope : '');
   const feature = (name) =>
