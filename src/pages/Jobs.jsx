@@ -24,13 +24,10 @@ const statusTone = {
 
 export default function Jobs() {
   const { t } = useI18n();
-  const { company, activeBranch, branches, access, pkg, reloadPackage, levelOf, scopeOf } = useWorkspace();
+  const { company, activeBranch, access, pkg, reloadPackage, levelOf } = useWorkspace();
   // A new ad is a create, and the position's own preset is what allows it: a position that may
   // only view or edit the ads it already has is never handed the button.
   const mayCreate = access ? levelOf('jobs') === 'write' : true;
-  // A position whose preset reaches the ads across the company works in every store, so the list
-  // is not pinned to the one branch the header happens to show.
-  const everyStore = access ? scopeOf('jobs') === 'company' : false;
   const limitReached = !canCreateJob(pkg);
   const canCreate = !limitReached && mayCreate;
   const { toast } = useToast();
@@ -51,7 +48,9 @@ export default function Jobs() {
     }
     setLoading(true);
     try {
-      const query = everyStore ? { company_id: activeBranch.company_id } : { branch_id: activeBranch.id };
+      // An ad belongs to the store it was posted in: this screen works in the branch the header
+      // shows, whatever reach the position's preset gives it elsewhere.
+      const query = { branch_id: activeBranch.id };
       const [list, grouped] = await Promise.all([
         base44.entities.Job
           .filter(query, { sort: '-created_date', limit: 100 })
@@ -70,16 +69,11 @@ export default function Jobs() {
       // A screen that could not read the ads still stops loading and says so.
       setLoading(false);
     }
-  }, [activeBranch, everyStore]);
+  }, [activeBranch]);
 
   useEffect(() => {
     load();
   }, [load]);
-
-  const branchName = (id) => {
-    const found = branches.find((branch) => branch.id === id);
-    return found ? found.name : '';
-  };
 
   const create = async () => {
     if (!form.title.trim() || !activeBranch) return;
@@ -171,9 +165,7 @@ export default function Jobs() {
                   <div className="min-w-0">
                     <p className="truncate font-semibold">{job.title}</p>
                     <p className="text-xs text-muted-foreground">
-                      {[job.position || '—', job.employment_type || 'casual', everyStore ? branchName(job.branch_id) : '']
-                        .filter(Boolean)
-                        .join(' · ')}
+                      {[job.position || '—', job.employment_type || 'casual'].filter(Boolean).join(' · ')}
                     </p>
                   </div>
                   <Badge className={statusTone[job.status] || statusTone.draft}>
