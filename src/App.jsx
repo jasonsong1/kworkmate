@@ -7,6 +7,7 @@ import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 import ScrollToTop from './components/ScrollToTop';
 import ProtectedRoute from '@/components/ProtectedRoute';
+import FirstVisit from '@/components/FirstVisit';
 import BackofficeLayout from '@/components/BackofficeLayout';
 import { LanguageProvider } from '@/lib/i18n';
 // Add page imports here
@@ -41,10 +42,12 @@ import QrDesign from '@/pages/QrDesign';
 import PlatformAdmin from '@/pages/PlatformAdmin';
 import Kiosk from '@/pages/Kiosk';
 import StaffHome from '@/pages/StaffHome';
+import Welcome from '@/pages/Welcome';
+import Demo from '@/pages/Demo';
 
 // Paths that render for a visitor who is not signed in: the applicant and onboarding surfaces,
 // plus this app's own sign-in pages, which must never be swapped for a platform redirect.
-const PUBLIC_PATHS = ['/apply/', '/interview/', '/onboarding/', '/mini-interview/', '/video-interview/', '/kiosk/', '/login', '/forgot-password', '/reset-password', '/password-reset'];
+const PUBLIC_PATHS = ['/apply/', '/interview/', '/onboarding/', '/mini-interview/', '/video-interview/', '/kiosk/', '/welcome', '/demo', '/login', '/forgot-password', '/reset-password', '/password-reset'];
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
@@ -81,6 +84,10 @@ const AuthenticatedApp = () => {
       <Route path="/video-interview/:token" element={<VideoInterview />} />
       <Route path="/kiosk/:token" element={<Kiosk />} />
 
+      {/* Public first screen and the sample demo behind it */}
+      <Route path="/welcome" element={<Welcome />} />
+      <Route path="/demo" element={<Demo />} />
+
       {/* Authentication */}
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
@@ -89,7 +96,7 @@ const AuthenticatedApp = () => {
       <Route path="/password-reset" element={<PasswordReset />} />
 
       {/* Back office */}
-      <Route element={<ProtectedRoute unauthenticatedElement={<Navigate to="/login" replace />} />}>
+      <Route element={<ProtectedRoute unauthenticatedElement={<FirstVisit />} />}>
         <Route element={<BackofficeLayout />}>
           <Route path="/" element={<Home />} />
           {/* The same personal space the crew lands on, opened by a manager from their own menu. */}
