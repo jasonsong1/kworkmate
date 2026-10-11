@@ -190,7 +190,8 @@ export default function Applicants() {
 
   const actionButtons = (applicant) =>
   <>
-      {miniAllowed && job && job.mini_interview_enabled !== false && applicant.status === 'top10' &&
+      {miniAllowed && job && job.mini_interview_enabled !== false &&
+    !['rejected', 'hired'].includes(applicant.status) &&
     <Button size="sm" variant="secondary" disabled={busyId === applicant.id} onClick={() => act(applicant, 'mini')}>
           {applicant.mini_interview_status === 'sent' ?
       <Check className="mr-1.5 h-3.5 w-3.5" /> :
@@ -204,7 +205,7 @@ export default function Applicants() {
     job &&
     job.video_interview_enabled !== false && (
     !company || company.video_interview_enabled !== false) &&
-    ['top10', 'mini_interview'].includes(applicant.status) &&
+    !['rejected', 'hired'].includes(applicant.status) &&
     applicant.video_interview_status !== 'completed' &&
     <Button size="sm" variant="secondary" disabled={busyId === applicant.id} onClick={() => act(applicant, 'video')}>
             {applicant.video_interview_status === 'sent' ?
@@ -217,7 +218,7 @@ export default function Applicants() {
       t('applicants.videoInterview')}
           </Button>
     }
-      {['top10', 'mini_interview', 'final_interview'].includes(applicant.status) &&
+      {!['rejected', 'hired'].includes(applicant.status) &&
     <Button size="sm" disabled={busyId === applicant.id} onClick={() => act(applicant, 'invite')}>
           <Sparkles className="mr-1.5 h-3.5 w-3.5" /> {t('applicants.invite')}
         </Button>
