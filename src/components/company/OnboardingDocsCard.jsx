@@ -6,25 +6,21 @@ import { useToast } from '@/components/ui/use-toast';
 import { useI18n } from '@/lib/i18n';
 import { useWorkspace } from '@/lib/WorkspaceContext';
 import { formatBytes } from '@/lib/bh';
-import { saveCompanySettings } from '@/lib/companySettings';
+import { canSaveSettings, saveCompanySettings } from '@/lib/companySettings';
 import { base44 } from '@/api/base44Client';
 
 // The documents every new hire receives: uploaded once here, then attached to the
 // onboarding email when someone is hired.
 export default function OnboardingDocsCard() {
   const { t } = useI18n();
-  const { company, role, presetKey, isManager, levelOf, reload } = useWorkspace();
+  const { company, isCompanyAdmin, access, levelOf, reload } = useWorkspace();
   const { toast } = useToast();
   const inputRef = useRef(null);
   const [busy, setBusy] = useState(false);
 
   const docs = (company && company.onboarding_docs) || [];
-  // The store's manager keeps these documents too, not only the company admin.
-  const canEdit =
-    role === 'company_admin' ||
-    isManager ||
-    ['manager', 'supervisor_manager'].includes(presetKey) ||
-    ['update', 'write'].includes(levelOf('settings'));
+  // The same rule the server applies to this save, so an upload offered here is never refused.
+  const canEdit = canSaveSettings({ isCompanyAdmin, access, levelOf });
 
   const save = async (next) => {
     await saveCompanySettings(company.id, { onboarding_docs: next });

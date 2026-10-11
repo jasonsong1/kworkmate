@@ -11,7 +11,7 @@ import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/components/ui/use-toast';
 import { useI18n } from '@/lib/i18n';
 import { useWorkspace } from '@/lib/WorkspaceContext';
-import { checklistFor, fieldVisibilityOf } from '@/lib/onboardingDocs';
+import { checklistFor } from '@/lib/onboardingDocs';
 import { kwSessionAction } from '@/lib/kwAuthClient';
 import { base44 } from '@/api/base44Client';
 
@@ -55,7 +55,9 @@ export default function StaffOnboardingCard() {
 
   if (!profile || !form) return null;
 
-  const visible = fieldVisibilityOf(company);
+  // Every detail stays on the card: what the employer collects is what their onboarding questions
+  // ask for, and an item they never ask about is simply left blank.
+  const visible = { address: true, date_of_birth: true, emergency_contact: true, tax: true, super: true, bank: true };
   const checklist = checklistFor(profile, company, lang);
   const percent = checklist.requiredTotal === 0 ? 100 : (checklist.requiredDone / checklist.requiredTotal) * 100;
   const set = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));

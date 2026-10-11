@@ -1,17 +1,7 @@
-// The onboarding paperwork: which documents a new hire hands in, which personal details the
-// employer asks for, and how far along one person is. The employer's own list is stored on the
-// company record; this module holds the standard set it starts from and the rules that read both
-// the list and one employee's record back into a status.
-
-// The personal details an employer may ask for, each one switchable on the company settings.
-export const ONBOARDING_FIELD_KEYS = [
-  'address',
-  'date_of_birth',
-  'emergency_contact',
-  'tax',
-  'super',
-  'bank'
-];
+// The onboarding paperwork: which documents a new hire hands in, which details the employer asks
+// for on their own question form, and how far along one person is. The employer's own list is
+// stored on the company record; this module holds the standard set it starts from and the rules
+// that read both the list and one employee's record back into a status.
 
 export const DEFAULT_DOC_TYPES = [
   { key: 'id', label: '신분증 (ID)', label_en: 'Photo ID (passport or licence)', required: true },
@@ -41,14 +31,17 @@ export function docTypesOf(company) {
   return list.filter((type) => type && type.key && (type.label || type.label_en));
 }
 
-// Every item is asked for unless the employer switched it off.
-export function fieldVisibilityOf(company) {
-  const raw = (company && company.onboarding_field_visibility) || {};
-  const out = {};
-  ONBOARDING_FIELD_KEYS.forEach((key) => {
-    out[key] = raw[key] !== false;
-  });
-  return out;
+// What the settings screen writes back: a named row is a document, an unnamed one is dropped.
+export function cleanDocTypes(types) {
+  return (types || [])
+    .filter((type) => String((type && type.label) || '').trim())
+    .map((type) => ({
+      key: type.key,
+      label: String(type.label).trim(),
+      label_en: String(type.label_en || '').trim(),
+      kind: type.kind === 'info' ? 'info' : 'file',
+      required: type.required !== false
+    }));
 }
 
 export function docTypeLabel(type, lang) {
@@ -71,37 +64,85 @@ export function infoFilled(profile, key) {
   return false;
 }
 
-// An item the employer is not asking about at all counts as settled: nobody can be left short of
-// completion by a question that is never put to them.
-function infoOff(type, visible) {
-  if (type.key === 'personal') return !visible.address && !visible.date_of_birth && !visible.emergency_contact;
-  if (type.key === 'bank') return !visible.bank;
-  return false;
-}
-
-// A document filed under its type settles that type. An older record filed a contract as
-// "contract" before types existed, so that shape still counts.
-function fileFor(docs, key) {
-  return (
-    docs.find((doc) => doc && doc.doc_type === key) ||
-    (key === 'contract' ? docs.find((doc) => doc && doc.type === 'contract') : null) ||
-    null
+// The employer's own questions, in the order they are asked. A question switched out of the vault
+// is still put to the employee; it just does not appear in the document vault.
+export function questionsOf(company) {
+  return ((company && company.onboarding_questions) || []).filter(
+    (question) => question && String(question.label || '').trim() && question.visible !== false
   );
 }
 
+// The answers given on the onboarding form, read as the employer's own questions with what was
+// answered: the answer itself, then the details a follow-up asked for.
+export function answerRows(profile, company, t) {
+  const stored = Array.isArray(profile && profile.onboarding_answers) ? profile.onboarding_answers : [];
+  return questionsOf(company).map((question) => {
+    const given = stored.find((entry) => entry && entry.id === question.id) || {};
+    const raw = String((given.answer !== undefined ? given.answer : question.answer) || '').trim();
+    const answer =
+      question.type === 'yes_no' && raw ? t(raw === 'yes' ? 'onboardingQ.yes' : 'onboardingQ.no') : raw;
+    const details = Object.entries(given.follow_up || {})
+      .map(([field, value]) => [field, String(value || '').trim()])
+      .filter(([, value]) => value);
+    return { id: question.id, label: String(question.label).trim(), answer, details };
+  });
+}
+
+// The details kept on the record itself, for a company whose own form asks no questions: the same
+// rows the profile screen shows.
+export function fieldRows(profile, t) {
+  if (!profile) return [];
+  return [
+    [t('ob.field.address'), profile.address],
+    [t('ob.field.date_of_birth'), profile.date_of_birth],
+    [t('ob.emergencyName'), profile.emergency_contact_name],
+    [t('ob.emergencyPhone'), profile.emergency_contact_phone],
+    [t('ob.tfn'), profile.tfn_pending ? t('ob.tfnPending') : profile.tfn_number],
+    [t('ob.superFund'), profile.super_fund_name],
+    [t('ob.superUsi'), profile.super_usi],
+    [t('ob.superMember'), profile.super_member_number],
+    [t('ob.bankBsb'), profile.bank_bsb],
+    [t('ob.bankAccount'), profile.bank_account_number],
+    [t('ob.bankHolder'), profile.bank_account_name]
+  ];
+}
+
+// A file counts for an item when it was filed under that type, when the item's own name appears in
+// the file's name, or — since the onboarding form files an attachment beside the question that
+// asked for it — when it is simply one of the employee's own uploads no other item has claimed.
+// The employer names what they want before the employee uploads, so nothing depends on a file name.
+function fileFor(docs, type, used) {
+  const labels = [type.label, type.label_en, type.key]
+    .map((value) => String(value || '').trim().toLowerCase())
+    .filter(Boolean);
+  const free = (doc) => doc && !used.has(doc);
+  const typed = docs.find(
+    (doc) => free(doc) && (doc.doc_type === type.key || doc.type === type.key)
+  );
+  if (typed) return typed;
+  const byName = docs.find((doc) => {
+    if (!free(doc)) return false;
+    const name = String(doc.name || '').toLowerCase();
+    return labels.some((label) => label && name.includes(label));
+  });
+  if (byName) return byName;
+  // Nothing says which item this upload belongs to, so the next item without a file claims it.
+  return docs.find((doc) => free(doc) && (doc.type === 'onboarding' || doc.type === 'staff_upload')) || null;
+}
+
 export function checklistFor(profile, company, lang) {
-  const visible = fieldVisibilityOf(company);
   const docs = Array.isArray(profile && profile.docs) ? profile.docs : [];
+  const used = new Set();
   const items = docTypesOf(company).map((type) => {
     const info = type.kind === 'info';
-    const file = info ? null : fileFor(docs, type.key);
-    const done = info ? infoOff(type, visible) || infoFilled(profile, type.key) : Boolean(file);
+    const file = info ? null : fileFor(docs, type, used);
+    if (file) used.add(file);
     return {
       key: type.key,
       kind: info ? 'info' : 'file',
       label: docTypeLabel(type, lang),
       required: type.required !== false,
-      done,
+      done: info ? infoFilled(profile, type.key) : Boolean(file),
       file
     };
   });

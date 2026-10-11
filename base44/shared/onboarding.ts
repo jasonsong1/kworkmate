@@ -1,9 +1,7 @@
 // The onboarding paperwork, resolved on the server: which documents the employer asks a new hire
-// for, which personal details they ask for, and whether one employee's record is complete. The
-// employee's own screen and the employer's status list both read the answer from here, so a screen
-// can never show a status the server would not agree with.
-
-export const ONBOARDING_FIELD_KEYS = ['address', 'date_of_birth', 'emergency_contact', 'tax', 'super', 'bank'];
+// for and whether one employee's record is complete. The employee's own screen and the employer's
+// status list both read the answer from here, so a screen can never show a status the server would
+// not agree with.
 
 export const DEFAULT_DOC_TYPES: any[] = [
   { key: 'id', label: '신분증 (ID)', label_en: 'Photo ID (passport or licence)', required: true },
@@ -32,15 +30,6 @@ export function docTypesOf(company: any) {
   return list.filter((type: any) => type && type.key && (type.label || type.label_en));
 }
 
-export function fieldVisibilityOf(company: any) {
-  const raw = (company && company.onboarding_field_visibility) || {};
-  const out: any = {};
-  ONBOARDING_FIELD_KEYS.forEach((key) => {
-    out[key] = raw[key] !== false;
-  });
-  return out;
-}
-
 function filled(profile: any, field: string) {
   return Boolean(String((profile && profile[field]) || '').trim());
 }
@@ -53,28 +42,39 @@ function infoFilled(profile: any, key: string) {
   return false;
 }
 
-function infoOff(type: any, visible: any) {
-  if (type.key === 'personal') return !visible.address && !visible.date_of_birth && !visible.emergency_contact;
-  if (type.key === 'bank') return !visible.bank;
-  return false;
-}
-
-function fileFor(docs: any[], key: string) {
-  return (
-    docs.find((doc: any) => doc && doc.doc_type === key) ||
-    (key === 'contract' ? docs.find((doc: any) => doc && doc.type === 'contract') : null) ||
-    null
-  );
+// A file counts for an item when it was filed under that type, when the item's own name appears in
+// the file's name, or — since the onboarding form files an attachment beside the question that
+// asked for it — when it is simply one of the employee's own uploads no other item has claimed.
+function fileFor(docs: any[], type: any, used: Set<any>) {
+  const labels = [type.label, type.label_en, type.key]
+    .map((value: any) => String(value || '').trim().toLowerCase())
+    .filter(Boolean);
+  const free = (doc: any) => doc && !used.has(doc);
+  const typed = docs.find((doc: any) => free(doc) && (doc.doc_type === type.key || doc.type === type.key));
+  if (typed) return typed;
+  const byName = docs.find((doc: any) => {
+    if (!free(doc)) return false;
+    const name = String(doc.name || '').toLowerCase();
+    return labels.some((label: string) => label && name.includes(label));
+  });
+  if (byName) return byName;
+  return docs.find((doc: any) => free(doc) && (doc.type === 'onboarding' || doc.type === 'staff_upload')) || null;
 }
 
 export function checklistFor(profile: any, company: any) {
-  const visible = fieldVisibilityOf(company);
   const docs = Array.isArray(profile && profile.docs) ? profile.docs : [];
+  const used = new Set();
   const items = docTypesOf(company).map((type: any) => {
     const info = type.kind === 'info';
-    const file = info ? null : fileFor(docs, type.key);
-    const done = info ? infoOff(type, visible) || infoFilled(profile, type.key) : Boolean(file);
-    return { key: type.key, kind: info ? 'info' : 'file', required: type.required !== false, done, file };
+    const file = info ? null : fileFor(docs, type, used);
+    if (file) used.add(file);
+    return {
+      key: type.key,
+      kind: info ? 'info' : 'file',
+      required: type.required !== false,
+      done: info ? infoFilled(profile, type.key) : Boolean(file),
+      file
+    };
   });
   const required = items.filter((item: any) => item.required);
   return {
@@ -83,37 +83,29 @@ export function checklistFor(profile: any, company: any) {
   };
 }
 
-// Only the details the employer is asking for are ever written, so switching an item off also
-// stops it being collected.
-export function visibleFields(data: any, company: any) {
-  const visible = fieldVisibilityOf(company);
+// The details an employee filled in on their own record, written exactly as given: what the
+// employer collects is what their onboarding questions ask for, so nothing is filtered here.
+export function onboardingFields(data: any) {
   const source = data || {};
   const out: any = {};
-  const put = (field: string) => {
+  [
+    'address',
+    'date_of_birth',
+    'emergency_contact_name',
+    'emergency_contact_phone',
+    'tfn_number',
+    'tfn_pending',
+    'residency_status',
+    'super_choice',
+    'super_fund_name',
+    'super_usi',
+    'super_member_number',
+    'bank_bsb',
+    'bank_account_number',
+    'bank_account_name'
+  ].forEach((field) => {
     if (field in source) out[field] = source[field];
-  };
-  if (visible.address) put('address');
-  if (visible.date_of_birth) put('date_of_birth');
-  if (visible.emergency_contact) {
-    put('emergency_contact_name');
-    put('emergency_contact_phone');
-  }
-  if (visible.tax) {
-    put('tfn_number');
-    put('tfn_pending');
-    put('residency_status');
-  }
-  if (visible.super) {
-    put('super_choice');
-    put('super_fund_name');
-    put('super_usi');
-    put('super_member_number');
-  }
-  if (visible.bank) {
-    put('bank_bsb');
-    put('bank_account_number');
-    put('bank_account_name');
-  }
+  });
   return out;
 }
 
@@ -124,14 +116,12 @@ export function onboardingStatusFor(profile: any, company: any, docs: any[]) {
   if (checklist.complete) return 'completed';
   const started =
     (docs || []).length > 0 ||
-    ONBOARDING_FIELD_KEYS.some((key) => {
-      if (key === 'address') return filled(profile, 'address');
-      if (key === 'date_of_birth') return filled(profile, 'date_of_birth');
-      if (key === 'emergency_contact') return filled(profile, 'emergency_contact_name');
-      if (key === 'tax') return filled(profile, 'tfn_number');
-      if (key === 'super') return filled(profile, 'super_choice') || filled(profile, 'super_fund_name');
-      if (key === 'bank') return filled(profile, 'bank_bsb');
-      return false;
-    });
+    filled(profile, 'address') ||
+    filled(profile, 'date_of_birth') ||
+    filled(profile, 'emergency_contact_name') ||
+    filled(profile, 'tfn_number') ||
+    filled(profile, 'super_choice') ||
+    filled(profile, 'super_fund_name') ||
+    filled(profile, 'bank_bsb');
   return started ? 'in_progress' : 'pending';
 }

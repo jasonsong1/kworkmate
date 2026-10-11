@@ -12,7 +12,7 @@ export default function OnboardingStatusList({ profile, company, onOpen, loading
   const checklist = checklistFor(profile, company, lang);
 
   return (
-    <div className="rounded-lg border">
+    <div className="w-full rounded-lg border">
       <div className="flex items-center justify-between gap-3 border-b px-4 py-2.5">
         <p className="text-sm font-semibold">{t('ob.title')}</p>
         <span className="text-xs text-muted-foreground">

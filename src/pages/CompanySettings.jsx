@@ -21,7 +21,9 @@ import { useI18n } from '@/lib/i18n';
 import { useWorkspace } from '@/lib/WorkspaceContext';
 import { videoInterviewAllowed } from '@/lib/packages';
 import { clampAccess, grantedModules, levelRank, moduleLabelKey, normalizeCell, scopeRank } from '@/lib/access';
-import { saveCompanySettings } from '@/lib/companySettings';
+import { canSaveSettings, saveCompanySettings } from '@/lib/companySettings';
+import { cleanDocTypes, docTypesOf } from '@/lib/onboardingDocs';
+import { questionsFromDraft, toDraft } from '@/lib/onboardingQuestions';
 import CompanyPicker from '@/components/platform/CompanyPicker';
 import { base44 } from '@/api/base44Client';
 
@@ -34,15 +36,18 @@ const PANEL_MODULES = {
 
 export default function CompanySettings() {
   const { t } = useI18n();
-  const { company, role, isPlatformAdmin, pkg, presets, feature, hasModule, levelOf, patchCompany } = useWorkspace();
+  const { company, role, isPlatformAdmin, isCompanyAdmin, access, pkg, presets, feature, hasModule, levelOf, patchCompany } = useWorkspace();
   const videoAllowed = videoInterviewAllowed(pkg);
   const miniAllowed = feature('mini_interview');
-  // Saving follows what this person's company settings area allows, not the title on their
-  // account: a role the company itself defined can hold it without being the company admin.
-  const canSave = role === 'company_admin' || ['update', 'write'].includes(levelOf('settings'));
+  // Saving follows the same rule the server applies to this save, so a Save button that is on
+  // screen always saves: the company's own admins, and anyone the settings area is open to.
+  const canSave = canSaveSettings({ role, isCompanyAdmin, access, levelOf });
   const { toast } = useToast();
   const [tab, setTab] = useState('company');
   const [form, setForm] = useState(null);
+  // The onboarding tab is part of this page's own Save: both of its lists are held here until Save
+  // is pressed, so one button writes the whole screen.
+  const [onboarding, setOnboarding] = useState(null);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -66,6 +71,16 @@ export default function CompanySettings() {
       // what the table now offers, so the screen never shows a level it cannot explain.
       role_permissions: clampAccess(company.role_permissions || {}),
       custom_roles: company.custom_roles || []
+    });
+    setOnboarding({
+      docTypes: docTypesOf(company).map((type) => ({
+        key: type.key,
+        label: type.label || type.label_en || '',
+        label_en: type.label_en || '',
+        kind: type.kind || 'file',
+        required: type.required !== false
+      })),
+      questions: toDraft(company.onboarding_questions)
     });
   }, [company]);
 
@@ -117,7 +132,11 @@ export default function CompanySettings() {
     const payload = {
       ...form,
       ai_top_n: Number(form.ai_top_n) || 10,
-      pay_multipliers: paySettings(form.pay_multipliers)
+      pay_multipliers: paySettings(form.pay_multipliers),
+      // The onboarding paperwork is saved by this same button: the documents a new hire hands in,
+      // and the questions the employee answers on their onboarding link.
+      onboarding_doc_types: cleanDocTypes(onboarding.docTypes),
+      onboarding_questions: questionsFromDraft(onboarding.questions)
     };
     try {
       // The server decides whether this person may save the company's settings, and it is the
@@ -145,7 +164,7 @@ export default function CompanySettings() {
 
   }
 
-  if (!form) return <p className="text-sm text-muted-foreground">{t('common.loading')}</p>;
+  if (!form || !onboarding) return <p className="text-sm text-muted-foreground">{t('common.loading')}</p>;
 
   const CATEGORIES = [
     { key: 'company', label: t('settings.cat.company') },
@@ -207,8 +226,16 @@ export default function CompanySettings() {
         </TabsContent>
 
         <TabsContent value="docs" className="space-y-6">
-          <OnboardingSetupCard />
-          <OnboardingQuestionsCard />
+          <OnboardingSetupCard
+            types={onboarding.docTypes}
+            onChange={(docTypes) => setOnboarding((prev) => ({ ...prev, docTypes }))}
+            canEdit={canSave}
+          />
+          <OnboardingQuestionsCard
+            questions={onboarding.questions}
+            onChange={(questions) => setOnboarding((prev) => ({ ...prev, questions }))}
+            canEdit={canSave}
+          />
           <OnboardingDocsCard />
         </TabsContent>
 

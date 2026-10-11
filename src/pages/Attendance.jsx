@@ -21,7 +21,7 @@ const ALL = 'all';
 
 export default function Attendance() {
   const { t } = useI18n();
-  const { activeBranch, me, scopeOf } = useWorkspace();
+  const { activeBranch, me, scopeOf, employeeProfile } = useWorkspace();
   const { canEdit } = usePermissions();
   // "Own records only" is a data-range rule the person's position preset carries: a manager
   // sees the branch, a floor position sees nothing but itself.
@@ -111,6 +111,24 @@ export default function Attendance() {
   const hours = Math.floor(stats.minutes / 60);
   const minutes = stats.minutes % 60;
 
+  // A day's pay is the hours on the record times the person's own hourly rate, so the wage is
+  // there the moment they clock out. A record with no rate set — or one nobody has clocked out
+  // of yet — simply shows nothing.
+  const rateOf = (email) => {
+    const person =
+      employees.find((item) => item.user_email === email) ||
+      (employeeProfile && employeeProfile.user_email === email ? employeeProfile : null);
+    const rate = person ? Number(person.hourly_rate) : 0;
+    return Number.isFinite(rate) && rate > 0 ? rate : 0;
+  };
+  const wageOf = (row) => {
+    const rate = rateOf(row.employee_email);
+    return row.minutes && rate ? (row.minutes / 60) * rate : 0;
+  };
+  const money = (value) => `$${value.toFixed(2)}`;
+  // A turned-down punch is not paid, so it stays out of the total.
+  const wageTotal = rows.reduce((sum, row) => (row.approval_status === 'rejected' ? sum : sum + wageOf(row)), 0);
+
   return (
     <div>
       <PageHeader
@@ -167,6 +185,9 @@ export default function Attendance() {
             <p className="text-2xl font-semibold">
               {hours}h {minutes}m
             </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {t('attendance.wage')}: {money(wageTotal)}
+            </p>
           </CardContent>
         </Card>
         <Card>
@@ -200,6 +221,7 @@ export default function Attendance() {
                     <TableHead>{t('attendance.clockIn')}</TableHead>
                     <TableHead>{t('attendance.clockOut')}</TableHead>
                     <TableHead>{t('attendance.duration')}</TableHead>
+                    <TableHead>{t('attendance.wage')}</TableHead>
                     <TableHead>{t('attendance.geo')}</TableHead>
                     <TableHead>{t('attendance.approval')}</TableHead>
                   </TableRow>
@@ -226,6 +248,9 @@ export default function Attendance() {
                       </TableCell>
                       <TableCell className="text-sm">
                         {row.minutes ? `${Math.floor(row.minutes / 60)}h ${row.minutes % 60}m` : '—'}
+                      </TableCell>
+                      <TableCell className="text-sm font-medium">
+                        {wageOf(row) ? money(wageOf(row)) : '—'}
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">

@@ -1,55 +1,50 @@
 import React from 'react';
 import { useI18n } from '@/lib/i18n';
-import { fieldVisibilityOf } from '@/lib/onboardingDocs';
+import { answerRows, fieldRows } from '@/lib/onboardingDocs';
 
-// The personal details a hire handed in, shown only where the employer still asks for them.
+// What a hire handed in, read from the employer's own onboarding questions and the answers given
+// on the onboarding form: the bank, tax and super details they typed in appear here. A question the
+// employer keeps out of the vault is not shown. A company that asks no questions of its own falls
+// back to the details kept on the record itself.
 export default function OnboardingDetails({ profile, company }) {
   const { t } = useI18n();
-  const visible = fieldVisibilityOf(company);
-  const rows = [];
-  if (visible.address) rows.push([t('ob.field.address'), profile.address]);
-  if (visible.date_of_birth) rows.push([t('ob.field.date_of_birth'), profile.date_of_birth]);
-  if (visible.emergency_contact) {
-    rows.push([t('ob.emergencyName'), profile.emergency_contact_name]);
-    rows.push([t('ob.emergencyPhone'), profile.emergency_contact_phone]);
-  }
-  if (visible.tax) {
-    rows.push([
-      t('ob.tfn'),
-      profile.tfn_pending ? t('ob.tfnPending') : profile.tfn_number
-    ]);
-  }
-  if (visible.super) {
-    rows.push([
-      t('ob.superChoice'),
-      profile.super_choice === 'custom_fund'
-        ? t('ob.superCustom')
-        : profile.super_choice
-          ? t('ob.superDefault')
-          : ''
-    ]);
-    if (profile.super_fund_name) rows.push([t('ob.superFund'), profile.super_fund_name]);
-    if (profile.super_usi) rows.push([t('ob.superUsi'), profile.super_usi]);
-    if (profile.super_member_number) rows.push([t('ob.superMember'), profile.super_member_number]);
-  }
-  if (visible.bank) {
-    rows.push([t('ob.bankBsb'), profile.bank_bsb]);
-    rows.push([t('ob.bankAccount'), profile.bank_account_number]);
-    rows.push([t('ob.bankHolder'), profile.bank_account_name]);
-  }
-  if (!profile || rows.length === 0) return null;
+  if (!profile) return null;
+
+  const rows = answerRows(profile, company, t);
+  const fields = rows.length === 0 ? fieldRows(profile, t) : [];
+  if (rows.length === 0 && fields.length === 0) return null;
 
   return (
-    <div className="rounded-lg border">
+    <div className="w-full rounded-lg border">
       <p className="border-b px-4 py-2.5 text-sm font-semibold">{t('ob.profileTitle')}</p>
-      <div className="grid gap-x-6 gap-y-3 p-4 sm:grid-cols-2">
-        {rows.map(([label, value], index) => (
-          <div key={`${label}-${index}`}>
-            <p className="text-xs text-muted-foreground">{label}</p>
-            <p className="text-sm">{String(value || '').trim() ? value : t('ob.notProvided')}</p>
-          </div>
-        ))}
-      </div>
+      {rows.length > 0 ? (
+        <div className="divide-y">
+          {rows.map((row) => (
+            <div key={row.id} className="px-4 py-3">
+              <p className="text-xs text-muted-foreground">{row.label}</p>
+              <p className="text-sm">{row.answer || t('ob.notProvided')}</p>
+              {row.details.length > 0 && (
+                <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1">
+                  {row.details.map(([field, value]) => (
+                    <span key={field} className="text-xs text-muted-foreground">
+                      {field}: <span className="text-foreground">{value}</span>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="grid gap-x-6 gap-y-3 p-4 sm:grid-cols-2">
+          {fields.map(([label, value], index) => (
+            <div key={`${label}-${index}`}>
+              <p className="text-xs text-muted-foreground">{label}</p>
+              <p className="text-sm">{String(value || '').trim() ? value : t('ob.notProvided')}</p>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

@@ -70,22 +70,79 @@ export default async function (req) {
 
     const signedAt = new Date().toISOString();
 
-    // The declaration form is now the employer's own, so the payroll blocks are written only
-    // when their answers supplied them.
+    // The payroll fields the record itself keeps. What the form answered is what gets written, so
+    // a wage run reads the record rather than going looking through the answers list.
+    const payroll: any = {};
+    if (tfn.pending) payroll.tfn_pending = true;
+    if (tfn.number) payroll.tfn_number = String(tfn.number).trim();
+    if (tfn.residency_status) payroll.residency_status = tfn.residency_status;
+    if (typeof tfn.tax_free_threshold === 'boolean') payroll.tax_free_threshold = tfn.tax_free_threshold;
+    if (typeof tfn.hecs_help === 'boolean') payroll.hecs_help = tfn.hecs_help;
+    if (superChoice.choice) payroll.super_choice = superChoice.choice;
+    if (superChoice.member_number) payroll.super_member_number = superChoice.member_number;
+    if (superChoice.choice === 'custom_fund') {
+      if (superChoice.fund_name) payroll.super_fund_name = superChoice.fund_name;
+      if (superChoice.usi) payroll.super_usi = superChoice.usi;
+      if (superChoice.fund_abn) payroll.super_fund_abn = superChoice.fund_abn;
+    }
+    if (bank.bsb) payroll.bank_bsb = String(bank.bsb).trim();
+    if (bank.account_number) payroll.bank_account_number = String(bank.account_number).trim();
+    if (bank.account_name) payroll.bank_account_name = String(bank.account_name).trim();
+
+    // The employer's own questions carry the very same details, so an answer given on the link is
+    // written onto the record too. The standard form's questions are named, and each answer fills
+    // the field it stands for.
+    const answerTo = (id: string) => {
+      const row = onboardingAnswers.find((entry) => entry.id === id);
+      return row ? String(row.answer || '').trim() : '';
+    };
+    const followUpTo = (id: string, field: string) => {
+      const row = onboardingAnswers.find((entry) => entry.id === id);
+      return row && row.follow_up ? String(row.follow_up[field] || '').trim() : '';
+    };
+    const STANDARD_TEXT: Record<string, string> = {
+      default_address: 'address',
+      default_phone: 'phone',
+      default_dob: 'date_of_birth',
+      default_emergency_name: 'emergency_contact_name',
+      default_emergency_phone: 'emergency_contact_phone',
+      default_bank_bsb: 'bank_bsb',
+      default_bank_account: 'bank_account_number',
+      default_bank_holder: 'bank_account_name'
+    };
+    Object.entries(STANDARD_TEXT).forEach(([questionId, field]) => {
+      const value = answerTo(questionId);
+      if (value) payroll[field] = value;
+    });
+    const tfnHeld = answerTo('default_tfn_held');
+    if (tfnHeld === 'yes') {
+      const number = followUpTo('default_tfn_held', 'Tax File Number');
+      if (number) payroll.tfn_number = number;
+    }
+    if (tfnHeld === 'no') payroll.tfn_pending = true;
+    const taxFree = answerTo('default_tax_free');
+    if (taxFree) payroll.tax_free_threshold = taxFree === 'yes';
+    const hecs = answerTo('default_hecs');
+    if (hecs) payroll.hecs_help = hecs === 'yes';
+    const useDefaultFund = answerTo('default_super_default');
+    if (useDefaultFund === 'yes') {
+      payroll.super_choice = 'default_fund';
+      payroll.super_fund_name = (company && company.default_super_fund_name) || '';
+      payroll.super_usi = (company && company.default_super_fund_usi) || '';
+      payroll.super_fund_abn = (company && company.default_super_fund_abn) || '';
+    }
+    if (useDefaultFund === 'no') {
+      payroll.super_choice = 'custom_fund';
+      const fund = followUpTo('default_super_default', 'Fund name');
+      const usi = followUpTo('default_super_default', 'USI');
+      const member = followUpTo('default_super_default', 'Member number');
+      if (fund) payroll.super_fund_name = fund;
+      if (usi) payroll.super_usi = usi;
+      if (member) payroll.super_member_number = member;
+    }
+
     await base44.asServiceRole.entities.EmployeeProfile.update(employee.id, {
-      tfn_number: tfn.pending ? '' : String(tfn.number || '').trim(),
-      tfn_pending: tfn.pending === true,
-      residency_status: tfn.residency_status || '',
-      tax_free_threshold: tfn.tax_free_threshold !== false,
-      hecs_help: tfn.hecs_help === true,
-      super_choice: superChoice.choice || '',
-      super_fund_name: superChoice.choice === 'default_fund' ? (company ? company.default_super_fund_name : '') : (superChoice.fund_name || ''),
-      super_usi: superChoice.choice === 'default_fund' ? (company ? company.default_super_fund_usi : '') : (superChoice.usi || ''),
-      super_member_number: superChoice.member_number || '',
-      super_fund_abn: superChoice.choice === 'default_fund' ? (company ? company.default_super_fund_abn : '') : (superChoice.fund_abn || ''),
-      bank_bsb: String(bank.bsb || '').trim(),
-      bank_account_number: String(bank.account_number || '').trim(),
-      bank_account_name: String(bank.account_name || '').trim(),
+      ...payroll,
       signature_file_uri: body.signature_file_uri,
       signed_at: signedAt,
       onboarding_status: 'completed',

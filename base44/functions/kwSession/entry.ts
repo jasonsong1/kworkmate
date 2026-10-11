@@ -12,7 +12,7 @@ import {
   userFromSession,
   verifyPassword
 } from '../../shared/kwAuth.ts';
-import { docTypesOf, onboardingStatusFor, visibleFields } from '../../shared/onboarding.ts';
+import { docTypesOf, onboardingFields, onboardingStatusFor } from '../../shared/onboarding.ts';
 
 function rowsOf(result: any) {
   return Array.isArray(result) ? result : (result && result.items) || [];
@@ -165,10 +165,10 @@ export default async function (req) {
       return Response.json({ ok: true, docs: next, profile: sealRecord(saved) });
     }
 
-    // The details the employer asks a hire for, filled in on their own record. An item the
-    // employer switched off is never written, whatever the browser sent.
+    // The details filled in on the employee's own record, written exactly as given: what the
+    // employer collects is what their onboarding questions ask for.
     if (action === 'save_onboarding') {
-      const details = visibleFields(body.data || {}, company);
+      const details = onboardingFields(body.data || {});
       const docs = Array.isArray(profile.docs) ? profile.docs : [];
       const saved = await base44.asServiceRole.entities.EmployeeProfile.update(profile.id, {
         ...details,

@@ -83,7 +83,7 @@ export default function EmployeeDocumentsDialog({ open, onOpenChange, employee }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-h-[85vh] max-w-3xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
             {t('employees.vault')} — {employee ? employee.full_name : ''}
@@ -93,7 +93,7 @@ export default function EmployeeDocumentsDialog({ open, onOpenChange, employee }
         {/* An employee files their own documents here; the employer's copy of this screen does
             not offer it. */}
         {viaOwnRecord && (
-          <div className="flex items-center justify-between gap-3 rounded-lg border px-4 py-3">
+          <div className="flex w-full items-center justify-between gap-3 rounded-lg border px-4 py-3">
             <p className="text-sm text-muted-foreground">{t('employees.docUploadHint')}</p>
             <Button
               size="sm"
@@ -133,7 +133,7 @@ export default function EmployeeDocumentsDialog({ open, onOpenChange, employee }
         {docs.length === 0 ? (
           <p className="py-8 text-center text-sm text-muted-foreground">{t('employees.noDocs')}</p>
         ) : (
-          <div className="divide-y rounded-lg border">
+          <div className="w-full divide-y rounded-lg border">
             {docs.map((doc, index) => (
               <div key={`${doc.file_uri}-${index}`} className="flex items-center gap-3 px-4 py-3">
                 <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />

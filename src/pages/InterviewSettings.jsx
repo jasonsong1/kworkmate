@@ -10,15 +10,14 @@ import { useI18n } from '@/lib/i18n';
 import { useWorkspace } from '@/lib/WorkspaceContext';
 import { videoInterviewAllowed } from '@/lib/packages';
 import { DEFAULT_INTERVIEW_QUESTIONS } from '@/lib/bh';
-import { saveCompanySettings } from '@/lib/companySettings';
+import { canSaveSettings, saveCompanySettings } from '@/lib/companySettings';
 
 export default function InterviewSettings() {
   const { t } = useI18n();
-  const { company, reload, role, pkg, levelOf } = useWorkspace();
+  const { company, reload, isCompanyAdmin, access, pkg, levelOf } = useWorkspace();
   const videoAllowed = videoInterviewAllowed(pkg);
-  // Saving follows what this person's company settings area allows, the same rule the settings
-  // screen itself follows: a position the company gave that area to may save here too.
-  const canSave = role === 'company_admin' || ['update', 'write'].includes(levelOf('settings'));
+  // The same rule the settings screen and the server apply, so this Save is never a dead end.
+  const canSave = canSaveSettings({ isCompanyAdmin, access, levelOf });
   const { toast } = useToast();
   const [questions, setQuestions] = useState([]);
   const [videoQuestions, setVideoQuestions] = useState([]);

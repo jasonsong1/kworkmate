@@ -46,13 +46,14 @@ export default async function (req) {
       return Response.json({ error: 'You cannot change this company' }, { status: 403 });
     }
 
-    // Whoever the company lets save its settings also saves them here: its own admins, or a
-    // position whose settings area allows update or write.
+    // Whoever the company lets into its settings also saves them here: its own admins, and any
+    // position the settings area is open to at all. The screens offer their Save button on this
+    // same answer, so a button that is on screen is never refused.
     const isCompanyAdmin = isSuperAdmin || clean(me.app_role) === 'company_admin';
     if (!isCompanyAdmin) {
       const access = await accessFor(base44, me);
       const level = (access.settings && access.settings.level) || 'none';
-      if (!['update', 'write'].includes(level)) {
+      if (level === 'none') {
         return Response.json({ error: 'You cannot change the company settings' }, { status: 403 });
       }
     }
