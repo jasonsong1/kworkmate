@@ -78,10 +78,13 @@ export default function Jobs() {
   const create = async () => {
     if (!form.title.trim() || !activeBranch) return;
     setSaving(true);
+    // The ad belongs to the store the header shows, whatever reach the position's preset gives it
+    // elsewhere: the branch on screen is the one hiring.
+    const target = activeBranch;
     try {
       const job = await base44.entities.Job.create({
-        company_id: activeBranch.company_id,
-        branch_id: activeBranch.id,
+        company_id: target.company_id,
+        branch_id: target.id,
         title: form.title,
         position: form.position,
         employment_type: form.employment_type,
@@ -94,14 +97,19 @@ export default function Jobs() {
         auto_reject_email: company ? company.auto_reject_email !== false : true,
         mini_interview_enabled: company ? company.mini_interview_enabled !== false : true,
         video_interview_enabled: company ? company.video_interview_enabled !== false : false,
-        brand_color: activeBranch.brand_color || '#4338ca',
-        logo_url: activeBranch.logo_url || '',
+        brand_color: target.brand_color || '#4338ca',
+        logo_url: target.logo_url || '',
         top_n_cycle: 1
       });
       // The ad is read back before anything is reported, so a save that did not land is never
-      // announced as one that did.
-      const saved = job && job.id ? await base44.entities.Job.get(job.id).catch(() => null) : null;
-      if (!saved) throw new Error(t('jobs.createFailed'));
+      // announced as one that did. An ad filed under another store is put back on the branch on
+      // screen first, so it never turns up in a branch nobody was working in.
+      let saved = job && job.id ? await base44.entities.Job.get(job.id).catch(() => null) : null;
+      if (saved && saved.branch_id !== target.id) {
+        await base44.entities.Job.update(saved.id, { branch_id: target.id });
+        saved = await base44.entities.Job.get(saved.id).catch(() => null);
+      }
+      if (!saved || saved.branch_id !== target.id) throw new Error(t('jobs.createFailed'));
       setOpen(false);
       setForm({ title: '', position: '', employment_type: 'casual', hourly_rate: '' });
       toast({ title: 'Job ad created' });
@@ -208,6 +216,11 @@ export default function Jobs() {
           <DialogHeader>
             <DialogTitle>{t('jobs.add')}</DialogTitle>
           </DialogHeader>
+          {/* The ad is posted to the branch the header shows, so that branch is named here too. */}
+          <div className="flex items-center justify-between rounded-lg border bg-muted/40 px-3 py-2 text-xs">
+            <span className="text-muted-foreground">{t('top.branch')}</span>
+            <span className="font-medium">{activeBranch ? activeBranch.name : '—'}</span>
+          </div>
           <div className="grid gap-4">
             <div>
               <Label>Job title *</Label>
