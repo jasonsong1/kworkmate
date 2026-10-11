@@ -14,11 +14,12 @@ import { useI18n } from '@/lib/i18n';
 import { useWorkspace } from '@/lib/WorkspaceContext';
 import { usePermissions } from '@/lib/permissions';
 import { money, visaLabel } from '@/lib/bh';
+import { checklistFor } from '@/lib/onboardingDocs';
 import { base44 } from '@/api/base44Client';
 
 export default function Employees() {
-  const { t } = useI18n();
-  const { activeBranch, me, scopeOf } = useWorkspace();
+  const { t, lang } = useI18n();
+  const { activeBranch, company, me, scopeOf } = useWorkspace();
   const { canEdit } = usePermissions();
   // A position with "own records only" reaches its own profile and nothing else.
   const selfOnly = scopeOf('employees') === 'self';
@@ -173,6 +174,11 @@ export default function Employees() {
 
                     <Badge variant="secondary">{t('employees.pending')}</Badge>
                     }
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {t('ob.docsProgress')
+                            .replace('{done}', String(checklistFor(row, company, lang).requiredDone))
+                            .replace('{total}', String(checklistFor(row, company, lang).requiredTotal))}
+                        </p>
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-1">

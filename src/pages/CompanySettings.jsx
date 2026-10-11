@@ -5,6 +5,7 @@ import PageHeader from '@/components/PageHeader';
 import PackageCard from '@/components/package/PackageCard';
 import OnboardingDocsCard from '@/components/company/OnboardingDocsCard';
 import OnboardingQuestionsCard from '@/components/company/OnboardingQuestionsCard';
+import OnboardingSetupCard from '@/components/company/OnboardingSetupCard';
 import PayMultipliersCard, { payMultipliers, paySettings } from '@/components/company/PayMultipliersCard';
 import PublicHolidayCard from '@/components/company/PublicHolidayCard';
 import CompanyRolesManager from '@/components/CompanyRolesManager';
@@ -20,6 +21,7 @@ import { useI18n } from '@/lib/i18n';
 import { useWorkspace } from '@/lib/WorkspaceContext';
 import { videoInterviewAllowed } from '@/lib/packages';
 import { clampAccess, grantedModules, levelRank, moduleLabelKey, normalizeCell, scopeRank } from '@/lib/access';
+import { saveCompanySettings } from '@/lib/companySettings';
 import CompanyPicker from '@/components/platform/CompanyPicker';
 import { base44 } from '@/api/base44Client';
 
@@ -117,12 +119,19 @@ export default function CompanySettings() {
       ai_top_n: Number(form.ai_top_n) || 10,
       pay_multipliers: paySettings(form.pay_multipliers)
     };
-    await base44.entities.Company.update(company.id, payload);
-    // Saving keeps the screen where it is: the workspace copy of the company is updated in
-    // place instead of reloading the whole back office, so the open tab stays open.
-    patchCompany(payload);
-    setSaving(false);
-    toast({ title: t('settings.saved') });
+    try {
+      // The server decides whether this person may save the company's settings, and it is the
+      // server's answer that says the save happened.
+      await saveCompanySettings(company.id, payload);
+      // Saving keeps the screen where it is: the workspace copy of the company is updated in
+      // place instead of reloading the whole back office, so the open tab stays open.
+      patchCompany(payload);
+      toast({ title: t('settings.saved') });
+    } catch (error) {
+      toast({ variant: 'destructive', title: error.message || t('settings.saveFailed') });
+    } finally {
+      setSaving(false);
+    }
   };
 
   // A super admin who has not entered a company yet picks one here instead of waiting on
@@ -198,8 +207,9 @@ export default function CompanySettings() {
         </TabsContent>
 
         <TabsContent value="docs" className="space-y-6">
-          <OnboardingDocsCard />
+          <OnboardingSetupCard />
           <OnboardingQuestionsCard />
+          <OnboardingDocsCard />
         </TabsContent>
 
         <TabsContent value="screening">

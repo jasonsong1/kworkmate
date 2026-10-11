@@ -185,7 +185,13 @@ export default function Onboarding() {
           uploaded_by: 'self'
         }));
       const docs = [
-        { name: 'Employment contract', type: 'contract', file_uri: contractUpload.file_uri, created_at: now },
+        {
+          name: 'Employment contract',
+          type: 'contract',
+          doc_type: 'contract',
+          file_uri: contractUpload.file_uri,
+          created_at: now
+        },
         ...uploadedDocs
       ];
 

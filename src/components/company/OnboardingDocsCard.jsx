@@ -6,6 +6,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { useI18n } from '@/lib/i18n';
 import { useWorkspace } from '@/lib/WorkspaceContext';
 import { formatBytes } from '@/lib/bh';
+import { saveCompanySettings } from '@/lib/companySettings';
 import { base44 } from '@/api/base44Client';
 
 // The documents every new hire receives: uploaded once here, then attached to the
@@ -26,7 +27,7 @@ export default function OnboardingDocsCard() {
     ['update', 'write'].includes(levelOf('settings'));
 
   const save = async (next) => {
-    await base44.entities.Company.update(company.id, { onboarding_docs: next });
+    await saveCompanySettings(company.id, { onboarding_docs: next });
     await reload();
   };
 
@@ -45,16 +46,26 @@ export default function OnboardingDocsCard() {
         uploaded_at: new Date().toISOString()
       });
     }
-    await save([...docs, ...added]);
-    setBusy(false);
-    toast({ title: t('settings.docUploaded') });
+    try {
+      await save([...docs, ...added]);
+      toast({ title: t('settings.docUploaded') });
+    } catch (error) {
+      toast({ variant: 'destructive', title: error.message || t('ob.saveFailed') });
+    } finally {
+      setBusy(false);
+    }
   };
 
   const remove = async (doc) => {
     setBusy(true);
-    await save(docs.filter((item) => item.file_url !== doc.file_url));
-    setBusy(false);
-    toast({ title: t('settings.docDeleted') });
+    try {
+      await save(docs.filter((item) => item.file_url !== doc.file_url));
+      toast({ title: t('settings.docDeleted') });
+    } catch (error) {
+      toast({ variant: 'destructive', title: error.message || t('ob.saveFailed') });
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (

@@ -17,6 +17,8 @@ import AvailabilityMatrix from '@/components/AvailabilityMatrix';
 import CalendarSubscribeCard from '@/components/CalendarSubscribeCard';
 import ClockScanButton from '@/components/attendance/ClockScanButton';
 import EmployeeDocumentsDialog from '@/components/EmployeeDocumentsDialog';
+import StaffOnboardingCard from '@/components/staff/StaffOnboardingCard';
+import OnboardingDetails from '@/components/employee/OnboardingDetails';
 import SelfPasswordDialog from '@/components/staff/SelfPasswordDialog';
 import AllShiftsDialog from '@/components/staff/AllShiftsDialog';
 import { Badge } from '@/components/ui/badge';
@@ -41,7 +43,7 @@ import { base44 } from '@/api/base44Client';
 
 export default function StaffHome() {
   const { t } = useI18n();
-  const { me, employeeProfile, activeBranch, hasModule, presetKey } = useWorkspace();
+  const { me, employeeProfile, company, activeBranch, hasModule, presetKey } = useWorkspace();
   const { toast } = useToast();
   // This week is the first week there is: the roster runs four weeks ahead and never backwards.
   const thisWeek = startOfWeekIso(todayIso());
@@ -222,12 +224,20 @@ export default function StaffHome() {
                     </div>
                 }
                 </div>
+                <OnboardingDetails profile={employeeProfile} company={company} />
               </> :
 
             <p className="py-4 text-sm text-muted-foreground">{t('common.none')}</p>
             }
           </CardContent>
         </Card>
+
+        {/* The paperwork their own account can complete: their details and one file per document
+            their employer asks for. */}
+        {employeeProfile &&
+        <div className="lg:col-span-2">
+            <StaffOnboardingCard />
+          </div>}
 
         {roster &&
         <Card>

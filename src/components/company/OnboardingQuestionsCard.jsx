@@ -10,6 +10,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { useI18n } from '@/lib/i18n';
 import { useWorkspace } from '@/lib/WorkspaceContext';
 import { DEFAULT_ONBOARDING_QUESTIONS } from '@/lib/onboardingDefaults';
+import { saveCompanySettings } from '@/lib/companySettings';
 import { DATE_FORMATS } from '@/lib/onboardingDates';
 import { base44 } from '@/api/base44Client';
 
@@ -148,10 +149,15 @@ export default function OnboardingQuestionsCard() {
         validation: validationOf(question)
       }));
     setSaving(true);
-    await base44.entities.Company.update(company.id, { onboarding_questions: cleaned });
-    await reload();
-    setSaving(false);
-    toast({ title: t('onboardingQ.saved') });
+    try {
+      await saveCompanySettings(company.id, { onboarding_questions: cleaned });
+      await reload();
+      toast({ title: t('onboardingQ.saved') });
+    } catch (error) {
+      toast({ variant: 'destructive', title: error.message || t('ob.saveFailed') });
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (

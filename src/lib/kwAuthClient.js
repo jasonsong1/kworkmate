@@ -180,6 +180,16 @@ export async function kwMe() {
   return await kwVerify();
 }
 
+// One call to the app's own door, whichever way the person signed in: an employee's session token
+// carries itself, while a work-email account goes through the platform's own call.
+export async function kwSessionAction(payload) {
+  if (kwActive()) return await kwCall('kwSession', payload);
+  const response = await raw.functions.invoke('kwSession', payload);
+  const data = response.data || {};
+  if (data.error) throw new Error(data.error);
+  return data;
+}
+
 export async function kwChangePassword(currentPassword, newPassword) {
   return await kwCall('kwSession', {
     action: 'change_password',

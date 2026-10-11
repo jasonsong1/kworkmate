@@ -10,12 +10,15 @@ import { useI18n } from '@/lib/i18n';
 import { useWorkspace } from '@/lib/WorkspaceContext';
 import { videoInterviewAllowed } from '@/lib/packages';
 import { DEFAULT_INTERVIEW_QUESTIONS } from '@/lib/bh';
-import { base44 } from '@/api/base44Client';
+import { saveCompanySettings } from '@/lib/companySettings';
 
 export default function InterviewSettings() {
   const { t } = useI18n();
-  const { company, reload, role, pkg } = useWorkspace();
+  const { company, reload, role, pkg, levelOf } = useWorkspace();
   const videoAllowed = videoInterviewAllowed(pkg);
+  // Saving follows what this person's company settings area allows, the same rule the settings
+  // screen itself follows: a position the company gave that area to may save here too.
+  const canSave = role === 'company_admin' || ['update', 'write'].includes(levelOf('settings'));
   const { toast } = useToast();
   const [questions, setQuestions] = useState([]);
   const [videoQuestions, setVideoQuestions] = useState([]);
@@ -42,14 +45,19 @@ export default function InterviewSettings() {
   const save = async () => {
     if (!company) return;
     setSaving(true);
-    await base44.entities.Company.update(company.id, {
-      interview_questions: questions,
-      video_interview_questions: videoQuestions,
-      video_interview_enabled: videoEnabled
-    });
-    await reload();
-    setSaving(false);
-    toast({ title: t('interview.saved') });
+    try {
+      await saveCompanySettings(company.id, {
+        interview_questions: questions,
+        video_interview_questions: videoQuestions,
+        video_interview_enabled: videoEnabled
+      });
+      await reload();
+      toast({ title: t('interview.saved') });
+    } catch (error) {
+      toast({ variant: 'destructive', title: error.message || t('settings.saveFailed') });
+    } finally {
+      setSaving(false);
+    }
   };
 
   if (!ready) return <p className="text-sm text-muted-foreground">{t('common.loading')}</p>;
@@ -60,7 +68,7 @@ export default function InterviewSettings() {
         title={t('interview.title')}
         subtitle={t('interview.subtitle')}
         actions={
-          <Button onClick={save} disabled={saving || role !== 'company_admin'}>
+          <Button onClick={save} disabled={saving || !canSave}>
             {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
             {t('common.save')}
           </Button>

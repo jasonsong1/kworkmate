@@ -8,9 +8,13 @@ import { useI18n } from '@/lib/i18n';
 import { formatDateTime } from '@/lib/bh';
 import { base44 } from '@/api/base44Client';
 import { kwActive, kwCall, kwIdentity } from '@/lib/kwAuthClient';
+import { useWorkspace } from '@/lib/WorkspaceContext';
+import OnboardingStatusList from '@/components/employee/OnboardingStatusList';
+import OnboardingDetails from '@/components/employee/OnboardingDetails';
 
 export default function EmployeeDocumentsDialog({ open, onOpenChange, employee }) {
   const { t } = useI18n();
+  const { company } = useWorkspace();
   const { toast } = useToast();
   const [loadingId, setLoadingId] = useState(null);
   const [docs, setDocs] = useState([]);
@@ -113,6 +117,18 @@ export default function EmployeeDocumentsDialog({ open, onOpenChange, employee }
             />
           </div>
         )}
+
+        {/* What their employer asks a new hire for, and what has arrived. */}
+        {employee && company && (
+          <OnboardingStatusList
+            profile={employee}
+            company={company}
+            onOpen={openDoc}
+            loadingUri={loadingId}
+          />
+        )}
+
+        {employee && <OnboardingDetails profile={employee} company={company} />}
 
         {docs.length === 0 ? (
           <p className="py-8 text-center text-sm text-muted-foreground">{t('employees.noDocs')}</p>

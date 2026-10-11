@@ -107,6 +107,15 @@
         "type": "object"
       }
     },
+    "onboarding_doc_types": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "onboarding_field_visibility": {
+      "type": "object"
+    },
     "package": {
       "type": "string"
     },
