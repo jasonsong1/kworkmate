@@ -1,16 +1,13 @@
-import { createClient } from '@base44/sdk';
-import { appParams } from '@/lib/app-params';
-import { installKwAuth } from '@/lib/kwAuthClient';
+// ============================================================
+// base44Client.js
+// 목적: 프론트엔드 전체에서 `base44` 이름으로 불러와 사용하는 통합 클라이언트
+//
+// 이제 @base44/sdk 를 사용하지 않고, 100% Supabase(DB, 57개 Edge Functions, Storage)로
+// 연결된 자체 클라이언트를 내보냅니다.
+// 화면 코드들은 `base44.entities.*`, `base44.functions.invoke(...)` 그대로 사용 가능합니다.
+// ============================================================
 
-const { appId, token, functionsVersion, appBaseUrl } = appParams;
+import { createSupabaseAppClient } from '@/lib/kwAuthClient';
 
-// The platform client is created exactly as before. installKwAuth wraps it so that an employee
-// who signed in with the ID and password their employer issued is answered by this app's own
-// door, while a work-email sign-in keeps going straight to the platform.
-export const base44 = installKwAuth(createClient({
-  appId,
-  token,
-  functionsVersion,
-  serverUrl: '',
-  appBaseUrl
-}));
+// 100% Supabase 단독 체제의 클라이언트를 생성하여 내보냅니다.
+export const base44 = createSupabaseAppClient();
