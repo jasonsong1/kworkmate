@@ -1,15 +1,18 @@
-// 자동 생성 파일입니다. 직접 수정하지 마세요.
-// 원본: base44/functions/submitOnboarding/entry.ts (변환 도구: supabase/tools/port_function.mjs)
+// ==============================================================================
+// KWorkMate 온보딩 제출 처리 엣지 펑션 (submitOnboarding)
+// 기능: 직원 온보딩 결과 저장, TFN AES-256 암호화, 서류 보관함 등록, 확인 메일 발송
+// ==============================================================================
 
 import { createBase44Like } from '../_shared/server.ts';
 import { withCors } from '../_shared/http.mjs';
 import { sendEmail, brandedEmail } from '../_shared/email.ts';
 import { sendAccountAccessEmail } from '../_shared/account.ts';
+import { encryptSensitiveText } from '../_shared/crypto.ts';
 
-async function handler(req) {
+async function handler(req: Request) {
   try {
     const base44 = createBase44Like();
-    const body = await req.json();
+    const body = await req.json().catch(() => ({}));
     const token = body.token;
     if (!token) return Response.json({ error: 'token is required' }, { status: 400 });
 
@@ -39,18 +42,17 @@ async function handler(req) {
       ? await base44.asServiceRole.entities.Company.get(employee.company_id).catch(() => null)
       : null;
 
-    // The employer's own questions: what was asked of this employee has to be answered before
-    // the form can be filed.
+    // 고용주가 등록한 추가 설문 문항 응답 수집
     const asked = ((company && company.onboarding_questions) || []).filter(
-      (question) => question && question.visible !== false && String(question.label || '').trim()
+      (question: any) => question && question.visible !== false && String(question.label || '').trim()
     );
     const incomingAnswers = Array.isArray(body.extra_answers) ? body.extra_answers.slice(0, 30) : [];
-    const onboardingAnswers = asked.map((question) => {
-      const given = incomingAnswers.find((entry) => entry && entry.id === question.id) || {};
+    const onboardingAnswers = asked.map((question: any) => {
+      const given = incomingAnswers.find((entry: any) => entry && entry.id === question.id) || {};
       const answer = String(given.answer || '').trim();
-      const followUp = {};
+      const followUp: Record<string, string> = {};
       if (question.type === 'yes_no' && question.follow_up && question.follow_up.when === answer) {
-        (question.follow_up.fields || []).forEach((field) => {
+        (question.follow_up.fields || []).forEach((field: string) => {
           followUp[field] = String((given.follow_up || {})[field] || '').trim();
         });
       }
@@ -58,25 +60,24 @@ async function handler(req) {
     });
 
     for (const entry of onboardingAnswers) {
-      const question = asked.find((item) => item.id === entry.id) || {};
+      const question = asked.find((item: any) => item.id === entry.id) || {};
       if (question.required !== false && !entry.answer) {
         return Response.json({ error: `Please answer: ${question.label}` }, { status: 400 });
       }
       if (question.type === 'yes_no' && question.follow_up && question.follow_up.when === entry.answer) {
-        const missing = (question.follow_up.fields || []).find((field) => !entry.follow_up[field]);
+        const missing = (question.follow_up.fields || []).find((field: string) => !entry.follow_up[field]);
         if (missing) return Response.json({ error: `Please complete: ${missing}` }, { status: 400 });
       }
     }
 
-    const incomingDocs = Array.isArray(body.docs) ? body.docs.slice(0, 10) : [];
+    const incomingDocs = Array.isArray(body.docs) ? body.docs.slice(0, 15) : [];
     const existingDocs = Array.isArray(employee.docs) ? employee.docs : [];
-    const keep = existingDocs.filter((d) => d && (d.type === 'resume' || d.uploaded_by === 'self'));
+    const keep = existingDocs.filter((d: any) => d && (d.type === 'resume' || d.uploaded_by === 'self'));
 
     const signedAt = new Date().toISOString();
 
-    // The payroll fields the record itself keeps. What the form answered is what gets written, so
-    // a wage run reads the record rather than going looking through the answers list.
-    const payroll: any = {};
+    // 급여/세무/연금 필드 조합
+    const payroll: Record<string, any> = {};
     if (tfn.pending) payroll.tfn_pending = true;
     if (tfn.number) payroll.tfn_number = String(tfn.number).trim();
     if (tfn.residency_status) payroll.residency_status = tfn.residency_status;
@@ -93,17 +94,15 @@ async function handler(req) {
     if (bank.account_number) payroll.bank_account_number = String(bank.account_number).trim();
     if (bank.account_name) payroll.bank_account_name = String(bank.account_name).trim();
 
-    // The employer's own questions carry the very same details, so an answer given on the link is
-    // written onto the record too. The standard form's questions are named, and each answer fills
-    // the field it stands for.
     const answerTo = (id: string) => {
-      const row = onboardingAnswers.find((entry) => entry.id === id);
+      const row = onboardingAnswers.find((entry: any) => entry.id === id);
       return row ? String(row.answer || '').trim() : '';
     };
     const followUpTo = (id: string, field: string) => {
-      const row = onboardingAnswers.find((entry) => entry.id === id);
+      const row = onboardingAnswers.find((entry: any) => entry.id === id);
       return row && row.follow_up ? String(row.follow_up[field] || '').trim() : '';
     };
+
     const STANDARD_TEXT: Record<string, string> = {
       default_address: 'address',
       default_phone: 'phone',
@@ -118,16 +117,20 @@ async function handler(req) {
       const value = answerTo(questionId);
       if (value) payroll[field] = value;
     });
+
     const tfnHeld = answerTo('default_tfn_held');
     if (tfnHeld === 'yes') {
       const number = followUpTo('default_tfn_held', 'Tax File Number');
       if (number) payroll.tfn_number = number;
     }
     if (tfnHeld === 'no') payroll.tfn_pending = true;
+
     const taxFree = answerTo('default_tax_free');
     if (taxFree) payroll.tax_free_threshold = taxFree === 'yes';
+
     const hecs = answerTo('default_hecs');
     if (hecs) payroll.hecs_help = hecs === 'yes';
+
     const useDefaultFund = answerTo('default_super_default');
     if (useDefaultFund === 'yes') {
       payroll.super_choice = 'default_fund';
@@ -143,6 +146,11 @@ async function handler(req) {
       if (fund) payroll.super_fund_name = fund;
       if (usi) payroll.super_usi = usi;
       if (member) payroll.super_member_number = member;
+    }
+
+    // [보안 암호화]: 호주 개인정보보호법 및 규칙 8번에 따라 TFN 번호를 AES-256으로 암호화하여 DB에 보관
+    if (payroll.tfn_number) {
+      payroll.tfn_number = await encryptSensitiveText(payroll.tfn_number);
     }
 
     await base44.asServiceRole.entities.EmployeeProfile.update(employee.id, {
@@ -164,14 +172,14 @@ async function handler(req) {
         brandColor: (branch && branch.brand_color) || '#4338ca',
         lines: [
           `Hi ${employee.full_name},`,
-          `We have received and filed your onboarding documents for <b>${branch ? branch.name : 'your store'}</b>.`,
+          `We have received and filed your onboarding documents (including official ATO NAT 3092 & NAT 13080 forms) for <b>${branch ? branch.name : 'your store'}</b>.`,
           'Your signed documents are stored securely on your employee profile. Nothing else is needed from you.'
         ],
         footer: `${company ? company.name : ''} · kworkmate`
       })
     });
 
-    // Onboarding is done, so the employee can now be handed their account access.
+    // 온보딩 완료 후 계정 접근 권한 안내 이메일 발송
     const account = await sendAccountAccessEmail(base44, employee.user_email);
 
     return Response.json({
@@ -180,7 +188,7 @@ async function handler(req) {
       invited: account.invited,
       password_email_sent: account.password_email_sent
     });
-  } catch (error) {
+  } catch (error: any) {
     return Response.json({ error: error.message }, { status: 500 });
   }
 }

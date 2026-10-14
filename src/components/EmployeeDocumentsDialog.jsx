@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { FileText, Loader2, Trash2, Upload } from 'lucide-react';
+import { FileText, Loader2, Trash2, Upload, FileCheck, Shield } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -40,9 +40,6 @@ export default function EmployeeDocumentsDialog({ open, onOpenChange, employee }
     }
   }, [open, employee]);
 
-  // A signed-in employee holds this app's own session rather than a platform one, so their own
-  // staff record is what signs the file — and only a file that record already carries is ever
-  // signed. The employer's own screen keeps the platform's own signing.
   const identity = kwIdentity();
   const viaOwnRecord = Boolean(kwActive() && identity && employee && identity.email === employee.user_email);
 
@@ -61,7 +58,6 @@ export default function EmployeeDocumentsDialog({ open, onOpenChange, employee }
     }
   };
 
-  // Their own file, filed by themselves: the employer sees it on the same record.
   const upload = async (event) => {
     const file = event.target.files && event.target.files[0];
     event.target.value = '';
@@ -80,8 +76,6 @@ export default function EmployeeDocumentsDialog({ open, onOpenChange, employee }
     }
   };
 
-  // A file the employee filed themselves is theirs to remove; what the employer or the
-  // onboarding run put on the record stays.
   const remove = async (doc) => {
     if (!doc || !doc.file_uri) return;
     setRemovingId(doc.file_uri);
@@ -97,17 +91,30 @@ export default function EmployeeDocumentsDialog({ open, onOpenChange, employee }
     }
   };
 
+  const isAtoDoc = (doc) => {
+    if (!doc) return false;
+    const name = String(doc.name || '').toLowerCase();
+    const type = String(doc.type || '').toLowerCase();
+    const docType = String(doc.doc_type || '').toLowerCase();
+    return (
+      docType.startsWith('ato_') ||
+      type.startsWith('ato_') ||
+      name.includes('nat 3092') ||
+      name.includes('nat 13080') ||
+      name.includes('tfn declaration') ||
+      name.includes('superannuation standard choice')
+    );
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[85vh] max-w-3xl overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>
-            {t('employees.vault')} — {employee ? employee.full_name : ''}
+          <DialogTitle className="flex items-center gap-2">
+            <span>{t('employees.vault')} — {employee ? employee.full_name : ''}</span>
           </DialogTitle>
         </DialogHeader>
 
-        {/* An employee files their own documents here; the employer's copy of this screen does
-            not offer it. */}
         {viaOwnRecord && (
           <div className="flex w-full items-center justify-between gap-3 rounded-lg border px-4 py-3">
             <p className="text-sm text-muted-foreground">{t('employees.docUploadHint')}</p>
@@ -134,7 +141,6 @@ export default function EmployeeDocumentsDialog({ open, onOpenChange, employee }
           </div>
         )}
 
-        {/* What their employer asks a new hire for, and what has arrived. */}
         {(currentEmployee || employee) && company && (
           <OnboardingStatusList
             profile={currentEmployee || employee}
@@ -149,46 +155,61 @@ export default function EmployeeDocumentsDialog({ open, onOpenChange, employee }
         {docs.length === 0 ? (
           <p className="py-8 text-center text-sm text-muted-foreground">{t('employees.noDocs')}</p>
         ) : (
-          <div className="w-full divide-y rounded-lg border">
-            {docs.map((doc, index) => (
-              <div key={`${doc.file_uri}-${index}`} className="flex items-center gap-3 px-4 py-3">
-                <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium">{doc.name || 'Document'}</p>
-                  <p className="text-xs text-muted-foreground">{formatDateTime(doc.created_at)}</p>
-                </div>
-                <Badge variant="secondary" className="shrink-0 capitalize">
-                  {String(doc.type || 'file').replace(/_/g, ' ')}
-                </Badge>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => openDoc(doc)}
-                  disabled={loadingId === doc.file_uri}
-                >
-                  {loadingId === doc.file_uri ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          <div className="w-full divide-y rounded-lg border bg-card">
+            {docs.map((doc, index) => {
+              const ato = isAtoDoc(doc);
+              return (
+                <div key={`${doc.file_uri}-${index}`} className="flex items-center gap-3 px-4 py-3">
+                  {ato ? (
+                    <FileCheck className="h-4 w-4 shrink-0 text-emerald-600" />
                   ) : (
-                    t('common.open')
+                    <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
                   )}
-                </Button>
-                {viaOwnRecord && (doc.uploaded_by === 'self' || doc.type === 'staff_upload') && (
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium flex items-center gap-2">
+                      <span>{doc.name || 'Document'}</span>
+                      {ato && (
+                        <span className="inline-flex items-center gap-1 rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 border border-emerald-200">
+                          <Shield className="h-2.5 w-2.5" /> ATO Official
+                        </span>
+                      )}
+                    </p>
+                    <p className="text-xs text-muted-foreground">{formatDateTime(doc.created_at)}</p>
+                  </div>
+                  <Badge variant={ato ? 'default' : 'secondary'} className={`shrink-0 capitalize ${ato ? 'bg-emerald-600 hover:bg-emerald-700' : ''}`}>
+                    {ato ? 'ATO Form' : String(doc.type || 'file').replace(/_/g, ' ')}
+                  </Badge>
                   <Button
                     size="sm"
-                    variant="ghost"
-                    onClick={() => remove(doc)}
-                    disabled={removingId === doc.file_uri}
-                    title={t('common.delete')}
+                    variant={ato ? 'default' : 'outline'}
+                    className={ato ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : ''}
+                    onClick={() => openDoc(doc)}
+                    disabled={loadingId === doc.file_uri}
                   >
-                    {removingId === doc.file_uri ? (
+                    {loadingId === doc.file_uri ? (
                       <Loader2 className="h-3.5 w-3.5 animate-spin" />
                     ) : (
-                      <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                      t('common.open')
                     )}
                   </Button>
-                )}
-              </div>
-            ))}
+                  {viaOwnRecord && (doc.uploaded_by === 'self' || doc.type === 'staff_upload') && !ato && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => remove(doc)}
+                      disabled={removingId === doc.file_uri}
+                      title={t('common.delete')}
+                    >
+                      {removingId === doc.file_uri ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                      )}
+                    </Button>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
       </DialogContent>

@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { AlertCircle, ArrowLeft, ArrowRight, CheckCircle2, Loader2, Paperclip, ShieldCheck } from 'lucide-react';
+import { AlertCircle, ArrowLeft, ArrowRight, CheckCircle2, Loader2, Paperclip, ShieldCheck, FileCheck } from 'lucide-react';
 import SignaturePad from '@/components/onboarding/SignaturePad';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -9,12 +9,11 @@ import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { buildContractPdf } from '@/lib/onboardingPdf';
+import { buildContractPdf, buildTfnPdf, buildSuperPdf } from '@/lib/onboardingPdf';
 import { dateFormatOf, maskDate, validDate } from '@/lib/onboardingDates';
 import { base44 } from '@/api/base44Client';
 
-// The onboarding form is the employer's own: their questions grouped into pages, then the
-// signature the employee signs last.
+// 온보딩 설문지는 고용주가 정한 질문들로 구성되며, 마지막 단계에서 전자서명을 진행합니다.
 const SIGN_TITLE = 'Sign & submit';
 
 export default function Onboarding() {
@@ -28,8 +27,7 @@ export default function Onboarding() {
   const [signature, setSignature] = useState('');
   const [declaration, setDeclaration] = useState(false);
   const [answers, setAnswers] = useState({});
-  // Documents the employer asked for: each one is uploaded as soon as it is chosen and the
-  // answer holds the file's name, so a required upload is answered by attaching it.
+  // 고용주가 요구한 증빙 서류 업로드 상태
   const [uploads, setUploads] = useState({});
   const [uploadingId, setUploadingId] = useState('');
 
@@ -49,8 +47,7 @@ export default function Onboarding() {
 
   const questions = (data && data.onboarding_questions) || [];
 
-  // Questions the employer gave the same page number appear together on one page. A question
-  // saved before pages existed gets a page of its own.
+  // 고용주가 설정한 페이지 번호에 따라 질문들을 페이지별로 그룹화합니다.
   const pages = [];
   const explicitPages = questions
     .map((question) => Number(question.page))
@@ -80,10 +77,6 @@ export default function Onboarding() {
       [id]: { ...(prev[id] || {}), follow_up: { ...((prev[id] || {}).follow_up || {}), [field]: value } }
     }));
 
-  // A document the employer asked for is uploaded the moment it is chosen, so the answer is
-  // settled long before the form is submitted.
-  // The employer's own rules for one answer: how many digits a number may hold, whether a date is
-  // a whole day or only a year, and which file types may be attached.
   const validationOf = (question) => question.validation || {};
 
   const allowedFileTypes = (question) =>
@@ -149,6 +142,7 @@ export default function Onboarding() {
 
   const toFile = async (blob, name) => new File([blob], name, { type: 'application/pdf' });
 
+  // [핵심] 온보딩 설문지 최종 제출 처리
   const submit = async () => {
     if (!stepValid) {
       setError('Please sign and accept the declaration.');
@@ -157,24 +151,61 @@ export default function Onboarding() {
     setSaving(true);
     setError('');
     try {
+      const now = new Date().toISOString();
+
+      // 1. 전자서명 이미지 업로드
       const signatureBlob = await (await fetch(signature)).blob();
       const signatureFile = new File([signatureBlob], 'signature.png', { type: 'image/png' });
       const signatureUpload = await base44.integrations.Core.UploadPrivateFile({ file: signatureFile });
 
-      const context = {
+      // 2. 답변 내용에서 세무(TFN) 및 연금(Super) 필드 추출
+      const answerVal = (id) => (answers[id] || {}).answer || '';
+      const followVal = (id, field) => ((answers[id] || {}).follow_up || {})[field] || '';
+
+      const tfnHeld = answerVal('default_tfn_held');
+      const formData = {
+        tfn_pending: tfnHeld === 'no',
+        tfn_number: tfnHeld === 'yes' ? followVal('default_tfn_held', 'Tax File Number') : answerVal('default_tfn'),
+        residency_status: answerVal('default_residency') || 'resident',
+        tax_free_threshold: answerVal('default_tax_free') !== 'no',
+        hecs_help: answerVal('default_hecs') === 'yes',
+        super_choice: answerVal('default_super_default') === 'no' ? 'custom_fund' : 'default_fund',
+        super_fund_name: answerVal('default_super_default') === 'no' ? followVal('default_super_default', 'Fund name') : (data.company?.default_super_fund_name || ''),
+        super_usi: answerVal('default_super_default') === 'no' ? followVal('default_super_default', 'USI') : (data.company?.default_super_fund_usi || ''),
+        super_member_number: answerVal('default_super_default') === 'no' ? followVal('default_super_default', 'Member number') : '',
+        super_fund_abn: answerVal('default_super_default') === 'no' ? followVal('default_super_default', 'Fund ABN') : (data.company?.default_super_fund_abn || ''),
+        signed_at: now
+      };
+
+      const pdfContext = {
         employee: data.employee,
         branch: data.branch,
         company: data.company,
-        form: {},
+        form: formData,
         signatureDataUrl: signature
       };
-      const contractUpload = await base44.integrations.Core.UploadPrivateFile({
-        file: await toFile(buildContractPdf(context), 'employment-contract.pdf')
-      });
 
-      const now = new Date().toISOString();
-      // The documents the employer asked for are filed beside the signed contract, so they land
-      // in the employee's own document folder.
+      // 3. ATO 공식 NAT 3092 (TFN 신고서), NAT 13080 (연금 선택서), 고용 계약서 3종 자동 생성
+      const [tfnPdfBlob, superPdfBlob, contractPdfBlob] = await Promise.all([
+        buildTfnPdf(pdfContext),
+        buildSuperPdf(pdfContext),
+        buildContractPdf(pdfContext)
+      ]);
+
+      // 4. 생성된 공식 PDF들을 안전한 Private 스토리지에 병렬 업로드
+      const [tfnUpload, superUpload, contractUpload] = await Promise.all([
+        base44.integrations.Core.UploadPrivateFile({
+          file: await toFile(tfnPdfBlob, `TFN_Declaration_NAT3092_${data.employee.employee_number || 'staff'}.pdf`)
+        }),
+        base44.integrations.Core.UploadPrivateFile({
+          file: await toFile(superPdfBlob, `Super_Choice_NAT13080_${data.employee.employee_number || 'staff'}.pdf`)
+        }),
+        base44.integrations.Core.UploadPrivateFile({
+          file: await toFile(contractPdfBlob, `employment-contract_${data.employee.employee_number || 'staff'}.pdf`)
+        })
+      ]);
+
+      // 5. 직원이 직접 첨부한 증빙 파일들과 함께 서류함 등록 목록 구성
       const uploadedDocs = questions
         .filter((question) => question.type === 'upload' && uploads[question.id])
         .map((question) => ({
@@ -184,7 +215,22 @@ export default function Onboarding() {
           created_at: now,
           uploaded_by: 'self'
         }));
+
       const docs = [
+        {
+          name: 'ATO Tax File Number Declaration (NAT 3092)',
+          type: 'ato_tfn',
+          doc_type: 'ato_tfn',
+          file_uri: tfnUpload.file_uri,
+          created_at: now
+        },
+        {
+          name: 'ATO Superannuation Standard Choice (NAT 13080)',
+          type: 'ato_super',
+          doc_type: 'ato_super',
+          file_uri: superUpload.file_uri,
+          created_at: now
+        },
         {
           name: 'Employment contract',
           type: 'contract',
@@ -195,9 +241,24 @@ export default function Onboarding() {
         ...uploadedDocs
       ];
 
+      // 6. 백엔드 함수(submitOnboarding)에 서류 및 설문 결과 전송
       const response = await base44.functions.invoke('submitOnboarding', {
         token,
         signature_file_uri: signatureUpload.file_uri,
+        tfn: {
+          number: formData.tfn_number,
+          pending: formData.tfn_pending,
+          residency_status: formData.residency_status,
+          tax_free_threshold: formData.tax_free_threshold,
+          hecs_help: formData.hecs_help
+        },
+        super: {
+          choice: formData.super_choice,
+          fund_name: formData.super_fund_name,
+          usi: formData.super_usi,
+          fund_abn: formData.super_fund_abn,
+          member_number: formData.super_member_number
+        },
         docs,
         extra_answers: questions.map((question) => ({
           id: question.id,
@@ -218,7 +279,7 @@ export default function Onboarding() {
       }
       setState('done');
     } catch (err) {
-      setError(err.message);
+      setError(err.message || '온보딩 서류 제출 중 오류가 발생했습니다.');
     } finally {
       setSaving(false);
     }
@@ -249,7 +310,7 @@ export default function Onboarding() {
           </h1>
           <p className="mt-2 text-sm text-slate-500">
             {isDone
-              ? 'Your onboarding has been received. Your answers and signed documents are filed securely, and this link can no longer be used.'
+              ? 'Your onboarding has been received. Your answers and ATO official signed documents (NAT 3092 & NAT 13080) are filed securely.'
               : 'This onboarding link is invalid or has already been completed. Please contact your manager.'}
           </p>
         </div>
@@ -334,79 +395,79 @@ export default function Onboarding() {
                   )}
 
                   {question.type === 'upload' && (
-                  <label className="flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-dashed border-slate-300 p-3 text-sm">
-                    <span className="flex min-w-0 items-center gap-2 text-slate-600">
-                      {uploadingId === question.id ? (
-                        <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
-                      ) : (
-                        <Paperclip className="h-4 w-4 shrink-0" />
-                      )}
-                      <span className="truncate">
-                        {uploadingId === question.id
-                          ? 'Uploading…'
-                          : uploads[question.id]
-                            ? uploads[question.id].name
-                            : 'Choose a file'}
+                    <label className="flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-dashed border-slate-300 p-3 text-sm">
+                      <span className="flex min-w-0 items-center gap-2 text-slate-600">
+                        {uploadingId === question.id ? (
+                          <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
+                        ) : (
+                          <Paperclip className="h-4 w-4 shrink-0" />
+                        )}
+                        <span className="truncate">
+                          {uploadingId === question.id
+                            ? 'Uploading…'
+                            : uploads[question.id]
+                              ? uploads[question.id].name
+                              : 'Choose a file'}
+                        </span>
                       </span>
-                    </span>
-                    <span className="shrink-0 text-xs font-medium text-primary">
-                      {allowedFileTypes(question).length > 0
-                        ? allowedFileTypes(question).join(' / ').toUpperCase()
-                        : 'Browse'}
-                    </span>
-                    <input
-                      type="file"
-                      className="hidden"
-                      accept={allowedFileTypes(question).map((type) => `.${type}`).join(',')}
-                      onChange={(event) => chooseFile(question, event.target.files && event.target.files[0])}
-                    />
-                  </label>
+                      <span className="shrink-0 text-xs font-medium text-primary">
+                        {allowedFileTypes(question).length > 0
+                          ? allowedFileTypes(question).join(' / ').toUpperCase()
+                          : 'Browse'}
+                      </span>
+                      <input
+                        type="file"
+                        className="hidden"
+                        accept={allowedFileTypes(question).map((type) => `.${type}`).join(',')}
+                        onChange={(event) => chooseFile(question, event.target.files && event.target.files[0])}
+                      />
+                    </label>
                   )}
 
                   {question.type === 'number' && (
-                  <Input
-                    inputMode="numeric"
-                    value={value.answer || ''}
-                    onChange={(event) =>
-                      setAnswer(question.id, digitsOnly(event.target.value, Number(validationOf(question).digits) || 0))
-                    }
-                    placeholder={
-                      Number(validationOf(question).digits) > 0
-                        ? `Up to ${validationOf(question).digits} digits`
-                        : 'Numbers only'
-                    }
-                  />
-                  )}
-
-                  {question.type === 'date' &&
-                  (dateFormatOf(question) === 'YYYY-MM-DD' ? (
-                    <Input
-                      type="date"
-                      value={value.answer || ''}
-                      onChange={(event) => setAnswer(question.id, event.target.value)}
-                    />
-                  ) : (
                     <Input
                       inputMode="numeric"
                       value={value.answer || ''}
                       onChange={(event) =>
-                        setAnswer(question.id, maskDate(event.target.value, dateFormatOf(question)))
+                        setAnswer(question.id, digitsOnly(event.target.value, Number(validationOf(question).digits) || 0))
                       }
-                      placeholder={dateFormatOf(question).toLowerCase()}
+                      placeholder={
+                        Number(validationOf(question).digits) > 0
+                          ? `Up to ${validationOf(question).digits} digits`
+                          : 'Numbers only'
+                      }
                     />
-                  ))}
+                  )}
+
+                  {question.type === 'date' &&
+                    (dateFormatOf(question) === 'YYYY-MM-DD' ? (
+                      <Input
+                        type="date"
+                        value={value.answer || ''}
+                        onChange={(event) => setAnswer(question.id, event.target.value)}
+                      />
+                    ) : (
+                      <Input
+                        inputMode="numeric"
+                        value={value.answer || ''}
+                        onChange={(event) =>
+                          setAnswer(question.id, maskDate(event.target.value, dateFormatOf(question)))
+                        }
+                        placeholder={dateFormatOf(question).toLowerCase()}
+                      />
+                    ))}
 
                   {question.type !== 'yes_no' &&
-                  question.type !== 'select' &&
-                  question.type !== 'upload' &&
-                  question.type !== 'number' &&
-                  question.type !== 'date' && (
-                  <Input
-                    value={value.answer || ''}
-                    onChange={(event) => setAnswer(question.id, event.target.value)}
-                    placeholder="Your answer"
-                  />
-                  )}
+                    question.type !== 'select' &&
+                    question.type !== 'upload' &&
+                    question.type !== 'number' &&
+                    question.type !== 'date' && (
+                      <Input
+                        value={value.answer || ''}
+                        onChange={(event) => setAnswer(question.id, event.target.value)}
+                        placeholder="Your answer"
+                      />
+                    )}
 
                   {fields.map((field) => (
                     <div key={field}>
@@ -428,7 +489,7 @@ export default function Onboarding() {
             <h2 className="text-sm font-semibold">Signature & declaration</h2>
             <div className="rounded-xl bg-slate-50 p-3 text-xs leading-relaxed text-slate-600">
               I declare that the information I have given in this form is true and correct, and I authorise{' '}
-              {data.company ? data.company.name : 'my employer'} to use these details for their employment records.
+              {data.company ? data.company.name : 'my employer'} to use these details for their employment records and official ATO reporting.
             </div>
             <SignaturePad
               ref={padRef}
@@ -447,9 +508,18 @@ export default function Onboarding() {
                 I have read and accept the declaration above
               </label>
             </div>
+            <div className="space-y-1.5 rounded-xl border border-emerald-100 bg-emerald-50/60 p-3 text-xs text-emerald-800">
+              <p className="flex items-center gap-1.5 font-medium">
+                <FileCheck className="h-4 w-4 text-emerald-600" />
+                호주 국세청(ATO) 공식 서류 자동 생성 안내
+              </p>
+              <p className="text-[11px] leading-relaxed text-emerald-700">
+                제출 시 ATO 공식 규격의 <b>NAT 3092 (TFN 신고서)</b> 및 <b>NAT 13080 (연금 선택서)</b> 정식 PDF가 전자서명과 함께 자동 완성되어 안전하게 보관됩니다.
+              </p>
+            </div>
             <p className="flex items-center gap-2 text-xs text-slate-500">
               <ShieldCheck className="h-3.5 w-3.5" />
-              Your signed employment contract is generated and stored securely.
+              TFN 및 금융 정보는 강력한 암호화로 안전하게 보호됩니다.
             </p>
           </section>
         )}

@@ -1,4 +1,10 @@
+// ==============================================================================
+// KWorkMate 온보딩 PDF 생성 브릿지 모듈
+// ATO 공식 규격 엔진(NAT 3092, NAT 13080) 및 표준 고용 계약서 지원
+// ==============================================================================
+
 import { jsPDF } from 'jspdf';
+import { generateAtoNat3092Pdf, generateAtoNat13080Pdf } from './atoPdfEngine';
 
 function newDoc(title, subtitle) {
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
@@ -63,48 +69,81 @@ function signatureBlock(doc, dataUrl, y, label) {
   doc.text(`Signed ${new Date().toLocaleString()}`, 14, top + 38);
 }
 
-export function buildTfnPdf({ employee, company, form, signatureDataUrl }) {
-  const doc = newDoc('Tax File Number Declaration', 'ATO NAT 3092 — K-Workmate generated record');
-  let y = rows(
-    doc,
-    [
-      ['Employer', `${company ? company.name : ''}${company && company.abn ? ` (ABN ${company.abn})` : ''}`],
-      ['Employee', employee.full_name],
-      ['Employee number', employee.employee_number],
-      ['Tax file number', form.tfn_pending ? 'Not yet issued — declaration pending' : form.tfn_number],
-      ['Residency status', form.residency_status],
-      ['Tax-free threshold', form.tax_free_threshold ? 'Claimed' : 'Not claimed'],
-      ['HECS / HELP debt', form.hecs_help ? 'Yes' : 'No'],
-      ['Declaration', 'I declare that the information I have provided is true and correct.']
-    ],
-    40
-  );
-  signatureBlock(doc, signatureDataUrl, y);
-  return doc.output('blob');
+/**
+ * [ATO 공식 규격] NAT 3092: Tax File Number Declaration PDF 생성
+ */
+export async function buildTfnPdf({ employee, company, form, signatureDataUrl }) {
+  try {
+    const pdfBytes = await generateAtoNat3092Pdf({
+      employee: employee || {},
+      company: company || {},
+      form: form || {},
+      signatureDataUrl
+    });
+    return new Blob([pdfBytes], { type: 'application/pdf' });
+  } catch (error) {
+    console.error('[buildTfnPdf] ATO NAT 3092 engine fallback:', error);
+    // 폴백 기본 생성
+    const doc = newDoc('Tax File Number Declaration', 'ATO NAT 3092 — K-Workmate generated record');
+    let y = rows(
+      doc,
+      [
+        ['Employer', `${company ? company.name : ''}${company && company.abn ? ` (ABN ${company.abn})` : ''}`],
+        ['Employee', employee.full_name],
+        ['Employee number', employee.employee_number],
+        ['Tax file number', form.tfn_pending ? 'Not yet issued — declaration pending' : form.tfn_number],
+        ['Residency status', form.residency_status],
+        ['Tax-free threshold', form.tax_free_threshold ? 'Claimed' : 'Not claimed'],
+        ['HECS / HELP debt', form.hecs_help ? 'Yes' : 'No'],
+        ['Declaration', 'I declare that the information I have provided is true and correct.']
+      ],
+      40
+    );
+    signatureBlock(doc, signatureDataUrl, y);
+    return doc.output('blob');
+  }
 }
 
-export function buildSuperPdf({ employee, company, form, signatureDataUrl }) {
-  const doc = newDoc('Superannuation Standard Choice Form', 'ATO NAT 13087 — K-Workmate generated record');
-  const isDefault = form.super_choice === 'default_fund';
-  let y = rows(
-    doc,
-    [
-      ['Employer', company ? company.name : ''],
-      ['Employee', employee.full_name],
-      ['Employee number', employee.employee_number],
-      ['Choice', isDefault ? `Employer default fund — ${form.super_fund_name || ''}` : 'My own nominated fund'],
-      ['Fund name', form.super_fund_name],
-      ['USI', form.super_usi],
-      ['Fund ABN', form.super_fund_abn],
-      ['Member number', form.super_member_number || '—'],
-      ['Declaration', 'I authorise my employer to pay my superannuation contributions as stated above.']
-    ],
-    40
-  );
-  signatureBlock(doc, signatureDataUrl, y);
-  return doc.output('blob');
+/**
+ * [ATO 공식 규격] NAT 13080: Superannuation Standard Choice Form PDF 생성
+ */
+export async function buildSuperPdf({ employee, company, form, signatureDataUrl }) {
+  try {
+    const pdfBytes = await generateAtoNat13080Pdf({
+      employee: employee || {},
+      company: company || {},
+      form: form || {},
+      signatureDataUrl
+    });
+    return new Blob([pdfBytes], { type: 'application/pdf' });
+  } catch (error) {
+    console.error('[buildSuperPdf] ATO NAT 13080 engine fallback:', error);
+    // 폴백 기본 생성
+    const doc = newDoc('Superannuation Standard Choice Form', 'ATO NAT 13080 — K-Workmate generated record');
+    const isDefault = form.super_choice === 'default_fund';
+    let y = rows(
+      doc,
+      [
+        ['Employer', company ? company.name : ''],
+        ['Employee', employee.full_name],
+        ['Employee number', employee.employee_number],
+        ['Choice', isDefault ? `Employer default fund — ${form.super_fund_name || ''}` : 'My own nominated fund'],
+        ['Fund name', form.super_fund_name],
+        ['USI', form.super_usi],
+        ['Fund ABN', form.super_fund_abn],
+        ['Member number', form.super_member_number || '—'],
+        ['Declaration', 'I authorise my employer to pay my superannuation contributions as stated above.']
+      ],
+      40
+    );
+    signatureBlock(doc, signatureDataUrl, y);
+    return doc.output('blob');
+  }
 }
 
+/**
+ * 고용 계약서 요약 PDF 생성
+ */
 export function buildContractPdf({ employee, branch, company, form, signatureDataUrl }) {
   const doc = newDoc('Employment Contract Summary', 'K-Workmate generated record');
   const items = [
