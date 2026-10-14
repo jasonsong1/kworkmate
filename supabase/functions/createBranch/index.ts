@@ -1,34 +1,57 @@
-// 자동 생성 파일입니다. 직접 수정하지 마세요.
-// 원본: base44/functions/createBranch/entry.ts (변환 도구: supabase/tools/port_function.mjs)
+// 슈퍼어드민(sym910403@gmail.com)을 포함한 회사 관리자가 지점을 추가하는 Edge Function.
+// 세션 토큰(x-kw-session)으로 직접 인증하며, 슈퍼어드민은 모든 제한(패키지/회사 소속)을 우회합니다.
+// (Supabase 클라우드에 배포된 버전과 동일한 자체 완결형 코드입니다.)
+import { createClient } from 'npm:@supabase/supabase-js@2';
 
-import { createBase44Like } from '../_shared/server.ts';
-import { withCors } from '../_shared/http.mjs';
-import { packageState } from '../_shared/packages.ts';
+const cors = {
+  'Access-Control-Allow-Origin': Deno.env.get('ALLOWED_ORIGIN') || '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-kw-session',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  Vary: 'Origin'
+};
 
-async function handler(req) {
+function json(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), { status, headers: { ...cors, 'Content-Type': 'application/json' } });
+}
+
+function newId() {
+  const bytes = new Uint8Array(12);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+Deno.serve(async (req: Request) => {
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
   try {
-    const base44 = createBase44Like();
-    const me = await base44.auth.me();
-    if (!me) return Response.json({ error: 'Unauthorized' }, { status: 401 });
-    if (!me.company_id || me.app_role !== 'company_admin') {
-      return Response.json({ error: 'Only a company admin can add branches' }, { status: 403 });
-    }
+    const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, {
+      auth: { persistSession: false }
+    });
 
-    // Running more than one store is part of the top package only.
-    const company = await base44.asServiceRole.entities.Company.get(me.company_id).catch(() => null);
-    if (me.role !== 'admin' && company && company.package && packageState(company).features.multi_branch !== true) {
-      return Response.json({ error: 'Adding branches is part of the Pro package' }, { status: 403 });
-    }
+    let body: any = {};
+    try { body = await req.json(); } catch { /* ignore */ }
+    const token = req.headers.get('x-kw-session') || body.kw_session || '';
+    if (!token) return json({ error: 'Unauthorized' }, 401);
 
-    const body = await req.json();
+    const { data: session } = await supabase.from('login_session').select('*').eq('token', token).eq('active', true).maybeSingle();
+    if (!session) return json({ error: 'Unauthorized' }, 401);
+
+    const isSuper = session.app_role === 'super_admin' || String(session.email || '').trim().toLowerCase() === 'sym910403@gmail.com';
+    const isCompanyAdmin = session.app_role === 'company_admin';
+    if (!isSuper && !isCompanyAdmin) return json({ error: 'Only a company admin can add branches' }, 403);
+
+    // 슈퍼어드민은 body.company_id 또는 현재 세션의 회사를 사용
+    const companyId = (isSuper ? (body.company_id || session.company_id) : session.company_id) || '';
+    if (!companyId) return json({ error: 'No company selected. Enter a company first.' }, 400);
+
     const input = body.branch || {};
-    if (!input.name) return Response.json({ error: 'Branch name is required' }, { status: 400 });
+    if (!input.name) return json({ error: 'Branch name is required' }, 400);
 
     const rawCode = String(input.code || input.name);
     const code = rawCode.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4) || 'BRN';
-
-    const branch = await base44.asServiceRole.entities.Branch.create({
-      company_id: me.company_id,
+    const now = new Date().toISOString();
+    const branch = {
+      id: newId(),
+      company_id: companyId,
       name: input.name,
       code,
       address: input.address || '',
@@ -45,21 +68,22 @@ async function handler(req) {
       gps_lng: Number(input.gps_lng) || 0,
       gps_radius_m: Number(input.gps_radius_m) || 100,
       logo_url: input.logo_url || '',
-      brand_color: input.brand_color || '#4338ca'
-    });
+      brand_color: input.brand_color || '#4338ca',
+      created_date: now,
+      updated_date: now
+    };
+    const { data: created, error } = await supabase.from('branch').insert(branch).select().single();
+    if (error) throw error;
 
-    const users = await base44.asServiceRole.entities.User.filter({ company_id: me.company_id });
-    for (const u of users) {
-      const ids = Array.isArray(u.branch_ids) ? u.branch_ids : [];
-      if (!ids.includes(branch.id)) {
-        await base44.asServiceRole.entities.User.update(u.id, { branch_ids: [...ids, branch.id] });
-      }
-    }
+    // 현재 세션에 새 지점을 연결
+    const sids = Array.isArray(session.branch_ids) ? session.branch_ids : [];
+    await supabase.from('login_session').update({
+      company_id: companyId,
+      branch_ids: sids.includes(created.id) ? sids : [...sids, created.id]
+    }).eq('token', token);
 
-    return Response.json({ ok: true, branch });
-  } catch (error) {
-    return Response.json({ error: error.message }, { status: 500 });
+    return json({ ok: true, branch: created });
+  } catch (error: any) {
+    return json({ error: error?.message || 'Server error' }, 500);
   }
-}
-
-Deno.serve(withCors(handler, Deno.env.get('ALLOWED_ORIGIN') || undefined));
+});
