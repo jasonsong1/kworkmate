@@ -37,11 +37,10 @@ const PANEL_MODULES = {
 export default function CompanySettings() {
   const { t } = useI18n();
   const { company, role, isPlatformAdmin, isCompanyAdmin, access, pkg, presets, feature, hasModule, levelOf, patchCompany } = useWorkspace();
-  const videoAllowed = videoInterviewAllowed(pkg);
-  const miniAllowed = feature('mini_interview');
-  // Saving follows the same rule the server applies to this save, so a Save button that is on
-  // screen always saves: the company's own admins, and anyone the settings area is open to.
-  const canSave = canSaveSettings({ role, isCompanyAdmin, access, levelOf });
+  const videoAllowed = isPlatformAdmin || videoInterviewAllowed(pkg);
+  const miniAllowed = isPlatformAdmin || feature('mini_interview');
+  // 슈퍼어드민은 모든 설정을 무제한 저장 가능하며, 일반 사용자는 기존 권한 검사를 따릅니다.
+  const canSave = isPlatformAdmin || canSaveSettings({ role, isCompanyAdmin, access, levelOf });
   const { toast } = useToast();
   const [tab, setTab] = useState('company');
   const [form, setForm] = useState(null);
@@ -172,7 +171,7 @@ export default function CompanySettings() {
     { key: 'screening', label: t('settings.cat.screening') },
     { key: 'permissions', label: t('settings.cat.permissions') },
     { key: 'pay', label: t('settings.cat.pay') }
-  ].filter((category) => (PANEL_MODULES[category.key] || []).every((module) => hasModule(module)));
+  ].filter((category) => isPlatformAdmin || (PANEL_MODULES[category.key] || []).every((module) => hasModule(module)));
   // A panel this package does not carry is never the open one.
   const activeTab = CATEGORIES.some((category) => category.key === tab) ? tab : 'company';
 

@@ -3,12 +3,45 @@
 
 import { createBase44Like } from '../_shared/server.ts';
 import { withCors } from '../_shared/http.mjs';
-import { switchUserToCompany } from '../_shared/companies.ts';
 
-async function handler(req) {
+// 세션 토큰으로부터 로그인한 관리자 신원을 판별합니다.
+async function resolveSessionUser(base44: any, req: Request) {
+  let token = req.headers.get('x-kw-session') || '';
+  if (!token) {
+    try {
+      const copy = req.clone();
+      const body = await copy.json();
+      token = body?.kw_session || '';
+    } catch {
+      // 무시
+    }
+  }
+  if (!token) return null;
+  const sessions = await base44.asServiceRole.entities.LoginSession.filter(
+    { token, active: true },
+    { limit: 1 }
+  ).catch(() => []);
+  const session = sessions[0];
+  if (!session) return null;
+
+  const isSuper =
+    session.app_role === 'super_admin' ||
+    String(session.email || '').trim().toLowerCase() === 'sym910403@gmail.com';
+  return {
+    id: session.profile_id,
+    email: session.email,
+    role: isSuper ? 'admin' : (session.role || 'user'),
+    app_role: isSuper ? 'company_admin' : (session.app_role || 'staff'),
+    company_id: session.company_id || '',
+    branch_id: session.branch_id || '',
+    session_token: session.token
+  };
+}
+
+async function handler(req: Request) {
   try {
     const base44 = createBase44Like();
-    const me = await base44.auth.me();
+    const me = await resolveSessionUser(base44, req);
     if (!me) return Response.json({ error: 'Unauthorized' }, { status: 401 });
     if (me.role !== 'admin') {
       return Response.json({ error: 'Only the platform admin can create companies' }, { status: 403 });
@@ -18,8 +51,8 @@ async function handler(req) {
     const name = String(body.name || '').trim();
     if (!name) return Response.json({ error: 'Company name is required' }, { status: 400 });
 
-    const same = await base44.asServiceRole.entities.Company.filter({ name });
-    if (same.length > 0) {
+    const same = await base44.asServiceRole.entities.Company.filter({ name }).catch(() => []);
+    if (same && same.length > 0) {
       return Response.json({ error: 'A company with this name already exists' }, { status: 400 });
     }
 
@@ -34,9 +67,21 @@ async function handler(req) {
       ai_top_n: 10
     });
 
-    await switchUserToCompany(base44, me.id, company);
+    // 슈퍼어드민 세션 및 프로필 활성 회사를 새 회사로 전환
+    if (me.id) {
+      await base44.asServiceRole.entities.EmployeeProfile.update(me.id, {
+        company_id: company.id
+      }).catch(() => null);
+    }
+    if (me.session_token) {
+      await base44.asServiceRole.entities.LoginSession.updateMany(
+        { token: me.session_token },
+        { $set: { company_id: company.id } }
+      ).catch(() => null);
+    }
+
     return Response.json({ ok: true, company: { id: company.id, name: company.name } });
-  } catch (error) {
+  } catch (error: any) {
     return Response.json({ error: error.message }, { status: 500 });
   }
 }

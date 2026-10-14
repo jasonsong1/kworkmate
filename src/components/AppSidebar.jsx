@@ -14,12 +14,17 @@ import {
   Settings,
   Mic,
   Palette,
-  UserCircle2
+  UserCircle2,
+  Mail,
+  QrCode,
+  Clock,
+  Sparkles
 } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 import { useWorkspace } from '@/lib/WorkspaceContext';
 import { cn } from '@/lib/utils';
 
+// 일반 매니저/관리자가 보는 기본 메뉴 (기존과 동일하게 유지)
 const MANAGER_ITEMS = [
   { to: '/', key: 'nav.dashboard', icon: LayoutDashboard, end: true, module: 'dashboard' },
   { to: '/branches', key: 'nav.branches', icon: Store, area: 'branch_settings', module: 'branches' },
@@ -35,9 +40,28 @@ const MANAGER_ITEMS = [
   { to: '/settings', key: 'nav.settings', icon: Settings, area: 'company_settings', module: 'settings' }
 ];
 
-// Everyone's own space: their shifts, their hours, their clock-in and their own record. The crew
-// lands on it straight after sign-in; a manager opens it from beside the manager screens, because
-// a manager works shifts too.
+// 슈퍼어드민(단 1명)만을 위한 전 기능 메뉴: 빠져 있던 이메일 템플릿, 공고 디자인, QR 디자인, 클락 등 전체 도구 포함
+const SUPER_ADMIN_ITEMS = [
+  { to: '/', key: 'nav.dashboard', icon: LayoutDashboard, end: true, module: 'dashboard' },
+  { to: '/branches', key: 'nav.branches', icon: Store, module: 'branches' },
+  { to: '/employees', key: 'nav.employees', icon: Users, module: 'employees' },
+  { to: '/jobs', key: 'nav.jobs', icon: Briefcase, module: 'jobs' },
+  { to: '/applicants', key: 'nav.applicants', icon: UserSearch, module: 'applicants' },
+  { to: '/interviews', key: 'nav.interviews', icon: CalendarClock, module: 'interviews' },
+  { to: '/roster', key: 'nav.roster', icon: CalendarDays, module: 'roster' },
+  { to: '/leave', key: 'nav.leave', icon: CalendarPlus, module: 'leave' },
+  { to: '/attendance', key: 'nav.attendance', icon: Timer, module: 'attendance' },
+  // 기존에 메뉴에서 누락되었거나 가려져 있던 고급 디자인 & 제어 도구들
+  { to: '/interview-settings', key: 'nav.interview', icon: Mic, module: 'interview_settings' },
+  { to: '/email-templates', key: 'nav.emailTemplates', icon: Mail, module: 'templates' },
+  { to: '/job-design', key: 'nav.jobDesign', icon: Sparkles, module: 'templates' },
+  { to: '/qr-design', key: 'nav.qrDesign', icon: QrCode, module: 'attendance' },
+  { to: '/clock', key: 'nav.clock', icon: Clock, module: 'attendance' },
+  { to: '/template-design', key: 'nav.templateDesign', icon: Palette, module: 'templates' },
+  { to: '/settings', key: 'nav.settings', icon: Settings, module: 'settings' }
+];
+
+// Everyone's own space: their shifts, their hours, their clock-in and their own record.
 const MY_SPACE_ITEM = { to: '/my-space', key: 'nav.mySpace', icon: UserCircle2, module: 'dashboard' };
 
 const STAFF_ITEMS = [{ to: '/', key: 'nav.mySpace', icon: UserCircle2, end: true, module: 'dashboard' }];
@@ -48,11 +72,15 @@ const PLATFORM_ITEMS = [{ to: '/platform', key: 'nav.platform', icon: ShieldChec
 export default function AppSidebar({ onNavigate }) {
   const { t } = useI18n();
   const { isManager, isPlatformAdmin, hasModule } = useWorkspace();
-  // The menu is exactly what the server resolved for this person: the package the company
-  // paid for, the preset of their position, and the grant their employer saved. Anything
-  // outside that is not shown at all.
-  const allowed = MANAGER_ITEMS.filter((item) => hasModule(item.module));
-  const items = isManager
+
+  // [중요 원칙]:
+  // 1) 슈퍼어드민(isPlatformAdmin)은 빠진 기능 없이 모든 메뉴 항목(SUPER_ADMIN_ITEMS)을 전부 볼 수 있습니다.
+  // 2) 다른 직책(매니저/스태프)은 본래 권한(hasModule 필터링)에 따라 부여된 메뉴만 보도록 기존 규칙을 100% 그대로 유지합니다.
+  const allowed = isPlatformAdmin
+    ? SUPER_ADMIN_ITEMS
+    : MANAGER_ITEMS.filter((item) => hasModule(item.module));
+
+  const items = isPlatformAdmin || isManager
     ? allowed.flatMap((item) => (item.end ? [item, MY_SPACE_ITEM] : [item]))
     : [
         ...STAFF_ITEMS.filter((item) => item.to === '/' || hasModule(item.module)),

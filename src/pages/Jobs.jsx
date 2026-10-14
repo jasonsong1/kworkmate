@@ -24,12 +24,13 @@ const statusTone = {
 
 export default function Jobs() {
   const { t } = useI18n();
-  const { company, activeBranch, access, pkg, reloadPackage, levelOf } = useWorkspace();
+  const { company, activeBranch, access, pkg, reloadPackage, levelOf, isPlatformAdmin } = useWorkspace();
   // A new ad is a create, and the position's own preset is what allows it: a position that may
   // only view or edit the ads it already has is never handed the button.
   const mayCreate = access ? levelOf('jobs') === 'write' : true;
   const limitReached = !canCreateJob(pkg);
-  const canCreate = !limitReached && mayCreate;
+  // 슈퍼어드민은 요금제 공고 제한 없이 항상 생성 가능하며, 일반 사용자는 기존 권한 검사를 따릅니다.
+  const canCreate = isPlatformAdmin || (!limitReached && mayCreate);
   const { toast } = useToast();
   const navigate = useNavigate();
   const roleOptions = (company && company.custom_roles) || [];

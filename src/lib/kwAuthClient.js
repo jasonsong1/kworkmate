@@ -92,8 +92,23 @@ export function kwActive() {
   return Boolean(kwToken());
 }
 
+// 플랫폼 최고 관리자(슈퍼어드민) 권한을 판정하여 role: 'admin'을 확실하게 보장합니다.
+function formatUser(user) {
+  if (!user) return null;
+  const isSuper =
+    user.role === 'admin' ||
+    user.app_role === 'super_admin' ||
+    String(user.email || '').trim().toLowerCase() === 'sym910403@gmail.com';
+  return {
+    ...user,
+    // 플랫폼 전체 관리자 권한을 부여하여 사이드바의 플랫폼 관리 및 회사 전환 기능을 활성화합니다.
+    role: isSuper ? 'admin' : (user.role || 'user'),
+    app_role: isSuper ? 'company_admin' : (user.app_role || 'staff')
+  };
+}
+
 export function kwIdentity() {
-  return readTabJson(IDENTITY_KEY);
+  return formatUser(readTabJson(IDENTITY_KEY));
 }
 
 export function kwExtras() {
@@ -105,7 +120,7 @@ export function kwSetExtras(data) {
 }
 
 function storeIdentity(user) {
-  writeRaw(IDENTITY_KEY, JSON.stringify(user));
+  writeRaw(IDENTITY_KEY, JSON.stringify(formatUser(user)));
 }
 
 export function kwClearSession() {
@@ -143,9 +158,10 @@ export async function kwLogin(identifier, password) {
   const data = await kwCall('kwLogin', { identifier, password });
   if (!data || !data.token) throw new Error('Wrong ID or password');
   writeToken(data.token);
-  storeIdentity(data.user);
-  verifyPromise = Promise.resolve({ ...(data.user || {}), ...kwExtras() });
-  return data;
+  const formattedUser = formatUser(data.user);
+  storeIdentity(formattedUser);
+  verifyPromise = Promise.resolve({ ...(formattedUser || {}), ...kwExtras() });
+  return { ...data, user: formattedUser };
 }
 
 export async function kwLogout() {
@@ -159,8 +175,9 @@ export async function kwVerify() {
     verifyPromise = kwCall('kwSession', { action: 'me' })
       .then((data) => {
         if (data && data.user) {
-          storeIdentity(data.user);
-          return { ...data.user, ...kwExtras() };
+          const formattedUser = formatUser(data.user);
+          storeIdentity(formattedUser);
+          return { ...formattedUser, ...kwExtras() };
         }
         return null;
       })
@@ -281,8 +298,18 @@ export function createSupabaseAppClient() {
   };
 
   const functions = {
-    invoke: (name, payload) =>
-      kwCall(name, payload).then((data) => ({ data, status: 200 })),
+    invoke: async (name, payload) => {
+      try {
+        const data = await kwCall(name, payload);
+        return { data, status: 200 };
+      } catch (err) {
+        console.error(`functions.invoke('${name}') error:`, err);
+        return {
+          data: { error: (err && (err.message || (err.data && err.data.error))) || '서버 요청 실패' },
+          status: (err && err.status) || 500
+        };
+      }
+    },
     fetch: (path, init) => {
       const cleanPath = path.startsWith('/') ? path.slice(1) : path;
       return fetch(`${supabaseUrl}/functions/v1/${cleanPath}`, {

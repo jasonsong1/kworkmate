@@ -177,33 +177,35 @@ export function WorkspaceProvider({ children }) {
   };
 
   const activeBranch = branches.find((b) => b.id === activeBranchId) || null;
-  // The app owner (platform admin) can enter any company; everyone else only sees their own.
-  const isPlatformAdmin = Boolean(me && me.role === 'admin');
-  // A super admin always acts as the company admin of the company they are in, whatever
-  // app role happens to be stored on their account.
+  // 최고 관리자(슈퍼어드민): 단 1명(sym910403@gmail.com 또는 role이 admin인 계정)으로 판정합니다.
+  const isPlatformAdmin = Boolean(
+    me && (
+      me.role === 'admin' ||
+      me.app_role === 'super_admin' ||
+      String(me.email || '').trim().toLowerCase() === 'sym910403@gmail.com'
+    )
+  );
+
+  // 슈퍼어드민은 회사 내에서도 항상 최고 관리자('company_admin') 권한으로 행동합니다.
   const role = isPlatformAdmin ? 'company_admin' : (me && me.app_role) || 'staff';
-  // A manager is one of the two roles the platform ships with, or whatever position the company
-  // itself put on a manager preset: an employer who promotes somebody to a manager position
-  // expects the manager screens, whatever role key sits behind that position.
+
   const preset = (permissions.presets || []).find((item) => item.key === permissions.presetKey) || null;
+  // 슈퍼어드민은 항상 매니저 및 최고 관리자 권한을 가집니다 (다른 직책은 기존 권한 유지).
   const isManager =
+    isPlatformAdmin ||
     role === 'company_admin' ||
     role === 'branch_manager' ||
     ['manager', 'supervisor_manager'].includes(permissions.presetKey) ||
-    // A position whose preset runs the company's crew areas across every store works in the back
-    // office, whatever the key of the platform preset behind it.
     coversEveryBranch(preset);
-  const isCompanyAdmin = role === 'company_admin';
+  const isCompanyAdmin = isPlatformAdmin || role === 'company_admin';
   const access = permissions.access;
 
-  // With no answer from the server nothing is hidden — the back office says so and offers a retry.
-  // An area the employer closed for this person carries "no access" as its own answer, so it is
-  // hidden and its address does not open it.
-  const hasModule = (module) => (access ? Boolean(access[module] && access[module].level !== 'none') : true);
-  const levelOf = (module) => (access && access[module] ? access[module].level : 'none');
-  const scopeOf = (module) => (access && access[module] ? access[module].scope : '');
-  const feature = (name) =>
-    !pkg || !pkg.package ? true : (permissions.features || {})[name] !== false;
+  // [슈퍼어드민 특권]: 패키지나 직책 제한 없이 모든 모듈, 최고 권한(write), 전체 범위(company), 모든 기능을 무제한 허용합니다.
+  // [일반 직책]: 기존의 패키지/직책 권한 판정 로직을 100% 그대로 유지합니다.
+  const hasModule = (module) => (isPlatformAdmin ? true : access ? Boolean(access[module] && access[module].level !== 'none') : true);
+  const levelOf = (module) => (isPlatformAdmin ? 'write' : access && access[module] ? access[module].level : 'none');
+  const scopeOf = (module) => (isPlatformAdmin ? 'company' : access && access[module] ? access[module].scope : '');
+  const feature = (name) => (isPlatformAdmin ? true : !pkg || !pkg.package ? true : (permissions.features || {})[name] !== false);
 
   return (
     <WorkspaceContext.Provider

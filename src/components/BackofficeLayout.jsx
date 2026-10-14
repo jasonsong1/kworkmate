@@ -36,9 +36,8 @@ function BackofficeShell() {
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const requiredModule = moduleForPath(pathname);
-  // A module outside the package, the position preset or the employer grant is simply not
-  // there: no lock, no notice, and its address does not open it either.
-  const allowed = !requiredModule || hasModule(requiredModule);
+  // 슈퍼어드민은 모든 페이지/경로에 100% 접근 가능하며, 일반 사용자는 기존 권한 검사를 따릅니다.
+  const allowed = isPlatformAdmin || !requiredModule || hasModule(requiredModule);
   // A super admin is never locked out — they are the one who reactivates the company.
   const expired = Boolean(pkg && pkg.expired) && !isPlatformAdmin;
   const activeBranchOptions = branches.filter((b) => b.is_active !== false);

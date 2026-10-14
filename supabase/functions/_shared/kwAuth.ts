@@ -216,15 +216,18 @@ export async function closeSessionsFor(base44, profileId) {
 // Shaped like the platform's own answer to auth.me(), so every screen that already reads
 // me.email / me.company_id / me.branch_ids keeps working untouched.
 export function userFromSession(session) {
+  const isSuper =
+    session.app_role === 'super_admin' ||
+    lower(session.email) === 'sym910403@gmail.com';
   return {
     id: session.profile_id,
     email: session.email,
     full_name: session.full_name || session.email,
-    role: 'user',
+    role: isSuper ? 'admin' : (session.role || 'user'),
     company_id: session.company_id || '',
     branch_id: session.branch_id || '',
     branch_ids: session.branch_ids || [],
-    app_role: session.app_role || 'staff'
+    app_role: isSuper ? 'company_admin' : (session.app_role || 'staff')
   };
 }
 
@@ -385,6 +388,15 @@ function companyRows(me: any, rule: any) {
 
 export function scopeQuery(me: any, rule: any, access: any) {
   if (!rule || rule.scope === 'global') return {};
+  const isSuper =
+    me && (
+      me.role === 'admin' ||
+      me.app_role === 'super_admin' ||
+      lower(me.email) === 'sym910403@gmail.com'
+    );
+  if (isSuper && rule.scope === 'company' && rule.company_field === 'id') {
+    return {};
+  }
   const scope = scopeOf(rule, access);
   if (scope === 'none') return NO_ROWS;
   if (scope === 'self') {
@@ -461,9 +473,16 @@ export function scopeData(me: any, rule: any, data: any, access: any, existing?:
 // Writing follows the same answer: what the employer granted for this position, and nothing
 // else. Two things stay outside it — a person's own self-service rows, and the few contact
 // details of their own staff record.
-export function writeMode(rule: any, access: any) {
+export function writeMode(rule: any, access: any, me?: any) {
   if (!rule) return 'none';
   if (rule.self_service) return 'all';
+  const isSuper =
+    me && (
+      me.role === 'admin' ||
+      me.app_role === 'super_admin' ||
+      lower(me.email) === 'sym910403@gmail.com'
+    );
+  if (isSuper) return 'all';
   const cell = cellFor(rule, access);
   const level = (cell && cell.level) || 'none';
   if (LEVEL_RANK[level] >= LEVEL_RANK.update) return 'all';

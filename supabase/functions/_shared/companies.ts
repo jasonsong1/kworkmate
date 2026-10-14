@@ -3,15 +3,32 @@ import { coversEveryBranch, mergePresets, presetFor, primaryPositionOf, resolveP
 // Points the signed-in platform admin at one company: every back office screen and
 // backend function reads company_id / branch_ids from the user record, so this is all
 // that is needed to "enter" a company.
-export async function switchUserToCompany(base44, userId, company) {
-  const branches = await base44.asServiceRole.entities.Branch.filter({ company_id: company.id });
-  const ids = branches.map((branch) => branch.id);
-  await base44.asServiceRole.entities.User.update(userId, {
-    company_id: company.id,
-    branch_id: ids[0] || null,
-    branch_ids: ids,
-    app_role: 'company_admin'
-  });
+export async function switchUserToCompany(base44, userId, company, me) {
+  const branches = await base44.asServiceRole.entities.Branch.filter({ company_id: company.id }).catch(() => []);
+  const ids = (branches || []).map((branch) => branch.id);
+  if (userId) {
+    await base44.asServiceRole.entities.User.update(userId, {
+      company_id: company.id,
+      branch_id: ids[0] || null,
+      branch_ids: ids,
+      app_role: 'company_admin'
+    }).catch(() => null);
+
+    await base44.asServiceRole.entities.EmployeeProfile.update(userId, {
+      company_id: company.id,
+      branch_id: ids[0] || null
+    }).catch(() => null);
+  }
+
+  // 커스텀 로그인 세션(LoginSession)을 사용 중인 경우 세션의 활성 회사도 함께 갱신합니다.
+  const token = (me && (me.session_token || me.kw_session)) || '';
+  if (token) {
+    await base44.asServiceRole.entities.LoginSession.updateMany(
+      { token },
+      { $set: { company_id: company.id, branch_id: ids[0] || null, branch_ids: ids } }
+    ).catch(() => null);
+  }
+
   return { branch_ids: ids };
 }
 

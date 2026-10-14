@@ -57,7 +57,7 @@ async function handler(req) {
     // What the employer granted this person, resolved from the package, their position preset
     // and the grants saved for it — the same answer the screens were drawn from.
     const access = await accessFor(base44, me);
-    const writes = writeMode(rule, access);
+    const writes = writeMode(rule, access, me);
     if (!READ_OPS.includes(op) && writes === 'none') {
       return Response.json({ error: 'This account cannot change those records' }, { status: 403 });
     }
