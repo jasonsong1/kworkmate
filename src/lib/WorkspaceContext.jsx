@@ -14,6 +14,13 @@ const EMPTY_PERMISSIONS = {
   accessError: false
 };
 
+// 배열 형태를 100% 보장하는 안전 변환 함수
+function toArray(val) {
+  if (Array.isArray(val)) return val;
+  if (val && Array.isArray(val.items)) return val.items;
+  return [];
+}
+
 export function WorkspaceProvider({ children }) {
   const [me, setMe] = useState(null);
   const [company, setCompany] = useState(null);
@@ -32,7 +39,7 @@ export function WorkspaceProvider({ children }) {
       data
         ? {
             access: data.access || null,
-            presets: data.presets || [],
+            presets: toArray(data.presets),
             presetKey: data.preset_key || '',
             roleKey: data.role_key || '',
             features: data.features || {},
@@ -52,10 +59,6 @@ export function WorkspaceProvider({ children }) {
       const response = await base44.functions.invoke('syncMyProfile', {}).catch(() => null);
       const data = response && response.data && !response.data.error ? response.data : null;
       const fresh = await base44.auth.me().catch(() => null);
-      // The server has just worked the workspace out from the employer's records, so its answer
-      // fills in whatever the sign-in still reports from an earlier visit: a session opened before
-      // the account was linked carries no company at all, and a position the employer changed
-      // since then carries another set of branches.
       user =
         fresh && data && data.company_id
           ? {
@@ -69,9 +72,6 @@ export function WorkspaceProvider({ children }) {
       return data;
     };
 
-    // The employer's records decide which company and branches this account belongs to, and a
-    // position they changed after the account was linked has to reach this screen too, so the
-    // answer is worked out again on every visit rather than left from the first sign-in.
     let linked = null;
     if (user) linked = await link();
 
@@ -81,14 +81,15 @@ export function WorkspaceProvider({ children }) {
       user && (
         user.role === 'admin' ||
         user.app_role === 'super_admin' ||
-        (user.email && user.email.toLowerCase() === 'sym910403@gmail.com')
+        (user.email && String(user.email).trim().toLowerCase() === 'sym910403@gmail.com')
       )
     );
 
     // 슈퍼어드민 계정에 회사가 지정되어 있지 않을 경우 시스템의 첫 번째 회사를 자동 연결합니다.
     let effectiveCompanyId = user ? user.company_id : '';
     if (user && superAdmin && !effectiveCompanyId) {
-      const allComps = await base44.entities.Company.filter({}).catch(() => []);
+      const allCompsRaw = await base44.entities.Company.filter({}).catch(() => []);
+      const allComps = toArray(allCompsRaw);
       if (allComps.length > 0) {
         effectiveCompanyId = allComps[0].id;
         user.company_id = effectiveCompanyId;
@@ -96,40 +97,40 @@ export function WorkspaceProvider({ children }) {
     }
 
     if (user && effectiveCompanyId) {
-      let [companies, allBranches] = await Promise.all([
+      let [companiesRaw, allBranchesRaw] = await Promise.all([
         base44.entities.Company.filter({ id: effectiveCompanyId }).catch(() => []),
         base44.entities.Branch.filter({ company_id: effectiveCompanyId }).catch(() => [])
       ]);
-      // The tenant the account belongs to is read once more on the server when the direct read
-      // comes back empty, so a linked employee is never shut out of their own workspace.
+      let companies = toArray(companiesRaw);
+      let allBranches = toArray(allBranchesRaw);
+
       if (companies.length === 0) {
         if (!linked) linked = await link();
         if (linked && linked.company_id === effectiveCompanyId) {
           companies = linked.company ? [linked.company] : [];
-          allBranches = linked.branches || [];
+          allBranches = toArray(linked.branches);
         }
       }
       setCompany(companies[0] || null);
 
       const isCompanyAdmin = superAdmin || user.app_role === 'company_admin';
+      const userBranchIds = Array.isArray(user.branch_ids) ? user.branch_ids : [];
       const allowed = isCompanyAdmin
         ? allBranches
-        : allBranches.filter((b) => (user.branch_ids || []).includes(b.id));
-      // A deactivated branch disappears for its own staff and managers; a company admin still
-      // sees it so it can be brought back.
-      setBranches(isCompanyAdmin ? allowed : allowed.filter((b) => b.is_active !== false));
+        : allBranches.filter((b) => userBranchIds.includes(b.id));
+
+      const safeAllowed = toArray(allowed);
+      setBranches(isCompanyAdmin ? safeAllowed : safeAllowed.filter((b) => b.is_active !== false));
 
       const stored = localStorage.getItem('bh_branch');
       const pick =
-        allowed.find((b) => b.id === stored && b.is_active !== false) ||
-        allowed.find((b) => b.id === user.branch_id && b.is_active !== false) ||
-        allowed.find((b) => b.is_active !== false) ||
-        allowed[0];
+        safeAllowed.find((b) => b.id === stored && b.is_active !== false) ||
+        safeAllowed.find((b) => b.id === user.branch_id && b.is_active !== false) ||
+        safeAllowed.find((b) => b.is_active !== false) ||
+        safeAllowed[0];
       const pickedId = pick ? pick.id : '';
       setActiveBranchId(pickedId);
 
-      // The package, the position preset and the employer grant, resolved together: which
-      // modules this workspace may open and how far inside them it may go.
       await loadPackageStatus(pickedId);
     } else {
       setCompany(null);
@@ -138,10 +139,9 @@ export function WorkspaceProvider({ children }) {
       await loadPackageStatus('');
     }
 
-    // Everyone's own staff record. A manager works shifts too, so their own space shows the same
-    // record the crew's does — only the platform admin, who belongs to no store, has none.
     if (user && !superAdmin) {
-      const profiles = await base44.entities.EmployeeProfile.filter({ user_email: user.email }).catch(() => []);
+      const profilesRaw = await base44.entities.EmployeeProfile.filter({ user_email: user.email }).catch(() => []);
+      const profiles = toArray(profilesRaw);
       setEmployeeProfile(profiles[0] || null);
     } else {
       setEmployeeProfile(null);
@@ -155,7 +155,7 @@ export function WorkspaceProvider({ children }) {
   }, [load]);
 
   const patchBranch = useCallback((id, data) => {
-    setBranches((prev) => prev.map((b) => (b.id === id ? { ...b, ...data } : b)));
+    setBranches((prev) => toArray(prev).map((b) => (b.id === id ? { ...b, ...data } : b)));
   }, []);
 
   const patchCompany = useCallback((data) => {
@@ -170,7 +170,6 @@ export function WorkspaceProvider({ children }) {
     [activeBranchId, loadPackageStatus]
   );
 
-  // Entering another company changes which branches the user can see, so start from a clean workspace.
   const refreshWorkspace = useCallback(async () => {
     localStorage.removeItem('bh_branch');
     await load();
@@ -188,12 +187,13 @@ export function WorkspaceProvider({ children }) {
   const selectBranch = (id) => {
     setActiveBranchId(id);
     localStorage.setItem('bh_branch', id);
-    // A branch can narrow what the company granted, so the answer is asked again.
     reloadPackage(id);
   };
 
-  const activeBranch = branches.find((b) => b.id === activeBranchId) || null;
-  // 최고 관리자(슈퍼어드민): 단 1명(sym910403@gmail.com 또는 role이 admin인 계정)으로 판정합니다.
+  const safeBranches = toArray(branches);
+  const activeBranch = safeBranches.find((b) => b.id === activeBranchId) || null;
+
+  // 최고 관리자(슈퍼어드민): sym910403@gmail.com 또는 role이 admin인 계정
   const isPlatformAdmin = Boolean(
     me && (
       me.role === 'admin' ||
@@ -202,11 +202,10 @@ export function WorkspaceProvider({ children }) {
     )
   );
 
-  // 슈퍼어드민은 회사 내에서도 항상 최고 관리자('company_admin') 권한으로 행동합니다.
   const role = isPlatformAdmin ? 'company_admin' : (me && me.app_role) || 'staff';
+  const presetsList = toArray(permissions.presets);
+  const preset = presetsList.find((item) => item.key === permissions.presetKey) || null;
 
-  const preset = (permissions.presets || []).find((item) => item.key === permissions.presetKey) || null;
-  // 슈퍼어드민은 항상 매니저 및 최고 관리자 권한을 가집니다 (다른 직책은 기존 권한 유지).
   const isManager =
     isPlatformAdmin ||
     role === 'company_admin' ||
@@ -216,8 +215,6 @@ export function WorkspaceProvider({ children }) {
   const isCompanyAdmin = isPlatformAdmin || role === 'company_admin';
   const access = permissions.access;
 
-  // [슈퍼어드민 특권]: 패키지나 직책 제한 없이 모든 모듈, 최고 권한(write), 전체 범위(company), 모든 기능을 무제한 허용합니다.
-  // [일반 직책]: 기존의 패키지/직책 권한 판정 로직을 100% 그대로 유지합니다.
   const hasModule = (module) => (isPlatformAdmin ? true : access ? Boolean(access[module] && access[module].level !== 'none') : true);
   const levelOf = (module) => (isPlatformAdmin ? 'write' : access && access[module] ? access[module].level : 'none');
   const scopeOf = (module) => (isPlatformAdmin ? 'company' : access && access[module] ? access[module].scope : '');
@@ -228,7 +225,7 @@ export function WorkspaceProvider({ children }) {
       value={{
         me,
         company,
-        branches,
+        branches: safeBranches,
         role,
         isManager,
         isPlatformAdmin,
@@ -238,7 +235,7 @@ export function WorkspaceProvider({ children }) {
         activeBranchId,
         pkg,
         access,
-        presets: permissions.presets,
+        presets: presetsList,
         presetKey: permissions.presetKey,
         roleKey: permissions.roleKey,
         features: permissions.features,
