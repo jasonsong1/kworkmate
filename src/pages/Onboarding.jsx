@@ -28,7 +28,7 @@ import { buildContractPdf, buildTfnPdf, buildSuperPdf } from '@/lib/onboardingPd
 import { dateFormatOf, maskDate, validDate } from '@/lib/onboardingDates';
 import { base44 } from '@/api/base44Client';
 
-// 상단 미세 프로그레스 바 (마이크로 피드백용)
+// Slim progress bar for micro-feedback
 function SlimTopBar({ active }) {
   if (!active) return null;
   return (
@@ -49,20 +49,21 @@ export default function Onboarding() {
   const [signature, setSignature] = useState('');
   const [declaration, setDeclaration] = useState(false);
 
-  // 고용주가 설정한 질문 답변 상태
+  // Employer questionnaire answers
   const [answers, setAnswers] = useState({});
-  // 고용주 질문 중 파일 업로드 상태
+  // Question file uploads
   const [uploads, setUploads] = useState({});
   const [uploadingId, setUploadingId] = useState('');
 
-  // 회사 설정 증빙 서류 (신분증, 비자 증빙 등)
+  // Company verification documents (ID, Right to Work, etc.)
   const [companyDocUploads, setCompanyDocUploads] = useState({});
   const [uploadingDocKey, setUploadingDocKey] = useState('');
   const companyDocFileRef = useRef(null);
   const pickingDocKey = useRef('');
 
   // ==============================================================================
-  // 국세청 공식 세무 폼 (ATO NAT 3092) 상태 - 앞 단계 답변에서 자동 연동(Prefill)
+  // Australian Taxation Office (ATO NAT 3092) Tax Form State
+  // Pre-filled from employer questions and employee data
   // ==============================================================================
   const [taxForm, setTaxForm] = useState({
     title: 'Mr',
@@ -86,7 +87,7 @@ export default function Onboarding() {
     studentDebt: 'no' // 'yes' | 'no'
   });
 
-  // 데이터 로드
+  // Load onboarding session data
   useEffect(() => {
     const load = async () => {
       try {
@@ -99,7 +100,7 @@ export default function Onboarding() {
         setData(payload);
         setState('form');
 
-        // 기본 사원 정보가 있으면 Tax 폼에 초기 매핑
+        // Pre-fill initial employee details if available
         const emp = payload.employee || {};
         const nameParts = (emp.full_name || '').trim().split(' ');
         const given = nameParts.slice(0, -1).join(' ') || nameParts[0] || '';
@@ -124,19 +125,29 @@ export default function Onboarding() {
     load();
   }, [token]);
 
-  // 고용주 질문 목록
+  // Employer custom questions
   const questions = (data && data.onboarding_questions) || [];
 
-  // 고용주가 요구하는 필수 서류 목록 (신분증, 비자 증빙 등)
+  // Required verification documents from company settings
   const getCompanyDocTypes = () => {
     const rawList = data?.company?.onboarding_doc_types || [
-      { key: 'id', label: '신분증 (ID)', label_en: 'Photo ID (Passport or Driver Licence)', required: true },
-      { key: 'right_to_work', label: 'Right to Work 증빙 (비자/시민권)', label_en: 'Right to Work Evidence (VEVO / Passport)', required: true }
+      { key: 'id', label: 'Photo ID (Passport or Driver Licence)', label_en: 'Photo ID (Passport or Driver Licence)', required: true },
+      { key: 'right_to_work', label: 'Right to Work Evidence (VEVO / Passport)', label_en: 'Right to Work Evidence (VEVO / Passport)', required: true }
     ];
-    return rawList.filter((item) => item && item.kind !== 'info' && item.key !== 'tfn' && item.key !== 'super' && item.key !== 'contract');
+    return rawList
+      .filter((item) => item && item.kind !== 'info' && item.key !== 'tfn' && item.key !== 'super' && item.key !== 'contract')
+      .map((item) => {
+        let label = item.label_en || item.label || item.key;
+        if (item.key === 'id' || label.includes('신분증') || label.includes('ID')) {
+          label = 'Photo ID (Passport or Driver Licence)';
+        } else if (item.key === 'right_to_work' || label.includes('비자') || label.includes('Right to Work') || label.includes('VEVO')) {
+          label = 'Right to Work Evidence (VEVO / Passport / Citizenship)';
+        }
+        return { ...item, displayLabel: label };
+      });
   };
 
-  // 고용주가 설정한 page 번호에 따라 질문들을 페이지별로 그룹화
+  // Group questions by page
   const questionPages = [];
   const explicitPages = questions
     .map((q) => Number(q.page))
@@ -152,22 +163,22 @@ export default function Onboarding() {
   questionPages.sort((a, b) => a.number - b.number);
   questionPages.forEach((page) => {
     const titled = page.questions.find((q) => String(q.page_title || '').trim());
-    page.title = titled ? String(titled.page_title).trim() : (page.questions[0]?.label || '질문');
+    page.title = titled ? String(titled.page_title).trim() : (page.questions[0]?.label || 'Questions');
   });
 
-  // 전체 온보딩 페이지 리스트: [고용주 질문 페이지들...] -> [필수 첨부서류 페이지(서류가 있을 때)] -> [국세청 세무 신고서 페이지] -> [최종 서명 페이지]
+  // Overall onboarding steps: [Question Pages...] -> [Required Documents] -> [ATO Tax Declaration] -> [Declaration & Signature]
   const hasCompanyDocs = getCompanyDocTypes().length > 0;
   const pages = [
     ...questionPages.map((p, idx) => ({ type: 'questions', page: p, title: p.title || `Step ${idx + 1}` })),
-    ...(hasCompanyDocs ? [{ type: 'docs', title: '필수 서류 제출 (ID & Right to Work)' }] : []),
-    { type: 'tax', title: '호주 국세청(ATO) 세무 신고 (NAT 3092)' },
-    { type: 'sign', title: '서약 및 전자서명' }
+    ...(hasCompanyDocs ? [{ type: 'docs', title: 'Required Documents (ID & Right to Work)' }] : []),
+    { type: 'tax', title: 'ATO Tax File Number Declaration (NAT 3092)' },
+    { type: 'sign', title: 'Payee Declaration & Signature' }
   ];
 
   const totalSteps = pages.length;
   const currentPage = step < totalSteps ? pages[step] : null;
 
-  // 답변 핸들러 (질문 라벨을 함께 넘겨 Tax 폼에 정확히 매핑)
+  // Answer handler - passes label for accurate ATO Tax Form pre-filling
   const setAnswer = (id, value, label = '') => {
     setAnswers((prev) => ({ ...prev, [id]: { ...(prev[id] || {}), answer: value } }));
     syncAnswerToTaxForm(id, value, label);
@@ -184,7 +195,7 @@ export default function Onboarding() {
   };
 
   // ==============================================================================
-  // [중복 질문 제거] 앞 단계 답변이 들어오면 Tax 폼에 실시간 자동 매핑
+  // Real-time synchronization to ATO NAT 3092 Form
   // ==============================================================================
   const syncAnswerToTaxForm = (id, val, questionLabel = '') => {
     const str = String(val || '').trim();
@@ -195,28 +206,27 @@ export default function Onboarding() {
     setTaxForm((prev) => {
       const next = { ...prev };
 
-      // 1. Suburb (라벨 또는 ID 매칭)
+      // 1. Suburb
       if (lowerId.includes('suburb') || lowerLabel.includes('suburb')) {
         next.suburb = str.toUpperCase();
         return next;
       }
 
-      // 2. State (라벨 또는 ID 매칭)
+      // 2. State
       if (lowerId.includes('state') || lowerLabel.includes('state')) {
         next.state = str.toUpperCase();
         return next;
       }
 
-      // 3. Postcode (라벨 또는 ID 매칭)
+      // 3. Postcode
       if (lowerId.includes('post') || lowerLabel.includes('post')) {
         next.postcode = str.replace(/\D/g, '').slice(0, 4);
         return next;
       }
 
-      // 4. 주소 (Street address)
+      // 4. Street address
       if (lowerId.includes('address') || lowerLabel.includes('address')) {
         next.addressLine = str;
-        // 주소에 쉼표로 한 줄에 다 적었을 때 자동 분리 지원
         const parts = str.split(',').map((s) => s.trim());
         if (parts.length >= 2) {
           next.addressLine = parts[0];
@@ -228,7 +238,8 @@ export default function Onboarding() {
           }
         }
       }
-      // 2. 생년월일 (YYYY-MM-DD 정규화)
+
+      // 5. Date of birth
       if (id === 'default_dob' || id.includes('dob') || id.includes('birth')) {
         if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
           next.dob = str;
@@ -239,16 +250,19 @@ export default function Onboarding() {
           next.dob = str;
         }
       }
-      // 3. 성명
+
+      // 6. Name
       if (id === 'default_name' || id === 'full_name') {
         const parts = str.split(' ');
         next.givenNames = parts.slice(0, -1).join(' ') || parts[0] || '';
         next.familyName = parts.length > 1 ? parts[parts.length - 1] : '';
       }
-      // 4. 전화번호 & 이메일
+
+      // 7. Phone & Email
       if (id === 'default_phone' || id.includes('phone')) next.phone = str;
       if (id === 'default_email' || id.includes('email')) next.email = str;
-      // 5. TFN
+
+      // 8. TFN
       if (id === 'default_tfn') {
         next.tfnNumber = str;
         next.tfnMode = 'number';
@@ -257,14 +271,17 @@ export default function Onboarding() {
         if (str === 'no') next.tfnMode = 'applied';
         if (str === 'yes') next.tfnMode = 'number';
       }
-      // 6. 면세 한도
+
+      // 9. Tax-free threshold
       if (id === 'default_tax_free') {
         next.taxFreeThreshold = str === 'yes' ? 'yes' : 'no';
       }
-      // 7. 학자금 대출
+
+      // 10. Student debt
       if (id === 'default_hecs') {
         next.studentDebt = str === 'yes' ? 'yes' : 'no';
       }
+
       return next;
     });
   };
@@ -280,13 +297,13 @@ export default function Onboarding() {
     return limit > 0 ? digits.slice(0, limit) : digits;
   };
 
-  // 고용주 질문 중 파일 업로드
+  // Upload file for a specific question
   const chooseQuestionFile = async (question, file) => {
     if (!file) return;
     const types = allowedFileTypes(question);
     const extension = String(file.name || '').split('.').pop().toLowerCase();
     if (types.length > 0 && !types.includes(extension)) {
-      setError(`다음 형식의 파일만 업로드할 수 있습니다: ${types.join(', ')}.`);
+      setError(`Only the following file formats are allowed: ${types.join(', ')}.`);
       return;
     }
     setUploadingId(question.id);
@@ -294,15 +311,15 @@ export default function Onboarding() {
     try {
       const { file_uri } = await base44.integrations.Core.UploadPrivateFile({ file });
       setUploads((prev) => ({ ...prev, [question.id]: { file_uri, name: file.name } }));
-      setAnswer(question.id, file.name);
+      setAnswer(question.id, file.name, question.label);
     } catch (err) {
-      setError('파일 업로드에 실패했습니다. 다시 시도해 주세요.');
+      setError('Failed to upload file. Please try again.');
     } finally {
       setUploadingId('');
     }
   };
 
-  // 회사 설정 필수 서류 (신분증, 비자 등) 업로드
+  // Company verification document upload
   const chooseCompanyDoc = (docKey) => {
     pickingDocKey.current = docKey;
     if (companyDocFileRef.current) {
@@ -321,7 +338,7 @@ export default function Onboarding() {
     setError('');
     try {
       const res = await base44.integrations.Core.UploadPrivateFile({ file });
-      if (!res || !res.file_uri) throw new Error('파일 업로드 경로를 생성하지 못했습니다.');
+      if (!res || !res.file_uri) throw new Error('Failed to generate file upload path.');
       setCompanyDocUploads((prev) => ({
         ...prev,
         [key]: {
@@ -332,13 +349,13 @@ export default function Onboarding() {
         }
       }));
     } catch (err) {
-      setError(err.message || '서류 업로드 실패');
+      setError(err.message || 'Failed to upload document.');
     } finally {
       setUploadingDocKey('');
     }
   };
 
-  // 질문 유효성 검사
+  // Question validation
   const questionValid = (question) => {
     const val = answers[question.id] || {};
     const answer = String(val.answer || '').trim();
@@ -356,48 +373,48 @@ export default function Onboarding() {
     return true;
   };
 
-  // 현재 스텝 유효성 검사
+  // Validate current step
   const validateCurrentStep = () => {
     if (!currentPage) return '';
 
-    // 1. 고용주 질문 페이지
+    // 1. Questions step
     if (currentPage.type === 'questions') {
       const questionsOnPage = currentPage.page?.questions || [];
       for (const q of questionsOnPage) {
         if (!questionValid(q)) {
-          return `[${q.label}] 항목에 올바르게 답변해 주세요.`;
+          return `Please answer [${q.label}] correctly.`;
         }
       }
     }
 
-    // 2. 필수 서류 페이지
+    // 2. Required verification documents step
     if (currentPage.type === 'docs') {
       const requiredDocs = getCompanyDocTypes().filter((d) => d.required !== false);
       for (const doc of requiredDocs) {
         if (!companyDocUploads[doc.key]) {
-          return `필수 서류인 [${doc.label || doc.label_en || doc.key}] 파일을 업로드해 주세요.`;
+          return `Please upload the required document: ${doc.displayLabel || doc.label || doc.key}.`;
         }
       }
     }
 
-    // 3. Tax 폼 페이지
+    // 3. ATO Tax Form step
     if (currentPage.type === 'tax') {
-      if (!taxForm.familyName.trim()) return '국세청 신고서에 기재할 성(Family Name)을 입력해 주세요.';
-      if (!taxForm.givenNames.trim()) return '국세청 신고서에 기재할 이름(First Given Name)을 입력해 주세요.';
-      if (!taxForm.dob.trim()) return '생년월일을 입력해 주세요.';
-      if (!taxForm.addressLine.trim()) return '호주 거주지 주소를 입력해 주세요.';
+      if (!taxForm.familyName.trim()) return 'Please enter your surname / family name for the ATO declaration.';
+      if (!taxForm.givenNames.trim()) return 'Please enter your first given name for the ATO declaration.';
+      if (!taxForm.dob.trim()) return 'Please enter your date of birth.';
+      if (!taxForm.addressLine.trim()) return 'Please enter your residential address in Australia.';
       if (taxForm.tfnMode === 'number') {
         const cleanTfn = taxForm.tfnNumber.replace(/\D/g, '');
         if (cleanTfn.length < 8 || cleanTfn.length > 9) {
-          return '올바른 8~9자리 TFN(납세자번호)를 입력하시거나, 면제/신청 중 옵션을 선택해 주세요.';
+          return 'Please enter a valid 8 or 9-digit TFN, or select an exemption/pending option.';
         }
       }
     }
 
-    // 4. 서명 페이지
+    // 4. Signature step
     if (currentPage.type === 'sign') {
-      if (!signature) return '선언서 서명을 완료해 주세요.';
-      if (!declaration) return '선언 및 동의 체크박스에 체크해 주세요.';
+      if (!signature) return 'Please provide your digital signature below.';
+      if (!declaration) return 'Please check the declaration and consent box before proceeding.';
     }
 
     return '';
@@ -417,8 +434,8 @@ export default function Onboarding() {
   const toFile = async (blob, name) => new File([blob], name, { type: 'application/pdf' });
 
   // ==============================================================================
-  // [최종 제출]: Tax 폼 작성 완료 후 Submit 버튼 클릭 시 실행
-  // 100% 무손실 정부 벡터 양식(Page 5)으로 완성된 PDF 생성 후 플랫폼 보관함에 등록
+  // Final Submission
+  // Generates official ATO NAT 3092 vector PDF, Super Choice, Contract, and submits
   // ==============================================================================
   const submit = async () => {
     const err = validateCurrentStep();
@@ -432,12 +449,12 @@ export default function Onboarding() {
     try {
       const now = new Date().toISOString();
 
-      // 1. 전자서명 이미지 업로드
+      // 1. Upload signature image
       const signatureBlob = await (await fetch(signature)).blob();
       const signatureFile = new File([signatureBlob], 'signature.png', { type: 'image/png' });
       const signatureUpload = await base44.integrations.Core.UploadPrivateFile({ file: signatureFile });
 
-      // 2. 답변 내용 및 Tax 폼 데이터 병합
+      // 2. Prepare merged form data
       const answerVal = (id) => (answers[id] || {}).answer || '';
       const followVal = (id, field) => ((answers[id] || {}).follow_up || {})[field] || '';
 
@@ -482,14 +499,14 @@ export default function Onboarding() {
         signatureDataUrl: signature
       };
 
-      // 3. ATO 공식 NAT 3092 (100% 무손실 벡터 오버레이), NAT 13080, 고용계약서 자동 생성
+      // 3. Generate official PDFs (ATO NAT 3092 Vector Overlay, NAT 13080 Super Choice, Contract)
       const [tfnPdfBlob, superPdfBlob, contractPdfBlob] = await Promise.all([
         buildTfnPdf(pdfContext),
         buildSuperPdf(pdfContext),
         buildContractPdf(pdfContext)
       ]);
 
-      // 4. 생성된 공식 서류들을 Private 스토리지에 병렬 업로드
+      // 4. Parallel upload generated official PDFs to private storage
       const [tfnUpload, superUpload, contractUpload] = await Promise.all([
         base44.integrations.Core.UploadPrivateFile({
           file: await toFile(tfnPdfBlob, `TFN_Declaration_NAT3092_${data.employee.employee_number || 'staff'}.pdf`)
@@ -502,7 +519,7 @@ export default function Onboarding() {
         })
       ]);
 
-      // 5. 지원자가 질문 및 서류 단계에서 직접 업로드한 첨부파일들 통합
+      // 5. Consolidate documents
       const questionUploadsList = questions
         .filter((q) => q.type === 'upload' && uploads[q.id])
         .map((q) => ({
@@ -525,7 +542,6 @@ export default function Onboarding() {
         uploaded_by: 'applicant'
       }));
 
-      // 서류함에 최종 보관될 docs 목록 (공식 3종 + 사용자 증빙 서류)
       const docs = [
         ...companyDocsList,
         ...questionUploadsList,
@@ -552,7 +568,7 @@ export default function Onboarding() {
         }
       ];
 
-      // 6. 엣지 함수 호출하여 사원 프로필 및 tfn_declarations 감사 테이블에 등록
+      // 6. Invoke edge function to persist answers and documents
       const extraAnswers = questions.map((q) => ({
         id: q.id,
         label: q.label,
@@ -592,17 +608,17 @@ export default function Onboarding() {
       if (res.data?.ok) {
         setState('completed');
       } else {
-        throw new Error(res.data?.error || '온보딩 정보 제출에 실패했습니다.');
+        throw new Error(res.data?.error || 'Failed to submit onboarding details.');
       }
     } catch (submitErr) {
-      setError(submitErr.message || '온보딩 서류 처리 중 오류가 발생했습니다. 다시 시도해 주세요.');
+      setError(submitErr.message || 'An error occurred while submitting your documents. Please try again.');
     } finally {
       setSaving(false);
     }
   };
 
   // ==============================================================================
-  // 상태별 뷰 (로딩, 만료, 완료)
+  // State Views: Loading, Invalid, Completed
   // ==============================================================================
   if (state === 'loading') {
     return (
@@ -610,7 +626,7 @@ export default function Onboarding() {
         <SlimTopBar active={true} />
         <div className="flex items-center gap-3 text-sm text-slate-500 font-medium">
           <Loader2 className="h-5 w-5 animate-spin text-primary" />
-          <span>온보딩 양식을 불러오는 중입니다...</span>
+          <span>Loading onboarding form...</span>
         </div>
       </div>
     );
@@ -621,9 +637,9 @@ export default function Onboarding() {
       <div className="flex min-h-screen items-center justify-center p-4 bg-slate-50">
         <div className="max-w-md rounded-2xl border bg-white p-6 text-center shadow-sm">
           <AlertCircle className="mx-auto h-10 w-10 text-amber-500" />
-          <h1 className="mt-3 text-lg font-semibold text-slate-900">유효하지 않은 링크입니다</h1>
-          <p className="mt-2 text-sm text-slate-600">
-            링크가 만료되었거나 올바르지 않습니다. 관리자에게 새로운 온보딩 링크 발송을 요청해 주세요.
+          <h1 className="mt-3 text-lg font-semibold text-slate-900">Invalid or Expired Link</h1>
+          <p className="mt-2 text-sm text-slate-600 leading-relaxed">
+            This onboarding link has expired or is invalid. Please contact your manager or employer to request a new link.
           </p>
         </div>
       </div>
@@ -635,12 +651,12 @@ export default function Onboarding() {
       <div className="flex min-h-screen items-center justify-center p-4 bg-slate-50">
         <div className="max-w-md rounded-2xl border bg-white p-6 text-center shadow-sm">
           <CheckCircle2 className="mx-auto h-12 w-12 text-emerald-500" />
-          <h1 className="mt-3 text-xl font-bold text-slate-900">온보딩 서류 제출 완료</h1>
+          <h1 className="mt-3 text-xl font-bold text-slate-900">Onboarding Documents Submitted</h1>
           <p className="mt-2 text-sm text-slate-600 leading-relaxed">
-            호주 국세청(ATO) 공식 <b>NAT 3092 (TFN 신고서)</b> 및 <b>NAT 13080 (연금 선택서)</b>, 고용계약서 서명이 성공적으로 접수되었습니다.
+            Your official Australian Taxation Office (ATO) <b>NAT 3092 (TFN Declaration)</b>, <b>NAT 13080 (Superannuation Choice)</b>, and Employment Contract have been successfully submitted.
           </p>
           <div className="mt-4 rounded-xl bg-slate-50 p-3 text-xs text-slate-500 border">
-            제출된 서류는 회사의 비공개 서류 보관함에 안전하게 암호화되어 보관됩니다. 창을 닫으셔도 좋습니다.
+            Your documents are securely encrypted and stored in the company's document vault. You may now safely close this window.
           </div>
         </div>
       </div>
@@ -652,10 +668,10 @@ export default function Onboarding() {
 
   return (
     <div className="min-h-screen bg-slate-50/70 pb-16">
-      {/* 인터랙션을 막지 않는 마이크로 피드백 상단 바 */}
+      {/* Slim top progress bar for micro-feedback */}
       <SlimTopBar active={saving} />
 
-      {/* 헤더 */}
+      {/* Header */}
       <header className="border-b bg-white sticky top-0 z-30 shadow-xs">
         <div className="mx-auto max-w-2xl px-4 py-3.5 flex items-center justify-between">
           <div>
@@ -669,12 +685,12 @@ export default function Onboarding() {
               </span>
             </div>
             <h1 className="text-sm font-bold text-slate-900 mt-0.5">
-              {data.branch?.name ? `${data.branch.name} — 온보딩` : '직원 온보딩'}
+              {data.branch?.name ? `${data.branch.name} — Employee Onboarding` : 'Employee Onboarding'}
             </h1>
           </div>
           <div className="text-right">
             <span className="text-xs font-medium text-slate-500">
-              {step + 1} / {totalSteps} 단계
+              Step {step + 1} of {totalSteps}
             </span>
           </div>
         </div>
@@ -682,19 +698,19 @@ export default function Onboarding() {
       </header>
 
       <main className="mx-auto max-w-2xl px-4 pt-6 space-y-6">
-        {/* 스텝 제목 */}
+        {/* Step Title & Subtitle */}
         <div>
           <h2 className="text-lg font-bold text-slate-900">{currentPage?.title}</h2>
           <p className="text-xs text-slate-500 mt-0.5">
-            {currentPage?.type === 'questions' && '고용주가 요청한 온보딩 항목을 입력해 주세요.'}
-            {currentPage?.type === 'docs' && '호주 노동법 및 근무 자격 확인에 필요한 증빙서류를 첨부해 주세요.'}
-            {currentPage?.type === 'tax' && '앞서 입력하신 정보가 자동 연동되었습니다. 호주 국세청(ATO) 공식 NAT 3092 양식 내용을 확인해 주세요.'}
-            {currentPage?.type === 'sign' && '제출 전 선언문을 확인하고 자필 서명을 완료해 주세요.'}
+            {currentPage?.type === 'questions' && 'Please complete the onboarding details requested by your employer.'}
+            {currentPage?.type === 'docs' && 'Please attach the required verification documents (Photo ID and Right to Work in Australia).'}
+            {currentPage?.type === 'tax' && 'Your information has been pre-filled. Please review and complete your official ATO NAT 3092 Tax File Number Declaration.'}
+            {currentPage?.type === 'sign' && 'Please review the payee declaration and provide your digital signature below.'}
           </p>
         </div>
 
         {/* ============================================================================== */}
-        {/* [페이지 타입 1]: 고용주 설정 질문 페이지 */}
+        {/* [Step Type 1]: Employer Questionnaire Step */}
         {/* ============================================================================== */}
         {currentPage?.type === 'questions' && (
           <section className="space-y-5 rounded-2xl border bg-white p-5 shadow-sm">
@@ -712,7 +728,7 @@ export default function Onboarding() {
                       {question.label} {question.required !== false && <span className="text-red-500">*</span>}
                     </Label>
                     {question.required === false && (
-                      <span className="text-[11px] text-slate-400">선택</span>
+                      <span className="text-[11px] text-slate-400">Optional</span>
                     )}
                   </div>
                   {question.description && (
@@ -728,13 +744,13 @@ export default function Onboarding() {
                       <div className="flex items-center gap-2">
                         <RadioGroupItem value="yes" id={`${question.id}-yes`} />
                         <label htmlFor={`${question.id}-yes`} className="text-sm cursor-pointer">
-                          예 (Yes)
+                          Yes
                         </label>
                       </div>
                       <div className="flex items-center gap-2">
                         <RadioGroupItem value="no" id={`${question.id}-no`} />
                         <label htmlFor={`${question.id}-no`} className="text-sm cursor-pointer">
-                          아니오 (No)
+                          No
                         </label>
                       </div>
                     </RadioGroup>
@@ -743,7 +759,7 @@ export default function Onboarding() {
                   {question.type === 'select' && (
                     <Select value={value.answer || ''} onValueChange={(ans) => setAnswer(question.id, ans, question.label)}>
                       <SelectTrigger className="w-full">
-                        <SelectValue placeholder="선택해 주세요" />
+                        <SelectValue placeholder="Select an option" />
                       </SelectTrigger>
                       <SelectContent>
                         {(question.options || []).map((opt) => (
@@ -765,14 +781,14 @@ export default function Onboarding() {
                         )}
                         <span className="truncate">
                           {uploadingId === question.id
-                            ? '업로드 중...'
+                            ? 'Uploading...'
                             : uploads[question.id]
                             ? uploads[question.id].name
-                            : '파일 선택 (PDF, JPG, PNG)'}
+                            : 'Choose file (PDF, JPG, PNG)'}
                         </span>
                       </span>
                       <span className="shrink-0 text-xs font-semibold text-primary">
-                        {uploads[question.id] ? '변경' : '찾아보기'}
+                        {uploads[question.id] ? 'Change' : 'Browse'}
                       </span>
                       <input
                         type="file"
@@ -792,8 +808,8 @@ export default function Onboarding() {
                       }
                       placeholder={
                         Number(validationOf(question).digits) > 0
-                          ? `최대 ${validationOf(question).digits}자리 숫자`
-                          : '숫자만 입력'
+                          ? `Up to ${validationOf(question).digits} digits`
+                          : 'Numbers only'
                       }
                     />
                   )}
@@ -814,18 +830,18 @@ export default function Onboarding() {
                       <Input
                         value={value.answer || ''}
                         onChange={(e) => setAnswer(question.id, e.target.value, question.label)}
-                        placeholder="답변을 입력해 주세요"
+                        placeholder="Enter your answer"
                       />
                     )}
 
-                  {/* 후속 질문 필드 */}
+                  {/* Follow-up question fields */}
                   {fields.map((field) => (
                     <div key={field} className="pt-2 pl-3 border-l-2 border-slate-200 space-y-1">
                       <Label className="text-xs font-medium text-slate-700">{field}</Label>
                       <Input
                         value={(value.follow_up || {})[field] || ''}
                         onChange={(e) => setFollowUp(question.id, field, e.target.value)}
-                        placeholder={`${field} 입력`}
+                        placeholder={`Enter ${field}`}
                       />
                     </div>
                   ))}
@@ -836,15 +852,15 @@ export default function Onboarding() {
         )}
 
         {/* ============================================================================== */}
-        {/* [페이지 타입 2]: 회사 설정 필수 서류 제출 페이지 (신분증 & 비자 증빙) */}
+        {/* [Step Type 2]: Required Verification Documents Step (ID & Right to Work) */}
         {/* ============================================================================== */}
         {currentPage?.type === 'docs' && (
           <section className="space-y-4 rounded-2xl border bg-white p-5 shadow-sm">
             <div className="rounded-xl border border-blue-100 bg-blue-50/60 p-3.5 text-xs text-blue-900 leading-relaxed flex items-start gap-2.5">
               <FileCheck className="h-4 w-4 shrink-0 text-blue-600 mt-0.5" />
               <div>
-                <p className="font-semibold text-blue-950">회사 요구 증빙서류 첨부</p>
-                호주 노동법 및 본인 확인 규격에 맞추어 아래 증빙 서류를 업로드해 주세요.
+                <p className="font-semibold text-blue-950">Company Required Verification Documents</p>
+                Please upload the documents below in accordance with Australian workplace standards and identity verification requirements.
               </div>
             </div>
 
@@ -861,24 +877,24 @@ export default function Onboarding() {
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
                         <span className="font-semibold text-sm text-slate-800 break-words">
-                          {docType.label || docType.label_en || docType.key}
+                          {docType.displayLabel || docType.label || docType.key}
                         </span>
                         {docType.required !== false ? (
                           <span className="text-[10px] font-bold text-red-600 bg-red-50 border border-red-200 px-1.5 py-0.5 rounded">
-                            필수
+                            Required
                           </span>
                         ) : (
                           <span className="text-[10px] text-slate-500 bg-slate-200 px-1.5 py-0.5 rounded">
-                            선택
+                            Optional
                           </span>
                         )}
                       </div>
                       <p className="text-xs text-slate-500 mt-1 break-words">
                         {docType.key === 'id'
-                          ? '여권(Passport) 사진 또는 호주 운전면허증 스캔본 (PDF, JPG, PNG)'
+                          ? 'Passport photo page or Australian Driver Licence (PDF, JPG, PNG)'
                           : docType.key === 'right_to_work'
-                          ? '호주 비자 승인 레터(VEVO) 또는 영주권/시민권 증빙 서류'
-                          : docType.label_en || '서류 파일을 첨부해 주세요.'}
+                          ? 'Australian Visa Grant Notice (VEVO), Australian Passport, or Citizenship Certificate'
+                          : docType.label_en || 'Please attach the required document.'}
                       </p>
                       {currentDoc && (
                         <div className="mt-2.5 flex items-center gap-2 text-xs font-medium text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded border border-emerald-200">
@@ -895,7 +911,7 @@ export default function Onboarding() {
                             }
                             className="text-slate-400 hover:text-red-500 text-xs ml-1"
                           >
-                            삭제
+                            Remove
                           </button>
                         </div>
                       )}
@@ -908,17 +924,17 @@ export default function Onboarding() {
                         variant={currentDoc ? 'outline' : 'default'}
                         disabled={isUploading}
                         onClick={() => chooseCompanyDoc(docType.key)}
-                        className="text-xs h-9 min-w-[85px]"
+                        className="text-xs h-9 min-w-[95px]"
                       >
                         {isUploading ? (
                           <>
                             <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
-                            업로드...
+                            Uploading...
                           </>
                         ) : currentDoc ? (
-                          '파일 변경'
+                          'Change File'
                         ) : (
-                          '파일 선택'
+                          'Choose File'
                         )}
                       </Button>
                     </div>
@@ -938,18 +954,18 @@ export default function Onboarding() {
         )}
 
         {/* ============================================================================== */}
-        {/* [페이지 타입 3]: 호주 국세청(ATO) 세무 신고서 NAT 3092 (맨 마지막 직전) */}
-        {/* 앞 단계 답변이 이미 자동 채워져 있어서 중복 질문 없이 바로 검토 가능! */}
+        {/* [Step Type 3]: Australian Taxation Office (ATO) Tax Declaration (NAT 3092) */}
+        {/* Pre-filled from earlier answers so the applicant only needs to review! */}
         {/* ============================================================================== */}
         {currentPage?.type === 'tax' && (
           <section className="space-y-6 rounded-2xl border bg-white p-5 shadow-sm">
             <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-4 text-xs text-emerald-900 leading-relaxed">
               <div className="flex items-center gap-2 font-bold text-sm text-emerald-950 mb-1">
                 <FileCheck className="h-4.5 w-4.5 text-emerald-600" />
-                호주 국세청(ATO) 공식 NAT 3092 세무 신고서
+                Australian Taxation Office (ATO) NAT 3092 Tax File Number Declaration
               </div>
-              앞서 입력하신 정보가 정부 공식 양식에 <b>자동 반영</b>되었습니다.
-              내용을 확인하시고, 국세청 고유 질문(호주 세법상 거주자 분류 등)만 최종 체크해 주세요.
+              Your details have been <b>automatically pre-filled</b> from your previous answers.
+              Please review all fields and confirm any remaining ATO questions below.
             </div>
 
             {/* Q1: Tax File Number */}
@@ -967,7 +983,7 @@ export default function Onboarding() {
                 <div className="flex items-center gap-2">
                   <RadioGroupItem value="number" id="tfn-has-number" />
                   <label htmlFor="tfn-has-number" className="text-xs font-medium cursor-pointer">
-                    TFN 번호 보유 (I have a TFN)
+                    I have a TFN
                   </label>
                 </div>
                 {taxForm.tfnMode === 'number' && (
@@ -976,31 +992,33 @@ export default function Onboarding() {
                       inputMode="numeric"
                       value={taxForm.tfnNumber}
                       onChange={(e) => setTaxForm((t) => ({ ...t, tfnNumber: digitsOnly(e.target.value, 9) }))}
-                      placeholder="8자리 또는 9자리 숫자 (예: 123 456 789)"
+                      placeholder="8 or 9 digit number (e.g. 123 456 789)"
                       className="max-w-xs font-mono text-sm tracking-wider"
                     />
-                    <p className="text-[11px] text-slate-500 mt-1">숫자만 입력하시면 공식 9칸 박스에 자동 정렬됩니다.</p>
+                    <p className="text-[11px] text-slate-500 mt-1">
+                      Numbers only will be automatically formatted into the official 9-box section.
+                    </p>
                   </div>
                 )}
 
                 <div className="flex items-center gap-2 pt-1">
                   <RadioGroupItem value="applied" id="tfn-applied" />
                   <label htmlFor="tfn-applied" className="text-xs font-medium cursor-pointer">
-                    TFN 신청 중 / 발급 대기 중 (I have made a separate application/enquiry to the ATO - 28일 유예)
+                    I have made a separate application/enquiry to the ATO for a new or existing TFN (28-day grace period)
                   </label>
                 </div>
 
                 <div className="flex items-center gap-2">
                   <RadioGroupItem value="under18" id="tfn-under18" />
                   <label htmlFor="tfn-under18" className="text-xs font-medium cursor-pointer">
-                    만 18세 미만 비과세 면제 (Exemption: Under 18 years of age)
+                    Exemption: Under 18 years of age
                   </label>
                 </div>
 
                 <div className="flex items-center gap-2">
                   <RadioGroupItem value="pensioner" id="tfn-pensioner" />
                   <label htmlFor="tfn-pensioner" className="text-xs font-medium cursor-pointer">
-                    정부 연금 / 수당 수급자 면제 (Exemption: In receipt of a pension, benefit or allowance)
+                    Exemption: In receipt of a pension, benefit or allowance
                   </label>
                 </div>
               </RadioGroup>
@@ -1025,25 +1043,25 @@ export default function Onboarding() {
                   </Select>
                 </div>
                 <div className="sm:col-span-3">
-                  <Label className="text-xs text-slate-600">성 (Surname / Family name) *</Label>
+                  <Label className="text-xs text-slate-600">Surname / Family name *</Label>
                   <Input
                     value={taxForm.familyName}
                     onChange={(e) => setTaxForm((t) => ({ ...t, familyName: e.target.value.toUpperCase() }))}
-                    placeholder="HONG"
+                    placeholder="SMITH"
                     className="h-9 text-xs uppercase"
                   />
                 </div>
                 <div className="col-span-2">
-                  <Label className="text-xs text-slate-600">이름 (First given name) *</Label>
+                  <Label className="text-xs text-slate-600">First given name *</Label>
                   <Input
                     value={taxForm.givenNames}
                     onChange={(e) => setTaxForm((t) => ({ ...t, givenNames: e.target.value.toUpperCase() }))}
-                    placeholder="GILDONG"
+                    placeholder="JOHN"
                     className="h-9 text-xs uppercase"
                   />
                 </div>
                 <div className="col-span-2">
-                  <Label className="text-xs text-slate-600">중간 이름 (Other given names)</Label>
+                  <Label className="text-xs text-slate-600">Other given names</Label>
                   <Input
                     value={taxForm.otherNames}
                     onChange={(e) => setTaxForm((t) => ({ ...t, otherNames: e.target.value.toUpperCase() }))}
@@ -1052,7 +1070,7 @@ export default function Onboarding() {
                 </div>
               </div>
 
-              {/* 이전 성명 */}
+              {/* Previous Name (Q4) */}
               <div className="pt-2">
                 <div className="flex items-center gap-2">
                   <Checkbox
@@ -1061,7 +1079,7 @@ export default function Onboarding() {
                     onCheckedChange={(v) => setTaxForm((t) => ({ ...t, hasChangedName: Boolean(v) }))}
                   />
                   <label htmlFor="changed-name" className="text-xs text-slate-700 cursor-pointer">
-                    과거 국세청(ATO) 거래 이후 성(Family name)을 변경한 적이 있습니다 (Q4)
+                    I have changed my family name since I last dealt with the ATO (Q4)
                   </label>
                 </div>
                 {taxForm.hasChangedName && (
@@ -1069,7 +1087,7 @@ export default function Onboarding() {
                     <Input
                       value={taxForm.previousFamilyName}
                       onChange={(e) => setTaxForm((t) => ({ ...t, previousFamilyName: e.target.value.toUpperCase() }))}
-                      placeholder="이전 성 (Previous family name)"
+                      placeholder="Previous family name"
                       className="h-9 text-xs uppercase max-w-sm"
                     />
                   </div>
@@ -1077,21 +1095,21 @@ export default function Onboarding() {
               </div>
             </div>
 
-            {/* Q3: Address */}
+            {/* Q3: Home Address in Australia */}
             <div className="space-y-3 p-4 rounded-xl border bg-slate-50/60">
               <Label className="text-sm font-bold text-slate-800">3. What is your home address in Australia?</Label>
               <div className="grid gap-2.5">
                 <Input
                   value={taxForm.addressLine}
                   onChange={(e) => setTaxForm((t) => ({ ...t, addressLine: e.target.value.toUpperCase() }))}
-                  placeholder="Street Address (예: 123 GEORGE ST)"
+                  placeholder="Street address (e.g. 123 GEORGE ST)"
                   className="h-9 text-xs uppercase"
                 />
                 <div className="grid grid-cols-3 gap-2">
                   <Input
                     value={taxForm.suburb}
                     onChange={(e) => setTaxForm((t) => ({ ...t, suburb: e.target.value.toUpperCase() }))}
-                    placeholder="Suburb / Town (예: SYDNEY)"
+                    placeholder="Suburb / Town (e.g. SYDNEY)"
                     className="h-9 text-xs uppercase"
                   />
                   <Select value={taxForm.state} onValueChange={(v) => setTaxForm((t) => ({ ...t, state: v }))}>
@@ -1109,7 +1127,7 @@ export default function Onboarding() {
                   <Input
                     value={taxForm.postcode}
                     onChange={(e) => setTaxForm((t) => ({ ...t, postcode: digitsOnly(e.target.value, 4) }))}
-                    placeholder="Postcode (4자리)"
+                    placeholder="Postcode (4 digits)"
                     className="h-9 text-xs"
                   />
                 </div>
@@ -1129,7 +1147,7 @@ export default function Onboarding() {
                 />
               </div>
               <div>
-                <Label className="text-sm font-bold text-slate-800">6. Date of birth (생년월일)</Label>
+                <Label className="text-sm font-bold text-slate-800">6. Date of birth</Label>
                 <Input
                   type="date"
                   value={taxForm.dob}
@@ -1139,19 +1157,19 @@ export default function Onboarding() {
               </div>
             </div>
 
-            {/* Q7: Employment basis */}
+            {/* Q7: Employment Basis */}
             <div className="space-y-2 p-4 rounded-xl border bg-slate-50/60">
-              <Label className="text-sm font-bold text-slate-800">7. On what basis are you paid? (고용 형태)</Label>
+              <Label className="text-sm font-bold text-slate-800">7. On what basis are you paid?</Label>
               <RadioGroup
                 value={taxForm.employmentBasis}
                 onValueChange={(v) => setTaxForm((t) => ({ ...t, employmentBasis: v }))}
                 className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 pt-1"
               >
                 {[
-                  { id: 'casual', label: 'Casual (캐주얼)' },
-                  { id: 'part_time', label: 'Part-time (파트타임)' },
-                  { id: 'full_time', label: 'Full-time (풀타임)' },
-                  { id: 'labour_hire', label: 'Labour hire (파견)' },
+                  { id: 'casual', label: 'Casual' },
+                  { id: 'part_time', label: 'Part-time' },
+                  { id: 'full_time', label: 'Full-time' },
+                  { id: 'labour_hire', label: 'Labour hire' },
                   { id: 'super_stream', label: 'Super / Annuity' }
                 ].map((item) => (
                   <div key={item.id} className="flex items-center gap-2">
@@ -1166,7 +1184,7 @@ export default function Onboarding() {
 
             {/* Q8: Residency */}
             <div className="space-y-2 p-4 rounded-xl border bg-slate-50/60">
-              <Label className="text-sm font-bold text-slate-800">8. Are you: (호주 세법상 거주자 구분)</Label>
+              <Label className="text-sm font-bold text-slate-800">8. Are you:</Label>
               <RadioGroup
                 value={taxForm.residency}
                 onValueChange={(v) => setTaxForm((t) => ({ ...t, residency: v }))}
@@ -1175,30 +1193,32 @@ export default function Onboarding() {
                 <div className="flex items-center gap-2">
                   <RadioGroupItem value="resident" id="res-aus" />
                   <label htmlFor="res-aus" className="text-xs font-medium cursor-pointer">
-                    호주 세법상 거주자 (An Australian resident for tax purposes)
+                    An Australian resident for tax purposes
                   </label>
                 </div>
                 <div className="flex items-center gap-2">
                   <RadioGroupItem value="foreign" id="res-foreign" />
                   <label htmlFor="res-foreign" className="text-xs font-medium cursor-pointer">
-                    세법상 비거주자 (A foreign resident for tax purposes)
+                    A foreign resident for tax purposes
                   </label>
                 </div>
                 <div className="flex items-center gap-2">
                   <RadioGroupItem value="working_holiday" id="res-whm" />
                   <label htmlFor="res-whm" className="text-xs font-medium cursor-pointer">
-                    워킹홀리데이 비자 소지자 (A working holiday maker - Subclass 417 / 462)
+                    A working holiday maker (Subclass 417 / 462)
                   </label>
                 </div>
               </RadioGroup>
             </div>
 
-            {/* Q9: Tax-free threshold */}
+            {/* Q9: Tax-Free Threshold */}
             <div className="space-y-2 p-4 rounded-xl border bg-slate-50/60">
               <Label className="text-sm font-bold text-slate-800">
-                9. Do you want to claim the tax-free threshold from this payer? (면세 한도 적용)
+                9. Do you want to claim the tax-free threshold from this payer?
               </Label>
-              <p className="text-[11px] text-slate-500">주 수입원인 1개 직장에서만 $18,200 기본 면세 한도를 신청할 수 있습니다.</p>
+              <p className="text-[11px] text-slate-500">
+                You can generally only claim the $18,200 tax-free threshold from one payer at a time.
+              </p>
               <RadioGroup
                 value={taxForm.taxFreeThreshold}
                 onValueChange={(v) => setTaxForm((t) => ({ ...t, taxFreeThreshold: v }))}
@@ -1206,11 +1226,11 @@ export default function Onboarding() {
               >
                 <div className="flex items-center gap-2">
                   <RadioGroupItem value="yes" id="tft-yes" />
-                  <label htmlFor="tft-yes" className="text-xs font-medium cursor-pointer">예 (Yes)</label>
+                  <label htmlFor="tft-yes" className="text-xs font-medium cursor-pointer">Yes</label>
                 </div>
                 <div className="flex items-center gap-2">
                   <RadioGroupItem value="no" id="tft-no" />
-                  <label htmlFor="tft-no" className="text-xs font-medium cursor-pointer">아니오 (No)</label>
+                  <label htmlFor="tft-no" className="text-xs font-medium cursor-pointer">No</label>
                 </div>
               </RadioGroup>
             </div>
@@ -1218,7 +1238,7 @@ export default function Onboarding() {
             {/* Q10: Student Debt */}
             <div className="space-y-2 p-4 rounded-xl border bg-slate-50/60">
               <Label className="text-sm font-bold text-slate-800">
-                10. Do you have a HELP, VSL, FS, SSL or TSL debt? (학자금 대출 등 부채)
+                10. Do you have a Higher Education Loan Program (HELP), VET Student Loan (VSL), FS, SSL or Trade Support Loan (TSL) debt?
               </Label>
               <RadioGroup
                 value={taxForm.studentDebt}
@@ -1227,11 +1247,11 @@ export default function Onboarding() {
               >
                 <div className="flex items-center gap-2">
                   <RadioGroupItem value="yes" id="loan-yes" />
-                  <label htmlFor="loan-yes" className="text-xs font-medium cursor-pointer">예 (Yes)</label>
+                  <label htmlFor="loan-yes" className="text-xs font-medium cursor-pointer">Yes</label>
                 </div>
                 <div className="flex items-center gap-2">
                   <RadioGroupItem value="no" id="loan-no" />
-                  <label htmlFor="loan-no" className="text-xs font-medium cursor-pointer">아니오 (No)</label>
+                  <label htmlFor="loan-no" className="text-xs font-medium cursor-pointer">No</label>
                 </div>
               </RadioGroup>
             </div>
@@ -1239,33 +1259,32 @@ export default function Onboarding() {
         )}
 
         {/* ============================================================================== */}
-        {/* [페이지 타입 4]: 최종 서약 및 전자서명 (맨 마지막 단계) */}
+        {/* [Step Type 4]: Payee Declaration & Digital Signature */}
         {/* ============================================================================== */}
         {currentPage?.type === 'sign' && (
           <section className="space-y-5 rounded-2xl border bg-white p-5 shadow-sm">
             <div className="rounded-xl bg-slate-50 p-4 text-xs text-slate-700 leading-relaxed border space-y-2">
               <p className="font-semibold text-slate-900 text-sm">
-                DECLARATION by payee (Section A 납세자 최종 선언)
+                DECLARATION by payee (Section A)
               </p>
               <p>
-                I declare that the information I have given is true and correct.
-                (본인이 제출한 모든 정보는 진실하고 정확함을 선언합니다.)
+                I declare that the information that I have given is true and correct.
               </p>
               <p className="text-[11px] text-red-600 font-medium">
-                * There are penalties for deliberately making a false or misleading statement. (고의적인 허위 진술에는 법적 처벌이 따를 수 있습니다.)
+                * There are penalties for deliberately making a false or misleading statement.
               </p>
             </div>
 
-            {/* 자필 서명 패드 */}
+            {/* Signature Pad */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label className="text-sm font-semibold flex items-center gap-1.5">
                   <PenTool className="h-4 w-4 text-primary" />
-                  자필 전자서명 (You MUST SIGN here) *
+                  Digital Signature (You MUST sign here) *
                 </Label>
                 {signature && (
                   <span className="text-xs font-medium text-emerald-600 flex items-center gap-1">
-                    <CheckCircle2 className="h-3.5 w-3.5" /> 서명 완료
+                    <CheckCircle2 className="h-3.5 w-3.5" /> Signature captured
                   </span>
                 )}
               </div>
@@ -1278,7 +1297,7 @@ export default function Onboarding() {
               />
             </div>
 
-            {/* 선언문 동의 체크박스 */}
+            {/* Declaration Checkbox */}
             <div className="flex items-start gap-3 rounded-xl border p-3.5 bg-slate-50/50">
               <Checkbox
                 id="declaration-cb"
@@ -1289,28 +1308,28 @@ export default function Onboarding() {
                 }}
               />
               <label htmlFor="declaration-cb" className="text-xs leading-relaxed text-slate-800 cursor-pointer">
-                위 선언문과 입력한 세무 및 고용 정보가 정확함을 확인하였으며, 호주 국세청(ATO) 규격의 공식 NAT 3092 및 NAT 13080 서류 생성을 위해 사용하는 것에 동의합니다.
+                I declare that the personal, tax, and employment information provided is true and correct, and I consent to its use in generating official ATO NAT 3092 and NAT 13080 documents.
               </label>
             </div>
 
             <div className="space-y-1.5 rounded-xl border border-emerald-100 bg-emerald-50/60 p-3.5 text-xs text-emerald-900">
               <p className="flex items-center gap-1.5 font-bold">
                 <FileCheck className="h-4 w-4 text-emerald-600" />
-                호주 국세청(ATO) 공식 원본 벡터 양식 생성
+                Official ATO Vector PDF Generation
               </p>
               <p className="text-[11px] text-emerald-800 leading-relaxed">
-                제출 버튼을 누르면 업로드해주신 <b>정부 원본 서식(NAT 3092-06.2019)</b>의 해당 박스에 답변이 정확히 인쇄된 초고화질 공식 PDF가 생성되어 플랫폼 서류보관함에 보관됩니다.
+                Upon submission, your answers will be accurately rendered onto the official Australian Government NAT 3092 form with high-resolution vector precision and securely saved to your document vault.
               </p>
             </div>
 
             <p className="flex items-center gap-1.5 text-xs text-slate-500">
               <ShieldCheck className="h-4 w-4 text-slate-400" />
-              TFN 및 개인정보는 AES-256 군사등급 암호화로 보호됩니다.
+              Your TFN and personal data are protected with AES-256 bank-grade encryption.
             </p>
           </section>
         )}
 
-        {/* 에러 메시지 알림 */}
+        {/* Error Alert */}
         {error && (
           <p className="flex items-start gap-2 rounded-xl bg-destructive/10 px-4 py-3 text-xs font-medium text-destructive">
             <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
@@ -1318,7 +1337,7 @@ export default function Onboarding() {
           </p>
         )}
 
-        {/* 하단 이동 및 최종 제출 버튼 바 */}
+        {/* Navigation & Submit Buttons */}
         <div className="flex gap-3 pt-2">
           {step > 0 && (
             <Button
@@ -1332,7 +1351,7 @@ export default function Onboarding() {
               }}
               className="h-11 px-5"
             >
-              <ArrowLeft className="mr-1.5 h-4 w-4" /> 이전
+              <ArrowLeft className="mr-1.5 h-4 w-4" /> Back
             </Button>
           )}
 
@@ -1342,7 +1361,7 @@ export default function Onboarding() {
               className="flex-1 h-11 text-sm font-semibold"
               onClick={next}
             >
-              다음 단계 <ArrowRight className="ml-1.5 h-4 w-4" />
+              Next Step <ArrowRight className="ml-1.5 h-4 w-4" />
             </Button>
           ) : (
             <Button
@@ -1354,12 +1373,12 @@ export default function Onboarding() {
               {saving ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  공식 PDF 생성 및 저장 중...
+                  Generating Official PDFs & Submitting...
                 </>
               ) : (
                 <>
                   <FileCheck className="mr-2 h-4 w-4" />
-                  서약 완료 및 온보딩 서류 제출
+                  Submit Onboarding Documents
                 </>
               )}
             </Button>
