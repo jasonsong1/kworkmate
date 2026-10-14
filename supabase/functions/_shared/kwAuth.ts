@@ -6,6 +6,7 @@
 // resolveCaller() prefers whichever is present, so screens shared by managers and staff
 // keep working either way.
 
+import { createClient } from 'npm:@supabase/supabase-js@2';
 import {
   mergePresets,
   presetFor,
@@ -267,12 +268,48 @@ async function tokenFromRequest(req) {
 }
 
 // Either session answers: an employee signed in with the ID their employer issued, or an
-// account signed in through the platform. Nothing else gets an identity.
+// account signed in through the platform (including Google SSO).
 export async function resolveCaller(base44, req) {
   const token = await tokenFromRequest(req);
   if (token) {
-    const session = await loadSession(base44, token);
-    if (session) return { ...userFromSession(session), kw: true, session_token: session.token, profile_id: session.profile_id };
+    if (token.startsWith('kw_')) {
+      const session = await loadSession(base44, token);
+      if (session) return { ...userFromSession(session), kw: true, session_token: session.token, profile_id: session.profile_id };
+    } else {
+      // Supabase Auth JWT 토큰 (Google OAuth 등) 지원
+      try {
+        const url = (typeof Deno !== 'undefined' && Deno.env.get('SUPABASE_URL')) || '';
+        const serviceKey = (typeof Deno !== 'undefined' && Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')) || '';
+        if (url && serviceKey) {
+          const authClient = createClient(url, serviceKey, { auth: { persistSession: false } });
+          const { data: { user }, error } = await authClient.auth.getUser(token);
+          if (user && user.email) {
+            const email = lower(user.email);
+            const isSuper = email === 'sym910403@gmail.com' || user.app_metadata?.role === 'admin';
+            const profiles = rowsOf(
+              await base44.asServiceRole.entities.EmployeeProfile.filter({ user_email: email }, { limit: 1 }).catch(() => [])
+            );
+            const profile = profiles[0];
+            const branch_ids = isSuper ? [] : profile ? await branchIdsFor(base44, profile) : [];
+            return {
+              id: profile ? profile.id : user.id,
+              profile_id: profile ? profile.id : user.id,
+              email,
+              full_name: (profile && profile.full_name) || user.user_metadata?.full_name || email,
+              role: isSuper ? 'admin' : (profile && profile.role) || 'user',
+              app_role: isSuper ? 'company_admin' : (profile && profile.app_role) || 'staff',
+              company_id: (profile && profile.company_id) || '',
+              branch_id: (profile && profile.branch_id) || '',
+              branch_ids,
+              kw: true,
+              session_token: token
+            };
+          }
+        }
+      } catch (jwtErr) {
+        console.warn('[resolveCaller] JWT verification fallback error:', jwtErr);
+      }
+    }
   }
   const me = await base44.auth.me().catch(() => null);
   return me || null;

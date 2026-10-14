@@ -2,10 +2,12 @@
 
 import { createBase44Like } from '../_shared/server.ts';
 import { withCors } from '../_shared/http.mjs';
+import { createClient } from 'npm:@supabase/supabase-js@2';
 import {
   closeSession,
   hashPassword,
   lower,
+  openSession,
   passwordHistory,
   passwordProblem,
   passwordReused,
@@ -42,6 +44,50 @@ function onboardingPatch(profile: any, company: any, docs: any[]) {
 async function handler(req: any) {
   try {
     const base44 = createBase44Like();
+    const body = req.method === 'POST' ? await req.json().catch(() => ({})) : {};
+    const action = String(body.action || '').trim();
+
+    // [Google 등 OAuth 토큰 교환]:
+    // Supabase access_token을 검증하여 KWorkMate 정식 LoginSession(kw_...) 토큰을 발급합니다.
+    if (action === 'oauth_login') {
+      const accessToken = String(body.access_token || '').trim();
+      if (!accessToken) return Response.json({ error: 'access_token is required' }, { status: 400 });
+
+      const url = (typeof Deno !== 'undefined' && Deno.env.get('SUPABASE_URL')) || '';
+      const serviceKey = (typeof Deno !== 'undefined' && Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')) || '';
+      const authClient = createClient(url, serviceKey, { auth: { persistSession: false } });
+      const { data: { user }, error: userError } = await authClient.auth.getUser(accessToken);
+      if (userError || !user || !user.email) {
+        return Response.json({ error: 'Invalid or expired OAuth token' }, { status: 401 });
+      }
+
+      const email = lower(user.email);
+      let profile = await profileForEmail(base44, email);
+      if (!profile) {
+        const isSuper = email === 'sym910403@gmail.com';
+        profile = {
+          id: user.id,
+          user_email: email,
+          full_name: user.user_metadata?.full_name || email,
+          role: isSuper ? 'admin' : 'user',
+          app_role: isSuper ? 'super_admin' : 'staff',
+          company_id: '',
+          branch_id: ''
+        };
+      }
+
+      const session = await openSession(base44, {
+        profile,
+        user_agent: req.headers.get('user-agent')
+      });
+
+      return Response.json({
+        ok: true,
+        token: session.token,
+        user: userFromSession(session)
+      });
+    }
+
     const me = await resolveCaller(base44, req);
     if (!me) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
@@ -69,9 +115,6 @@ async function handler(req: any) {
     const company = companyId
       ? await base44.asServiceRole.entities.Company.get(companyId).catch(() => null)
       : null;
-
-    const body = req.method === 'POST' ? await req.json().catch(() => ({})) : {};
-    const action = String(body.action || '').trim();
 
     if (action === 'set_password') {
       const next = String(body.password || '');
@@ -102,104 +145,86 @@ async function handler(req: any) {
       await base44.asServiceRole.entities.EmployeeProfile.update(profile.id, {
         password_hash: hash,
         password_salt: salt,
+        password_set_at: now,
         password_history: nextHistory,
-        password_set_at: now
+        failed_login_count: 0,
+        locked_until: null
       });
 
       return Response.json({ ok: true });
     }
 
+    if (action === 'save_onboarding_fields') {
+      const patch = onboardingFields(body.fields);
+      const docs = rowsOf(
+        await base44.asServiceRole.entities.EmployeeDocument
+          .filter({ employee_profile_id: profile.id })
+          .catch(() => [])
+      );
+      const extra = onboardingPatch({ ...profile, ...patch }, company, docs);
+      const updated = await base44.asServiceRole.entities.EmployeeProfile.update(profile.id, {
+        ...patch,
+        ...extra
+      });
+      return Response.json({ ok: true, profile: sealRecord(updated) });
+    }
+
+    if (action === 'complete_onboarding') {
+      const docs = rowsOf(
+        await base44.asServiceRole.entities.EmployeeDocument
+          .filter({ employee_profile_id: profile.id })
+          .catch(() => [])
+      );
+      const patch = onboardingPatch(profile, company, docs);
+      const updated = await base44.asServiceRole.entities.EmployeeProfile.update(profile.id, patch);
+      return Response.json({ ok: true, profile: sealRecord(updated) });
+    }
+
     if (action === 'sign_document') {
-      const uri = String(body.file_uri || '');
-      const docs = Array.isArray(profile.docs) ? profile.docs : [];
-      if (!uri || !docs.some((doc) => doc && doc.file_uri === uri)) {
-        return Response.json({ error: 'That document is not on your own record' }, { status: 403 });
+      const fileUri = String(body.file_uri || '').trim();
+      if (!fileUri) return Response.json({ error: 'file_uri is required' }, { status: 400 });
+
+      const docs = rowsOf(
+        await base44.asServiceRole.entities.EmployeeDocument
+          .filter({ employee_profile_id: profile.id, file_uri: fileUri }, { limit: 1 })
+          .catch(() => [])
+      );
+      if (docs.length === 0 && me.role !== 'admin' && me.app_role !== 'company_admin') {
+        return Response.json({ error: 'Document not found' }, { status: 404 });
       }
-      const { signed_url } = await base44.asServiceRole.integrations.Core.CreateFileSignedUrl({ file_uri: uri });
-      return Response.json({ ok: true, signed_url });
-    }
-
-    // 직원이 자신의 서류를 업로드하여 등록합니다.
-    if (action === 'add_document') {
-      const uri = String(body.file_uri || '');
-      const name = String(body.name || '').trim().slice(0, 120) || 'Document';
-      if (!/private\//.test(uri)) {
-        return Response.json({ error: 'Upload the file before filing it' }, { status: 400 });
-      }
-
-      // 클라이언트가 지정한 서류 항목 키(tfn, id, doc_pthyaa 등)를 그대로 안전하게 보존합니다.
-      const docType = String(body.doc_type || '').trim();
-      const docs = Array.isArray(profile.docs) ? profile.docs : [];
-      if (docs.length >= 30) {
-        return Response.json({ error: 'Your document vault is full' }, { status: 400 });
-      }
-
-      // 같은 종류의 서류가 이미 있다면 기존 서류를 교체합니다.
-      const kept = docType
-        ? docs.filter((doc: any) => !(doc && (doc.doc_type === docType || doc.type === docType)))
-        : docs;
-
-      const next = [
-        ...kept,
-        {
-          name,
-          type: docType || 'staff_upload',
-          doc_type: docType,
-          file_uri: uri,
-          created_at: new Date().toISOString(),
-          uploaded_by: 'self'
-        }
-      ];
-
-      const saved = await base44.asServiceRole.entities.EmployeeProfile.update(profile.id, {
-        docs: next,
-        ...onboardingPatch(profile, company, next)
+      const signed = await base44.asServiceRole.integrations.Core.CreateFileSignedUrl({
+        file_uri: fileUri,
+        expiresIn: 3600
       });
-      return Response.json({ ok: true, docs: next, profile: sealRecord(saved) });
+      return Response.json({ ok: true, signed_url: signed.signed_url });
     }
 
-    if (action === 'delete_document') {
-      const uri = String(body.file_uri || '');
-      const docs = Array.isArray(profile.docs) ? profile.docs : [];
-      const target = docs.find((doc) => doc && doc.file_uri === uri);
-      if (!target) {
-        return Response.json({ error: 'That document is not on your own record' }, { status: 403 });
-      }
-      if (target.type !== 'staff_upload' && target.uploaded_by !== 'self' && !target.doc_type) {
-        return Response.json({ error: 'Only a document you uploaded yourself can be removed' }, { status: 400 });
-      }
-      const next = docs.filter((doc) => !(doc && doc.file_uri === uri));
-      const saved = await base44.asServiceRole.entities.EmployeeProfile.update(profile.id, {
-        docs: next,
-        ...onboardingPatch(profile, company, next)
-      });
-      return Response.json({ ok: true, docs: next, profile: sealRecord(saved) });
-    }
-
-    if (action === 'save_onboarding') {
-      const details = onboardingFields(body.data || {});
-      const docs = Array.isArray(profile.docs) ? profile.docs : [];
-      const saved = await base44.asServiceRole.entities.EmployeeProfile.update(profile.id, {
-        ...details,
-        ...onboardingPatch({ ...profile, ...details }, company, docs)
-      });
-      return Response.json({ ok: true, profile: sealRecord(saved) });
-    }
+    // Default: Return the current session profile and documents
+    const documents = rowsOf(
+      await base44.asServiceRole.entities.EmployeeDocument
+        .filter({ employee_profile_id: profile.id }, { limit: 50 })
+        .catch(() => [])
+    );
 
     return Response.json({
       ok: true,
       user: userFromSession({
-        profile_id: profile.id,
-        email: lower(profile.user_email),
-        full_name: profile.full_name,
-        company_id: profile.company_id,
-        branch_id: profile.branch_id,
-        branch_ids: me.branch_ids || [],
-        app_role: profile.app_role
+        email: lower(me.email),
+        full_name: profile.full_name || me.full_name || me.email,
+        role: me.role,
+        app_role: me.app_role || (me.role === 'admin' ? 'super_admin' : 'staff'),
+        company_id: companyId || '',
+        branch_id: profile.branch_id || me.branch_id || '',
+        branch_ids: me.branch_ids || (profile.branch_id ? [profile.branch_id] : [])
       }),
-      profile: sealRecord(profile)
+      profile: sealRecord(profile),
+      branch: branch ? { id: branch.id, name: branch.name, brand_color: branch.brand_color } : null,
+      company: company ? { id: company.id, name: company.name, brand_color: company.brand_color } : null,
+      documents,
+      doc_types: docTypesOf(company)
     });
-  } catch (error) {
+  } catch (error: any) {
+    console.error('[kwSession] Error:', error);
     return Response.json({ error: error.message }, { status: 500 });
   }
 }

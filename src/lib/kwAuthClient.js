@@ -196,20 +196,17 @@ export async function kwLoginWithGoogle(returnTo = '/') {
   return data;
 }
 
-// Google OAuth 리디렉션 복귀 후 세션 및 권한 동기화
+// Google OAuth 리디렉션 복귀 후 정식 KWorkMate 세션 발급 및 동기화
 export async function kwHandleOAuthCallback() {
   if (!supabase) return null;
   const { data: { session }, error } = await supabase.auth.getSession();
   if (error || !session) return null;
 
-  const token = session.access_token;
+  const accessToken = session.access_token;
   const user = session.user;
-  if (!token || !user) return null;
+  if (!accessToken || !user) return null;
 
-  // Supabase 세션 토큰을 세션 스토리지에 저장
-  writeToken(token);
-
-  // 백엔드 kwSession 함수로 프로필 및 권한 동기화
+  // 백엔드 kwSession 함수로 정식 KWorkMate 세션(kw_...) 발급 요청
   try {
     const fnUrl = `${supabaseUrl}/functions/v1/kwSession`;
     const res = await fetch(fnUrl, {
@@ -217,13 +214,18 @@ export async function kwHandleOAuthCallback() {
       headers: {
         'apikey': supabaseAnonKey,
         'Authorization': `Bearer ${supabaseAnonKey}`,
-        'x-kw-session': token,
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ action: 'me' })
+      body: JSON.stringify({ action: 'oauth_login', access_token: accessToken })
     });
     if (res.ok) {
       const payload = await res.json();
+      if (payload && payload.token) {
+        // 정식 kw_... 토큰 저장
+        writeToken(payload.token);
+      } else {
+        writeToken(accessToken);
+      }
       if (payload && payload.user) {
         const formatted = formatUser(payload.user);
         storeIdentity(formatted);
@@ -231,7 +233,8 @@ export async function kwHandleOAuthCallback() {
       }
     }
   } catch (err) {
-    console.warn('[kwHandleOAuthCallback] kwSession sync failed:', err);
+    console.warn('[kwHandleOAuthCallback] session exchange failed:', err);
+    writeToken(accessToken);
   }
 
   // 기본 사용자 정보 저장
