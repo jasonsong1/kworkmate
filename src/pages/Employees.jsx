@@ -50,7 +50,13 @@ export default function Employees() {
 
     }
     const page = await base44.entities.EmployeeProfile.filter(query, { sort: '-created_date', limit: 100 });
-    setRows(page.items || []);
+    // 슈퍼어드민(sym910403@gmail.com)은 플랫폼 총괄 관리자이므로 각 지점의 직원 목록에서 완전히 제외합니다.
+    const allItems = page.items || [];
+    const staffOnly = allItems.filter((item) => {
+      const email = String(item.user_email || '').trim().toLowerCase();
+      return email !== 'sym910403@gmail.com' && item.app_role !== 'super_admin';
+    });
+    setRows(staffOnly);
     setLoading(false);
   }, [activeBranch, search, selfOnly, me]);
 

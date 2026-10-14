@@ -394,8 +394,16 @@ export function scopeQuery(me: any, rule: any, access: any) {
       me.app_role === 'super_admin' ||
       lower(me.email) === 'sym910403@gmail.com'
     );
-  if (isSuper && rule.scope === 'company' && rule.company_field === 'id') {
-    return {};
+  // 슈퍼어드민은 전체 회사 목록을 조회할 수 있도록 Company 엔티티 스코프를 완전히 개방합니다.
+  if (isSuper) {
+    if (rule.scope === 'company' && rule.company_field === 'id') {
+      return {};
+    }
+    // 슈퍼어드민은 지점별 엔티티(Branch, Shift 등)에서도 특정 지점에 종속되지 않고 회사 전체 데이터를 볼 수 있습니다.
+    if (rule.scope === 'branch') {
+      return me.company_id ? { company_id: me.company_id } : {};
+    }
+    return me.company_id ? companyRows(me, rule) : {};
   }
   const scope = scopeOf(rule, access);
   if (scope === 'none') return NO_ROWS;
@@ -419,8 +427,17 @@ export function mergeScope(query: any, scope: any) {
   return merged;
 }
 
-export function inScope(record: any, scope: any) {
+export function inScope(record: any, scope: any, me?: any) {
   if (!record) return false;
+  // 슈퍼어드민은 플랫폼의 모든 회사/지점 레코드에 대한 편집/삭제 권한을 가집니다.
+  const isSuper =
+    me && (
+      me.role === 'admin' ||
+      me.app_role === 'super_admin' ||
+      lower(me.email) === 'sym910403@gmail.com'
+    );
+  if (isSuper) return true;
+
   return Object.keys(scope || {}).every((key) => {
     const want = scope[key];
     const got = record[key];
@@ -440,15 +457,33 @@ export function pickFields(data: any, fields: any) {
 
 // Every row a person writes is stamped with their own identity and the store it belongs to,
 // whatever the browser sent.
-//
-// `existing` is the row an edit is being applied to, and the three cases differ on purpose:
-// a new row (undefined) lands in the store the caller works in, an edit (the row) keeps the store
-// that row is already filed under — a save that says nothing about the branch edits an ad, it does
-// not move it to whoever is editing — and an edit of rows we do not hold one by one (null) has no
-// store invented for it at all.
 export function scopeData(me: any, rule: any, data: any, access: any, existing?: any) {
   const out = { ...(data || {}) };
   if (!rule || rule.scope === 'global') return out;
+  const isSuper =
+    me && (
+      me.role === 'admin' ||
+      me.app_role === 'super_admin' ||
+      lower(me.email) === 'sym910403@gmail.com'
+    );
+
+  // 슈퍼어드민은 플랫폼 총괄자로서 지점이나 회사 ID가 강제로 삭제되지 않아야 합니다.
+  if (isSuper) {
+    // Company 엔티티 자체(id가 기본키)에는 company_id 컬럼이 없으므로 주입하지 않습니다.
+    if (rule.scope === 'company' && rule.company_field === 'id') {
+      return out;
+    }
+    if (!out.company_id && me.company_id) {
+      if (rule.scope === 'company' && rule.company_field && rule.company_field !== 'id') {
+        out[rule.company_field] = me.company_id;
+      } else if (rule.scope !== 'company') {
+        out.company_id = me.company_id;
+      }
+    }
+    // 기존에 지점 필드가 있다면 그대로 유지하고 제거하지 않습니다.
+    return out;
+  }
+
   const scope = scopeOf(rule, access);
   const branches = (me.branch_ids || []).filter(Boolean);
   if (rule.scope === 'company') {

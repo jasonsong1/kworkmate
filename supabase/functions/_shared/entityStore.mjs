@@ -16,6 +16,7 @@
 export function tableFor(entity) {
   const name = String(entity || '');
   if (!/^[A-Za-z][A-Za-z0-9]*$/.test(name)) throw new Error('Invalid entity name');
+  if (name === 'User') return 'employee_profile';
   return name.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase();
 }
 
@@ -230,14 +231,25 @@ function forInsert(record, ctx) {
   return row;
 }
 
-// 수정 데이터: {$set: {...}} 형태도 허용, 그 외 $연산자는 거부
+// 수정 데이터: {$set: {...}}, {$unset: {...}} 형태 허용
 function forUpdate(data) {
-  const source = data && data.$set ? data.$set : data || {};
+  let source = {};
+  if (data && (data.$set || data.$unset)) {
+    if (data.$set) Object.assign(source, data.$set);
+    if (data.$unset) {
+      for (const key of Object.keys(data.$unset)) {
+        source[key] = null;
+      }
+    }
+  } else {
+    source = data || {};
+  }
   for (const key of Object.keys(source)) {
     if (key.startsWith('$')) throw new Error(`Unsupported update operator: ${key}`);
   }
   const row = { ...source };
   delete row.id;
+  delete row.branch_ids;
   row.updated_date = new Date().toISOString();
   return row;
 }
@@ -258,6 +270,34 @@ function assertNotEmptyQuery(query, op) {
 //    ctx      : { createdById }
 // ------------------------------------------------------------
 export async function runEntityOp(supabase, entity, op, body = {}, ctx = {}) {
+  // User 엔티티 호환: Base44 레거시 코드의 User 호출을 employee_profile로 매핑
+  if (entity === 'User') {
+    if (body.query && typeof body.query === 'object' && 'email' in body.query) {
+      body.query = { ...body.query, user_email: body.query.email };
+      delete body.query.email;
+    }
+    if (body.data && typeof body.data === 'object') {
+      if ('email' in body.data) {
+        body.data = { ...body.data, user_email: body.data.email };
+        delete body.data.email;
+      }
+      if ('branch_ids' in body.data) {
+        if (!body.data.branch_id && Array.isArray(body.data.branch_ids) && body.data.branch_ids.length > 0) {
+          body.data.branch_id = body.data.branch_ids[0];
+        }
+        delete body.data.branch_ids;
+      }
+    }
+  }
+
+  // EmployeeProfile도 마찬가지로 DB 스키마에 branch_ids 컬럼이 없으므로 제거
+  if (entity === 'EmployeeProfile' && body.data && typeof body.data === 'object' && 'branch_ids' in body.data) {
+    if (!body.data.branch_id && Array.isArray(body.data.branch_ids) && body.data.branch_ids.length > 0) {
+      body.data.branch_id = body.data.branch_ids[0];
+    }
+    delete body.data.branch_ids;
+  }
+
   const table = tableFor(entity);
 
   switch (op) {
@@ -273,7 +313,7 @@ export async function runEntityOp(supabase, entity, op, body = {}, ctx = {}) {
       if (!options) {
         const { data, error } = await q.limit(ARRAY_RESULT_LIMIT);
         throwIf(error);
-        return data || [];
+        return (data || []).map((r) => (entity === 'User' && r && r.user_email ? { ...r, email: r.user_email } : r));
       }
       const limit = Math.min(Math.max(Number(options.limit) || DEFAULT_PAGE_LIMIT, 1), 5000);
       const offset = readOffset(options);
@@ -282,8 +322,11 @@ export async function runEntityOp(supabase, entity, op, body = {}, ctx = {}) {
       throwIf(error);
       const rows = data || [];
       const hasMore = rows.length > limit;
+      const outRows = (hasMore ? rows.slice(0, limit) : rows).map((r) =>
+        entity === 'User' && r && r.user_email ? { ...r, email: r.user_email } : r
+      );
       return {
-        items: hasMore ? rows.slice(0, limit) : rows,
+        items: outRows,
         next_cursor: hasMore ? String(offset + limit) : null,
         has_more: hasMore
       };

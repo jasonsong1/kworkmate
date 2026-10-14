@@ -50,12 +50,22 @@ export async function sendAccountAccessEmail(base44, email, sendPassword = true)
 export async function hasAppAccess(base44, email) {
   const target = String(email || '').trim().toLowerCase();
   if (!target) return false;
-  const [profiles, companies, branches] = await Promise.all([
-    base44.asServiceRole.entities.EmployeeProfile.filter({ user_email: target }),
-    base44.asServiceRole.entities.Company.filter({ member_emails: target }),
-    base44.asServiceRole.entities.Branch.filter({ manager_emails: target })
-  ]);
-  return profiles.length > 0 || companies.length > 0 || branches.length > 0;
+  const profiles = await base44.asServiceRole.entities.EmployeeProfile.filter({ user_email: target }).catch(() => []);
+  if (profiles.length > 0) return true;
+
+  const companies = await base44.asServiceRole.entities.Company.list().catch(() => []);
+  const companyRows = Array.isArray(companies) ? companies : companies.items || [];
+  if (companyRows.some((c) => Array.isArray(c.member_emails) && c.member_emails.includes(target))) {
+    return true;
+  }
+
+  const branches = await base44.asServiceRole.entities.Branch.list().catch(() => []);
+  const branchRows = Array.isArray(branches) ? branches : branches.items || [];
+  if (branchRows.some((b) => Array.isArray(b.manager_emails) && b.manager_emails.includes(target))) {
+    return true;
+  }
+
+  return false;
 }
 
 // Removing the last record that admitted an address closes the app for that account again. The
@@ -67,17 +77,14 @@ export async function releaseAppAccess(base44, email) {
   if (!target) return { blocked: false, kept: false };
   if (await hasAppAccess(base44, target)) return { blocked: false, kept: true };
 
-  // The platform admin runs the app itself rather than a company inside it, so their own
-  // account is never touched.
-  const accounts = await base44.asServiceRole.entities.User.filter({ email: target });
-  if (!accounts.some((account) => account.role !== 'admin')) return { blocked: false, kept: false };
+  // 슈퍼어드민(sym910403@gmail.com)은 절대 접근 권한이 차단되지 않습니다.
+  if (target === 'sym910403@gmail.com') return { blocked: false, kept: false };
 
-  await base44.asServiceRole.entities.User.updateMany(
-    { email: target, role: { $ne: 'admin' } },
-    {
-      $unset: { company_id: '', branch_id: '', branch_ids: '' },
-      $set: { app_role: 'staff' }
-    }
-  );
+  // 남은 활성 로그인 세션을 종료 처리합니다.
+  await base44.asServiceRole.entities.LoginSession.updateMany(
+    { email: target, active: true },
+    { $set: { active: false, revoked_at: new Date().toISOString() } }
+  ).catch(() => null);
+
   return { blocked: true, kept: false };
 }
