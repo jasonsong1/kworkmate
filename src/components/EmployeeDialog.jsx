@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Loader2, Plus, X } from 'lucide-react';
+import { Loader2, Plus, X, Copy, Send, Check, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -13,6 +13,7 @@ import { useWorkspace } from '@/lib/WorkspaceContext';
 import { usePermissions } from '@/lib/permissions';
 import { base44 } from '@/api/base44Client';
 
+// 직원의 기본 빈 양식 데이터
 const empty = {
   full_name: '',
   user_email: '',
@@ -42,19 +43,23 @@ export default function EmployeeDialog({ open, onOpenChange, branch, employee, o
   const [form, setForm] = useState(empty);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  
+  // 온보딩 링크 복사 및 개별 발송 로딩 상태
+  const [copying, setCopying] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [sendingEmail, setSendingEmail] = useState(false);
+  const [currentOnboardingToken, setCurrentOnboardingToken] = useState('');
 
   const canAssignRole = myRole === 'company_admin';
-  // Completion is only reachable once the employee has actually submitted their onboarding.
+  // 온보딩 서류를 실제로 제출했는지 여부
   const onboardingSubmitted = Boolean(employee && employee.onboarding_submitted_at);
-  // The position on the record is the employer's own list from company settings — the same list
-  // the roster plans with. Whoever the employer gave the staff list to may set it, while the role
-  // key behind a position is still only handed out by a company admin. A position already stored
-  // stays listed even when it is no longer in the company's list, so nothing is lost on a save.
   const canEditEmployees = canEdit('employees') || canAssignRole;
+  
   const positionLabels = (company && company.custom_roles || []).map((item) => item.label);
   const positionOptions =
-  form.position && !positionLabels.includes(form.position) ? [...positionLabels, form.position] : positionLabels;
+    form.position && !positionLabels.includes(form.position) ? [...positionLabels, form.position] : positionLabels;
   const hasPositions = positionLabels.length > 0;
+
   const pickPosition = (label) => {
     const match = (company && company.custom_roles || []).find((item) => item.label === label);
     setForm((prev) => ({ ...prev, position: label, ...(match && canAssignRole ? { app_role: match.key } : {}) }));
@@ -63,7 +68,9 @@ export default function EmployeeDialog({ open, onOpenChange, branch, employee, o
   useEffect(() => {
     if (!open) return;
     setError('');
+    setCopied(false);
     if (employee) {
+      setCurrentOnboardingToken(employee.onboarding_token || '');
       setForm({
         ...empty,
         full_name: employee.full_name || '',
@@ -85,14 +92,14 @@ export default function EmployeeDialog({ open, onOpenChange, branch, employee, o
         send_onboarding_email: false
       });
     } else {
+      setCurrentOnboardingToken('');
       setForm(empty);
     }
   }, [open, employee]);
 
   const set = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
 
-  // A person can cover several positions: one main, one secondary and then as many more as the
-  // employer needs, up to ten in all.
+  // 직무 추가 및 관리 로직
   const MAX_POSITIONS = 10;
   const maxExtra = MAX_POSITIONS - 2;
   const addPosition = () =>
@@ -105,8 +112,6 @@ export default function EmployeeDialog({ open, onOpenChange, branch, employee, o
   const removePosition = (index) =>
     setForm((prev) => ({ ...prev, extra_positions: prev.extra_positions.filter((item, at) => at !== index) }));
 
-  // What the employer is told about the account itself: a brand new address is invited, while
-  // one the platform already knows simply has its way back in reopened.
   const accessNote = (data) => {
     if (data.email_error) return data.email_error;
     if (data.invited) return t('employees.accessInvited');
@@ -114,6 +119,98 @@ export default function EmployeeDialog({ open, onOpenChange, branch, employee, o
     return t('employees.accessGranted');
   };
 
+  // 온보딩 링크 클립보드 복사 함수
+  const copyOnboardingLink = async () => {
+    let token = currentOnboardingToken || (employee && employee.onboarding_token);
+    let link = token ? `${window.location.origin}/onboarding/${token}` : '';
+
+    if (!link && employee) {
+      setCopying(true);
+      try {
+        const res = await base44.functions.invoke('manageEmployee', {
+          action: 'send_onboarding_email',
+          employee_id: employee.id,
+          origin: window.location.origin,
+          send_onboarding_email: false
+        });
+        if (res.data?.onboarding_link) {
+          link = res.data.onboarding_link;
+          if (res.data.onboarding_token) {
+            setCurrentOnboardingToken(res.data.onboarding_token);
+          }
+        }
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setCopying(false);
+      }
+    }
+
+    if (link) {
+      await navigator.clipboard.writeText(link);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+      toast({
+        title: '온보딩 링크 복사 완료',
+        description: '클립보드에 복사되었습니다. 카카오톡이나 문자로 전송하세요.'
+      });
+    } else {
+      toast({
+        variant: 'destructive',
+        title: '온보딩 링크 생성 실패',
+        description: '직원 정보가 먼저 저장되어 있어야 링크를 생성할 수 있습니다.'
+      });
+    }
+  };
+
+  // 모달 안에서 온보딩 이메일 지금 즉시 발송
+  const sendOnboardingEmailNow = async () => {
+    if (!employee) {
+      toast({
+        variant: 'destructive',
+        title: '저장 필요',
+        description: '신규 직원은 먼저 저장 후 온보딩 메일을 발송할 수 있습니다.'
+      });
+      return;
+    }
+    setSendingEmail(true);
+    try {
+      const res = await base44.functions.invoke('manageEmployee', {
+        action: 'send_onboarding_email',
+        employee_id: employee.id,
+        origin: window.location.origin,
+        send_onboarding_email: true
+      });
+      const data = res.data || {};
+      if (data.onboarding_token) {
+        setCurrentOnboardingToken(data.onboarding_token);
+      }
+      if (data.email_sent) {
+        toast({
+          title: '온보딩 링크 발송 완료',
+          description: `${form.user_email || employee.user_email} (으)로 온보딩 안내 메일이 발송되었습니다.`
+        });
+      } else if (data.email_error) {
+        toast({
+          variant: 'destructive',
+          title: '이메일 발송 실패',
+          description: data.email_error
+        });
+      } else {
+        toast({ title: '온보딩 이메일 발송 요청을 처리했습니다.' });
+      }
+    } catch (e) {
+      toast({
+        variant: 'destructive',
+        title: '오류 발생',
+        description: '온보딩 메일 발송 중 문제가 발생했습니다.'
+      });
+    } finally {
+      setSendingEmail(false);
+    }
+  };
+
+  // 프로필 저장 제출
   const submit = async () => {
     if (!branch) return;
     if (!form.full_name.trim() || !form.user_email.trim()) {
@@ -146,8 +243,7 @@ export default function EmployeeDialog({ open, onOpenChange, branch, employee, o
       onOpenChange(false);
       onSaved && onSaved();
 
-      // The account is opened and its mail sent in a following call, so a slow invitation or
-      // mail provider never keeps the form on screen.
+      // 계정 권한 및 이메일 전송은 저장 후 비동기 호출
       if (savedId) {
         base44.functions.
         invoke('manageEmployee', {
@@ -163,7 +259,24 @@ export default function EmployeeDialog({ open, onOpenChange, branch, employee, o
             toast({ variant: 'destructive', title: access.error });
             return;
           }
-          if (!employee) toast({ title: accessNote(access) });
+          // 온보딩 이메일 발송 스위치가 켜져 있었던 경우 명확한 토스트 알림 표시
+          if (form.send_onboarding_email) {
+            if (access.email_sent) {
+              toast({
+                title: '온보딩 링크 발송 완료',
+                description: `${form.user_email} (으)로 온보딩 안내 이메일이 전송되었습니다.`
+              });
+            } else if (access.email_error) {
+              toast({
+                variant: 'destructive',
+                title: '온보딩 이메일 발송 실패',
+                description: access.email_error
+              });
+            }
+          }
+          if (!employee) {
+            toast({ title: accessNote(access) });
+          }
         }).
         catch(() => {});
       }
@@ -172,9 +285,12 @@ export default function EmployeeDialog({ open, onOpenChange, branch, employee, o
     }
   };
 
+  const activeToken = currentOnboardingToken || (employee && employee.onboarding_token);
+  const activeLink = activeToken ? `${window.location.origin}/onboarding/${activeToken}` : '';
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{employee ? t('common.edit') : t('employees.add')}</DialogTitle>
         </DialogHeader>
@@ -191,7 +307,6 @@ export default function EmployeeDialog({ open, onOpenChange, branch, employee, o
               onChange={(e) => set('user_email', e.target.value)}
               placeholder="staff@email.com" />
             <p className="mt-1 text-xs text-muted-foreground">{t('employees.emailHint')}</p>
-            
           </div>
           <div>
             <Label>{t('common.position')}</Label>
@@ -201,82 +316,76 @@ export default function EmployeeDialog({ open, onOpenChange, branch, employee, o
               </SelectTrigger>
               <SelectContent>
                 {positionOptions.map((label) =>
-                <SelectItem key={label} value={label}>
+                  <SelectItem key={label} value={label}>
                     {label}
                   </SelectItem>
                 )}
               </SelectContent>
             </Select>
-            <p className="mt-1 text-xs text-muted-foreground">
-              {form.app_role === 'company_admin' ?
-              t('role.adminHint') :
-              hasPositions ?
-              t('role.employeeHint') :
-              t('role.noneHint')}
-            </p>
-          </div>
-          <div className="sm:col-span-2">
-            <div className="flex items-center justify-between gap-2">
-              <Label>{t('employees.secondaryPosition')}</Label>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={addPosition}
-                disabled={!canEditEmployees || form.extra_positions.length >= maxExtra}
-              >
-                <Plus className="mr-1 h-3.5 w-3.5" /> {t('employees.addPosition')}
-              </Button>
-            </div>
-            <Select value={form.secondary_position || ''} onValueChange={(v) => set('secondary_position', v)} disabled={!canEditEmployees}>
-              <SelectTrigger>
-                <SelectValue placeholder={t('role.select')} />
-              </SelectTrigger>
-              <SelectContent>
-                {positionLabels.map((label) =>
-                <SelectItem key={label} value={label}>
-                    {label}
-                  </SelectItem>
-                )}
-                {form.secondary_position && !positionLabels.includes(form.secondary_position) &&
-                <SelectItem value={form.secondary_position}>{form.secondary_position}</SelectItem>
-                }
-              </SelectContent>
-            </Select>
-            <p className="mt-1 text-xs text-muted-foreground">{t('employees.secondaryPositionHint')}</p>
-
-            {form.extra_positions.length > 0 &&
-            <div className="mt-2 space-y-2">
-                {form.extra_positions.map((label, index) =>
-              <div key={index} className="flex items-center gap-2">
-                    <Select value={label || ''} onValueChange={(v) => setExtraPosition(index, v)} disabled={!canEditEmployees}>
-                      <SelectTrigger>
-                        <SelectValue placeholder={t('role.select')} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {positionLabels.map((option) =>
-                    <SelectItem key={option} value={option}>
-                            {option}
-                          </SelectItem>
-                    )}
-                        {label && !positionLabels.includes(label) && <SelectItem value={label}>{label}</SelectItem>}
-                      </SelectContent>
-                    </Select>
-                    <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => removePosition(index)}
-                  disabled={!canEditEmployees}
-                  aria-label="Remove position">
-                      <X className="h-4 w-4" />
-                    </Button>
-                  </div>
-              )}
-                <p className="text-xs text-muted-foreground">{t('employees.positionsHint')}</p>
-              </div>
+            {!hasPositions &&
+              <p className="mt-1 text-xs text-muted-foreground">{t('employees.noCustomRoles')}</p>
             }
           </div>
+          <div>
+            <Label>{t('employees.secondaryPosition')}</Label>
+            <Select
+              value={form.secondary_position || ''}
+              onValueChange={(v) => set('secondary_position', v)}
+              disabled={!canEditEmployees}>
+              <SelectTrigger>
+                <SelectValue placeholder={t('employees.none')} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">{t('employees.none')}</SelectItem>
+                {positionOptions.map((label) =>
+                  <SelectItem key={label} value={label}>
+                    {label}
+                  </SelectItem>
+                )}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="sm:col-span-2 space-y-2">
+            <div className="flex items-center justify-between">
+              <Label>{t('employees.extraPositions')}</Label>
+              {canEditEmployees && form.extra_positions.length < maxExtra &&
+                <Button type="button" variant="outline" size="sm" onClick={addPosition}>
+                  <Plus className="mr-1 h-3.5 w-3.5" />
+                  {t('employees.addPosition')}
+                </Button>
+              }
+            </div>
+            {form.extra_positions.map((value, idx) =>
+              <div key={idx} className="flex items-center gap-2">
+                <Select
+                  value={value || ''}
+                  onValueChange={(v) => setExtraPosition(idx, v)}
+                  disabled={!canEditEmployees}>
+                  <SelectTrigger className="flex-1">
+                    <SelectValue placeholder={t('role.select')} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {positionOptions.map((label) =>
+                      <SelectItem key={label} value={label}>
+                        {label}
+                      </SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
+                {canEditEmployees &&
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => removePosition(idx)}>
+                    <X className="h-4 w-4" />
+                  </Button>
+                }
+              </div>
+            )}
+          </div>
+
           <div>
             <Label>{t('employees.visa')}</Label>
             <Select value={form.visa_type || ''} onValueChange={(v) => set('visa_type', v)}>
@@ -285,17 +394,14 @@ export default function EmployeeDialog({ open, onOpenChange, branch, employee, o
               </SelectTrigger>
               <SelectContent>
                 {VISA_TYPES.map((v) =>
-                <SelectItem key={v.value} value={v.value}>
+                  <SelectItem key={v.value} value={v.value}>
                     {t(VISA_LABEL_KEYS[v.value] || v.value)}
                   </SelectItem>
                 )}
               </SelectContent>
             </Select>
           </div>
-          
 
-
-          
           <div>
             <Label>{t('employees.employmentType')}</Label>
             <Select value={form.employment_type} onValueChange={(v) => set('employment_type', v)}>
@@ -304,7 +410,7 @@ export default function EmployeeDialog({ open, onOpenChange, branch, employee, o
               </SelectTrigger>
               <SelectContent>
                 {EMPLOYMENT_TYPES.map((e) =>
-                <SelectItem key={e.value} value={e.value}>
+                  <SelectItem key={e.value} value={e.value}>
                     {t(EMPLOYMENT_LABEL_KEYS[e.value] || e.value)}
                   </SelectItem>
                 )}
@@ -324,14 +430,12 @@ export default function EmployeeDialog({ open, onOpenChange, branch, employee, o
             <Input
               value={form.emergency_contact_name}
               onChange={(e) => set('emergency_contact_name', e.target.value)} />
-            
           </div>
           <div>
             <Label>{t('employees.emergencyPhone')}</Label>
             <Input
               value={form.emergency_contact_phone}
               onChange={(e) => set('emergency_contact_phone', e.target.value)} />
-            
           </div>
           <div>
             <Label>{t('employees.uiLanguage')}</Label>
@@ -357,8 +461,9 @@ export default function EmployeeDialog({ open, onOpenChange, branch, employee, o
             <p className="mt-1 text-xs text-muted-foreground">{t('employees.pinHint')}</p>
           </div>
 
-          {!employee &&
-          <>
+          {/* 신규 등록 시 옵션 */}
+          {!employee && (
+            <>
               <div className="flex items-center justify-between rounded-lg border px-4 py-3">
                 <span className="text-sm">{t('employees.inviteHint')}</span>
                 <Switch checked={form.send_invite} onCheckedChange={(v) => set('send_invite', v)} />
@@ -366,45 +471,115 @@ export default function EmployeeDialog({ open, onOpenChange, branch, employee, o
               <div className="flex items-center justify-between rounded-lg border px-4 py-3">
                 <span className="text-sm">{t('employees.sendOnboarding')}</span>
                 <Switch
-                checked={form.send_onboarding_email}
-                onCheckedChange={(v) => set('send_onboarding_email', v)} />
-              
+                  checked={form.send_onboarding_email}
+                  onCheckedChange={(v) => set('send_onboarding_email', v)} />
               </div>
             </>
-          }
+          )}
 
-          {employee &&
-          <div className="sm:col-span-2 space-y-3 rounded-lg border px-4 py-3">
-              <div className="flex items-center justify-between gap-4">
-              <span className="text-sm">{t('employees.sendOnboarding')}</span>
-              <Switch
-              checked={form.send_onboarding_email}
-              onCheckedChange={(v) => set('send_onboarding_email', v)} />
+          {/* 기존 직원 수정 시 온보딩 통합 제어 카드 */}
+          {employee && (
+            <div className="sm:col-span-2 space-y-4 rounded-xl border border-blue-100 bg-blue-50/40 p-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-blue-100 pb-3">
+                <div>
+                  <h4 className="font-semibold text-slate-800 text-sm flex items-center gap-1.5">
+                    📋 직원 온보딩 링크 및 서류 관리
+                  </h4>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    직원에게 온보딩 링크를 전달하여 TFN 및 Super 설문을 작성하도록 합니다.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="bg-white hover:bg-slate-50 text-xs h-8 border-blue-200"
+                    disabled={copying}
+                    onClick={copyOnboardingLink}>
+                    {copied ? (
+                      <>
+                        <Check className="mr-1.5 h-3.5 w-3.5 text-emerald-600" />
+                        복사됨!
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="mr-1.5 h-3.5 w-3.5 text-blue-600" />
+                        {copying ? '생성 중...' : '온보딩 링크 복사'}
+                      </>
+                    )}
+                  </Button>
+                  {activeLink && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      className="text-xs h-8 px-2 text-slate-600"
+                      onClick={() => window.open(activeLink, '_blank')}
+                      title="새 창에서 온보딩 폼 열기">
+                      <ExternalLink className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="bg-blue-600 hover:bg-blue-700 text-white text-xs h-8"
+                    disabled={sendingEmail}
+                    onClick={sendOnboardingEmailNow}>
+                    {sendingEmail ? (
+                      <>
+                        <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                        발송 중...
+                      </>
+                    ) : (
+                      <>
+                        <Send className="mr-1.5 h-3.5 w-3.5" />
+                        지금 이메일 발송
+                      </>
+                    )}
+                  </Button>
+                </div>
               </div>
-              <div className="flex items-center justify-between gap-4">
-                <span className="text-sm">{t('employees.onboarding')}</span>
-                <Select
-                value={form.onboarding_status}
-                onValueChange={(v) => set('onboarding_status', v)}>
-                  <SelectTrigger className="w-40">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="pending">{t('employees.statusPending')}</SelectItem>
-                    <SelectItem value="in_progress">{t('employees.statusInProgress')}</SelectItem>
-                    <SelectItem
-                    value="completed"
-                    disabled={!onboardingSubmitted && form.onboarding_status !== 'completed'}>
-                      {t('employees.statusCompleted')}
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
+
+              {/* 링크 주소 안내 */}
+              {activeLink && (
+                <div className="rounded bg-white/80 border border-blue-100 p-2 text-xs font-mono text-slate-600 truncate select-all">
+                  🔗 {activeLink}
+                </div>
+              )}
+
+              <div className="grid gap-3 sm:grid-cols-2 pt-1">
+                <div className="flex items-center justify-between gap-4 rounded-lg bg-white p-3 border border-slate-200">
+                  <span className="text-sm font-medium text-slate-700">저장 시 이메일 자동 발송</span>
+                  <Switch
+                    checked={form.send_onboarding_email}
+                    onCheckedChange={(v) => set('send_onboarding_email', v)} />
+                </div>
+                <div className="flex items-center justify-between gap-4 rounded-lg bg-white p-3 border border-slate-200">
+                  <span className="text-sm font-medium text-slate-700">{t('employees.onboarding')}</span>
+                  <Select
+                    value={form.onboarding_status}
+                    onValueChange={(v) => set('onboarding_status', v)}>
+                    <SelectTrigger className="w-32 h-8 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="pending">{t('employees.statusPending')}</SelectItem>
+                      <SelectItem value="in_progress">{t('employees.statusInProgress')}</SelectItem>
+                      <SelectItem
+                        value="completed"
+                        disabled={!onboardingSubmitted && form.onboarding_status !== 'completed'}>
+                        {t('employees.statusCompleted')}
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
-              {!onboardingSubmitted &&
-              <p className="text-xs text-muted-foreground">{t('employees.statusLocked')}</p>
-              }
+              {!onboardingSubmitted && (
+                <p className="text-xs text-muted-foreground pl-1">{t('employees.statusLocked')}</p>
+              )}
             </div>
-          }
+          )}
         </div>
 
         {error && <p className="text-sm text-destructive">{error}</p>}
@@ -419,6 +594,6 @@ export default function EmployeeDialog({ open, onOpenChange, branch, employee, o
           </Button>
         </DialogFooter>
       </DialogContent>
-    </Dialog>);
-
+    </Dialog>
+  );
 }

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { FileText, KeyRound, Pencil, Plus, Power, Search, Send, Trash2 } from 'lucide-react';
+import { FileText, KeyRound, Pencil, Plus, Power, Search, Send, Trash2, Copy, Check, Link } from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
 import EmployeeDialog from '@/components/EmployeeDialog';
 import EmployeeDocumentsDialog from '@/components/EmployeeDocumentsDialog';
@@ -33,6 +33,11 @@ export default function Employees() {
   const [docsFor, setDocsFor] = useState(null);
   const [loginFor, setLoginFor] = useState(null);
 
+  // 온보딩 링크 복사 및 즉시 발송 상태 관리
+  const [copyingId, setCopyingId] = useState(null);
+  const [copiedId, setCopiedId] = useState(null);
+  const [sendingId, setSendingId] = useState(null);
+
   const load = useCallback(async () => {
     if (!activeBranch) {
       setRows([]);
@@ -45,9 +50,9 @@ export default function Employees() {
     const term = search.trim();
     if (term) {
       query.$or = [
-      { full_name: { $regex: term, $options: 'i' } },
-      { employee_number: { $regex: term, $options: 'i' } }];
-
+        { full_name: { $regex: term, $options: 'i' } },
+        { employee_number: { $regex: term, $options: 'i' } }
+      ];
     }
     const page = await base44.entities.EmployeeProfile.filter(query, { sort: '-created_date', limit: 100 });
     // 슈퍼어드민(sym910403@gmail.com)은 플랫폼 총괄 관리자이므로 각 지점의 직원 목록에서 완전히 제외합니다.
@@ -100,17 +105,87 @@ export default function Employees() {
     load();
   };
 
+  // 테이블에서 원클릭으로 온보딩 링크 복사
+  const copyRowOnboardingLink = async (row) => {
+    let token = row.onboarding_token;
+    let link = token ? `${window.location.origin}/onboarding/${token}` : '';
+    if (!link) {
+      setCopyingId(row.id);
+      try {
+        const res = await base44.functions.invoke('manageEmployee', {
+          action: 'send_onboarding_email',
+          employee_id: row.id,
+          origin: window.location.origin,
+          send_onboarding_email: false
+        });
+        if (res.data?.onboarding_link) {
+          link = res.data.onboarding_link;
+          if (res.data.onboarding_token) {
+            row.onboarding_token = res.data.onboarding_token;
+          }
+        }
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setCopyingId(null);
+      }
+    }
+    if (link) {
+      await navigator.clipboard.writeText(link);
+      setCopiedId(row.id);
+      setTimeout(() => setCopiedId(null), 2500);
+      toast({
+        title: '온보딩 링크 복사 완료',
+        description: `${row.full_name} 님의 온보딩 링크가 클립보드에 복사되었습니다.`
+      });
+    } else {
+      toast({ variant: 'destructive', title: '온보딩 링크 생성 실패' });
+    }
+  };
+
+  // 테이블에서 원클릭으로 온보딩 안내 이메일 재발송
+  const sendRowOnboardingEmail = async (row) => {
+    setSendingId(row.id);
+    try {
+      const res = await base44.functions.invoke('manageEmployee', {
+        action: 'send_onboarding_email',
+        employee_id: row.id,
+        origin: window.location.origin,
+        send_onboarding_email: true
+      });
+      const data = res.data || {};
+      if (data.email_sent) {
+        toast({
+          title: '온보딩 링크 발송 완료',
+          description: `${row.user_email} (으)로 온보딩 안내 메일이 발송되었습니다.`
+        });
+        load();
+      } else if (data.email_error) {
+        toast({
+          variant: 'destructive',
+          title: '이메일 발송 실패',
+          description: data.email_error
+        });
+      } else {
+        toast({ title: '온보딩 메일 발송 처리 완료' });
+      }
+    } catch (e) {
+      toast({ variant: 'destructive', title: '온보딩 메일 발송 오류가 발생했습니다.' });
+    } finally {
+      setSendingId(null);
+    }
+  };
+
   return (
     <div>
       <PageHeader
         title={t('employees.title')}
         subtitle={activeBranch ? activeBranch.name : t('employees.subtitle')}
         actions={
-        <Button onClick={openCreate} disabled={!activeBranch || !canManage}>
+          <Button onClick={openCreate} disabled={!activeBranch || !canManage}>
             <Plus className="mr-2 h-4 w-4" /> {t('employees.add')}
           </Button>
         } />
-      
 
       <Card>
         <CardContent className="p-4">
@@ -121,65 +196,62 @@ export default function Employees() {
               onChange={(e) => setSearch(e.target.value)}
               placeholder={t('common.search')}
               className="pl-9" />
-            
           </div>
 
-          {loading ?
-          <p className="py-10 text-center text-sm text-muted-foreground">{t('common.loading')}</p> :
-          rows.length === 0 ?
-          <p className="py-10 text-center text-sm text-muted-foreground">{t('common.none')}</p> :
-
-          <div className="overflow-x-auto">
+          {loading ? (
+            <p className="py-10 text-center text-sm text-muted-foreground">{t('common.loading')}</p>
+          ) : rows.length === 0 ? (
+            <p className="py-10 text-center text-sm text-muted-foreground">{t('common.none')}</p>
+          ) : (
+            <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead>{t('common.name')}</TableHead>
                     <TableHead>{t('employees.number')}</TableHead>
                     <TableHead>{t('common.position')}</TableHead>
-                    
-                    
                     <TableHead>{t('employees.onboarding')}</TableHead>
                     <TableHead className="text-right">{t('common.actions')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {rows.map((row) =>
-                <TableRow
-                  key={row.id}
-                  className={
-                  row.status === 'inactive' ?
-                  'bg-destructive/5 text-destructive hover:bg-destructive/5' :
-                  ''
-                  }>
-                  
+                  {rows.map((row) => (
+                    <TableRow
+                      key={row.id}
+                      className={
+                        row.status === 'inactive'
+                          ? 'bg-destructive/5 text-destructive hover:bg-destructive/5'
+                          : ''
+                      }>
                       <TableCell>
                         <div className="flex items-center gap-2">
                           <p className="font-medium">{row.full_name}</p>
-                          {row.status === 'inactive' &&
-                      <Badge variant="secondary">{t('employees.inactive')}</Badge>
-                      }
+                          {row.status === 'inactive' && (
+                            <Badge variant="secondary">{t('employees.inactive')}</Badge>
+                          )}
                         </div>
                         <p className="text-xs text-muted-foreground">{row.user_email}</p>
                       </TableCell>
                       <TableCell className="font-mono text-xs">{row.employee_number || '—'}</TableCell>
                       <TableCell>
                         <span>{row.position || '—'}</span>
-                        {row.secondary_position ?
-                    <span className="ml-1 text-xs text-muted-foreground">+ {row.secondary_position}</span> :
-                    null}
+                        {row.secondary_position ? (
+                          <span className="ml-1 text-xs text-muted-foreground">+ {row.secondary_position}</span>
+                        ) : null}
                       </TableCell>
                       
-                      
                       <TableCell>
-                        {row.onboarding_status === 'completed' ?
-                    <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100">
+                        {row.onboarding_status === 'completed' ? (
+                          <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100">
                             {t('employees.completed')}
-                          </Badge> :
-                    row.onboarding_status === 'in_progress' ?
-                    <Badge variant="secondary">{t('employees.statusInProgress')}</Badge> :
-
-                    <Badge variant="secondary">{t('employees.pending')}</Badge>
-                    }
+                          </Badge>
+                        ) : row.onboarding_status === 'in_progress' ? (
+                          <Badge variant="secondary" className="bg-amber-100 text-amber-800 hover:bg-amber-100">
+                            {t('employees.statusInProgress')}
+                          </Badge>
+                        ) : (
+                          <Badge variant="secondary">{t('employees.pending')}</Badge>
+                        )}
                         <p className="mt-1 text-xs text-muted-foreground">
                           {t('ob.docsProgress')
                             .replace('{done}', String(checklistFor(row, company, lang).requiredDone))
@@ -192,63 +264,73 @@ export default function Employees() {
                             <Pencil className="h-3.5 w-3.5" />
                           </Button>
                           <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => setDocsFor(row)}
-                        title={t('employees.vault')}>
-                        
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => setDocsFor(row)}
+                            title={t('employees.vault')}>
                             <FileText className="h-3.5 w-3.5" />
                             <span className="ml-1 text-xs">{(row.docs || []).length}</span>
                           </Button>
                           <Button
-                        size="sm"
-                        variant="ghost"
-                        title={row.password_set ? t('employees.passwordOn') : t('employees.loginAccess')}
-                        onClick={() => setLoginFor(row)}
-                        disabled={!canManage}
-                        className={row.password_set ? 'text-emerald-600' : ''}>
-                        
+                            size="sm"
+                            variant="ghost"
+                            title={row.password_set ? t('employees.passwordOn') : t('employees.loginAccess')}
+                            onClick={() => setLoginFor(row)}
+                            disabled={!canManage}
+                            className={row.password_set ? 'text-emerald-600' : ''}>
                             <KeyRound className="h-3.5 w-3.5" />
                           </Button>
-                          {(row.onboarding_status === 'pending' || !row.onboarding_status) &&
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        title={t('employees.sendOnboarding')}
-                        onClick={() => {
-                          setEditing(row);
-                          setDialogOpen(true);
-                        }}>
-                        
-                              <Send className="h-3.5 w-3.5" />
-                            </Button>
-                      }
+                          
+                          {/* 온보딩 미완료인 경우: 원클릭 링크 복사 및 이메일 재발송 버튼 */}
+                          {row.onboarding_status !== 'completed' && (
+                            <>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                title="온보딩 링크 복사 (카카오톡/문자용)"
+                                disabled={copyingId === row.id}
+                                onClick={() => copyRowOnboardingLink(row)}>
+                                {copiedId === row.id ? (
+                                  <Check className="h-3.5 w-3.5 text-emerald-600" />
+                                ) : (
+                                  <Copy className="h-3.5 w-3.5 text-blue-600" />
+                                )}
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                title="온보딩 안내 이메일 지금 발송"
+                                disabled={sendingId === row.id}
+                                onClick={() => sendRowOnboardingEmail(row)}>
+                                <Send className={`h-3.5 w-3.5 ${sendingId === row.id ? 'animate-pulse text-amber-500' : 'text-blue-600'}`} />
+                              </Button>
+                            </>
+                          )}
+
                           <Button
-                        size="sm"
-                        variant="ghost"
-                        title={row.status === 'inactive' ? t('employees.activate') : t('employees.deactivate')}
-                        disabled={!canManage}
-                        onClick={() => toggleActive(row)}>
-                        
+                            size="sm"
+                            variant="ghost"
+                            title={row.status === 'inactive' ? t('employees.activate') : t('employees.deactivate')}
+                            disabled={!canManage}
+                            onClick={() => toggleActive(row)}>
                             <Power className="h-3.5 w-3.5" />
                           </Button>
                           <Button
-                        size="sm"
-                        variant="ghost"
-                        title={t('employees.delete')}
-                        disabled={!canManage}
-                        onClick={() => removeEmployee(row)}>
-                        
+                            size="sm"
+                            variant="ghost"
+                            title={t('employees.delete')}
+                            disabled={!canManage}
+                            onClick={() => removeEmployee(row)}>
                             <Trash2 className="h-3.5 w-3.5 text-destructive" />
                           </Button>
                         </div>
                       </TableCell>
                     </TableRow>
-                )}
+                  ))}
                 </TableBody>
               </Table>
             </div>
-          }
+          )}
         </CardContent>
       </Card>
 
@@ -270,6 +352,6 @@ export default function Employees() {
         employee={loginFor}
         onSaved={load} />
       
-    </div>);
-
+    </div>
+  );
 }

@@ -5,7 +5,7 @@ import { createBase44Like } from '../_shared/server.ts';
 import { withCors } from '../_shared/http.mjs';
 import { formatEmployeeNumber, randomToken } from '../_shared/util.ts';
 import { hashPin, isValidPin, newPinSalt } from '../_shared/pin.ts';
-import { sendEmail, brandedEmail, portalLink } from '../_shared/email.ts';
+import { sendEmail, sendEmailDetailed, brandedEmail, portalLink } from '../_shared/email.ts';
 import { sendAccountAccessEmail, releaseAppAccess } from '../_shared/account.ts';
 import { employeeLanguage, onboardingMail, onboardingReminderMail } from '../_shared/employeeMail.ts';
 import { packageState, resolveLimit } from '../_shared/packages.ts';
@@ -159,7 +159,8 @@ async function handler(req) {
 
     // Opening the account and sending its mail is kept off the save path: a slow invitation or
     // mail provider must never leave the employer looking at a form that is still saving.
-    if (action === 'grant_access') {
+    // 계정 접근 권한 부여(grant_access) 및 온보딩 이메일 전송(send_onboarding_email)
+    if (action === 'grant_access' || action === 'send_onboarding_email') {
       const profile = await base44.asServiceRole.entities.EmployeeProfile.get(body.employee_id).catch(() => null);
       if (!profile || (!isSuper && profile.company_id !== me.company_id)) {
         return Response.json({ error: 'Employee not found' }, { status: 404 });
@@ -170,19 +171,23 @@ async function handler(req) {
       const branch = await base44.asServiceRole.entities.Branch.get(profile.branch_id).catch(() => null);
       const store = branch ? branch.name : '';
 
-      // Someone on the books must be able to sign in straight away, so the account itself is
-      // always opened; only the password-setup email follows the employer's choice. An address
-      // the platform already knows has its access restored rather than re-invited.
-      const access = await sendAccountAccessEmail(base44, profile.user_email, body.send_invite !== false);
+      // grant_access일 때만 계정 접근 권한 및 로그인 비밀번호 설정 메일 전송
+      let access = {};
+      if (action === 'grant_access') {
+        access = await sendAccountAccessEmail(base44, profile.user_email, body.send_invite !== false);
+      }
 
-      if (body.send_onboarding_email) {
-        // A form already sent back cannot be reopened with the old link, so asking for it again
-        // issues a fresh one and the next submission starts from an empty form.
+      let emailResult = { ok: true, error: '' };
+      let onboardingToken = profile.onboarding_token;
+      let link = '';
+
+      // 온보딩 이메일 발송 요청인 경우
+      if (body.send_onboarding_email || action === 'send_onboarding_email') {
+        // 이미 제출되었거나 완료된 경우 새 토큰 발급
         const reopened =
           !profile.onboarding_token ||
           Boolean(profile.onboarding_submitted_at) ||
           profile.onboarding_status === 'completed';
-        let onboardingToken = profile.onboarding_token;
         if (reopened) {
           onboardingToken = randomToken(24);
           await base44.asServiceRole.entities.EmployeeProfile.update(profile.id, {
@@ -191,17 +196,17 @@ async function handler(req) {
             onboarding_submitted_at: ''
           });
         }
-        const link = portalLink(body.origin, `/onboarding/${onboardingToken}`);
+        link = portalLink(body.origin, `/onboarding/${onboardingToken}`);
         const details = {
           name: profile.full_name || 'team member',
           store,
           employeeNumber: profile.employee_number
         };
-        // The first send welcomes them; a later one nudges the form they have not sent back yet.
         const mail = !reopened && profile.onboarding_submitted_at
           ? onboardingReminderMail(employeeLanguage(profile.language), details)
           : onboardingMail(employeeLanguage(profile.language), details);
-        await sendEmail(base44, {
+
+        emailResult = await sendEmailDetailed(base44, {
           to: profile.user_email,
           subject: mail.subject,
           html: brandedEmail({
@@ -214,9 +219,22 @@ async function handler(req) {
             footer: `${store} · kworkmate`
           })
         });
+        console.log(`[manageEmployee] Onboarding email to ${profile.user_email}:`, emailResult);
       }
 
-      return Response.json({ ok: true, employee: profile, ...access });
+      if (!link && onboardingToken) {
+        link = portalLink(body.origin, `/onboarding/${onboardingToken}`);
+      }
+
+      return Response.json({
+        ok: true,
+        employee: profile,
+        onboarding_token: onboardingToken,
+        onboarding_link: link,
+        email_sent: emailResult.ok,
+        email_error: emailResult.error || '',
+        ...access
+      });
     }
 
     const input = body.employee || {};
