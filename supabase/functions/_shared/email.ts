@@ -1,9 +1,11 @@
 // The app's own mail (applicants and team members) is delivered through the app's Resend
 // account, which carries its own sending limits instead of the platform mail service's daily
 // Supabase Edge Functions 환경에서는 Deno.env로 비밀값을 읽어옵니다.
-export const secrets = new Proxy({}, {
-  get: (_, prop: string) => Deno.env.get(prop) || ''
-});
+export const secrets = {
+  get: (prop: string) => (typeof Deno !== 'undefined' ? Deno.env.get(prop) : '') || '',
+  RESEND_API_KEY: (typeof Deno !== 'undefined' ? Deno.env.get('RESEND_API_KEY') : '') || '',
+  RESEND_FROM: (typeof Deno !== 'undefined' ? Deno.env.get('RESEND_FROM') : '') || ''
+};
 
 const RESEND_ENDPOINT = 'https://api.resend.com/emails';
 const RESEND_FROM = (typeof Deno !== 'undefined' ? Deno.env.get('RESEND_FROM') : '') || 'K-Workmate <onboarding@resend.dev>';

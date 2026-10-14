@@ -168,7 +168,6 @@ export default function StaffOnboardingCard() {
         setRecord(saved.profile);
         syncForm(saved.profile);
       }
-      if (reload) reload();
       toast({ title: t('ob.saved') || '온보딩 정보가 저장되었습니다.' });
     } catch (error) {
       toast({ variant: 'destructive', title: error.message || t('ob.saveFailed') || '저장에 실패했습니다.' });
@@ -212,7 +211,6 @@ export default function StaffOnboardingCard() {
         setRecord(saved.profile);
         syncForm(saved.profile);
       }
-      if (reload) reload();
       toast({ title: t('ob.uploaded') || '서류가 성공적으로 업로드되었습니다.' });
     } catch (error) {
       toast({ variant: 'destructive', title: error.message || t('ob.uploadFailed') || '업로드 실패' });
@@ -290,7 +288,6 @@ export default function StaffOnboardingCard() {
         setRecord(saved.profile);
         syncForm(saved.profile);
       }
-      if (reload) reload();
       toast({ title: t('ob.removed') || '서류가 삭제되었습니다.' });
     } catch (error) {
       toast({ variant: 'destructive', title: error.message || t('ob.uploadFailed') || '삭제 실패' });

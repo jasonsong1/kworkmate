@@ -144,16 +144,7 @@ export default function Kiosk() {
           style={{ backgroundImage: 'radial-gradient(circle at 15% 0%, #ffffff 0%, transparent 45%)' }}
         />
         <div className="relative mx-auto max-w-xl text-center">
-          {logoUrl ? (
-            <div className="mx-auto mb-4 flex h-16 w-48 items-center justify-center overflow-hidden rounded-xl bg-white/95 p-2 shadow-sm">
-              <img
-                src={logoUrl}
-                alt={info.company_name || ''}
-                className="max-h-full max-w-full object-contain"
-                style={{ objectFit: 'contain' }}
-              />
-            </div>
-          ) : null}
+
           <p className="text-xs uppercase tracking-[0.2em] opacity-80">{info.company_name || ''}</p>
           <h1 className="mt-2 text-3xl font-bold">{info.branch_name}</h1>
           <p className="mt-1 text-sm opacity-90">Attendance kiosk · {info.date}</p>

@@ -83,22 +83,35 @@ export default function SecureVerificationDialog({
       window.crypto.getRandomValues(challenge);
 
       // 모바일 FaceID/TouchID 또는 Windows Hello 생체인식 요청
-      const credential = await navigator.credentials.get({
-        publicKey: {
-          challenge,
-          timeout: 60000,
-          userVerification: 'preferred'
-        }
-      }).catch((err) => {
-        // 사용자가 취소했거나 등록된 키가 없을 경우 시뮬레이션 지원 또는 안내
-        console.warn('Biometrics call:', err);
-        return null;
-      });
+      let credential = null;
+      try {
+        credential = await navigator.credentials.get({
+          publicKey: {
+            challenge,
+            timeout: 60000,
+            userVerification: 'preferred'
+          }
+        });
+      } catch (err) {
+        console.warn('Biometrics call failed or cancelled:', err);
+        toast({
+          variant: 'destructive',
+          title: '인증이 취소되었거나 실패했습니다. 로그인 비밀번호로 인증해 주세요.'
+        });
+        return; // 취소 시 절대 onSuccess를 실행하지 않고 종료
+      }
 
-      // 생체인증 완료
-      toast({ title: '얼굴인식(생체인증) 본인 확인이 완료되었습니다.' });
-      onOpenChange(false);
-      if (onSuccess) onSuccess();
+      // 생체인증이 실제로 성공적으로 서명된 경우에만 열람 허용
+      if (credential && credential.id) {
+        toast({ title: '얼굴인식(생체인증) 본인 확인이 완료되었습니다.' });
+        onOpenChange(false);
+        if (onSuccess) onSuccess();
+      } else {
+        toast({
+          variant: 'destructive',
+          title: '생체인증을 확인할 수 없습니다. 비밀번호로 인증해 주세요.'
+        });
+      }
     } catch (error) {
       toast({
         variant: 'destructive',

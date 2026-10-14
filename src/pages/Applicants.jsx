@@ -1,5 +1,16 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Check, Loader2, MailWarning, Sparkles, UserCheck, UserPlus, UserX, Video } from 'lucide-react';
+import {
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  Loader2,
+  MailWarning,
+  Sparkles,
+  UserCheck,
+  UserPlus,
+  UserX,
+  Video
+} from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
 import AiSpinner from '@/components/AiSpinner';
 import ApplicantCard from '@/components/ApplicantCard';
@@ -14,12 +25,8 @@ import { useWorkspace } from '@/lib/WorkspaceContext';
 import { featureAllowed, videoInterviewAllowed } from '@/lib/packages';
 import { base44 } from '@/api/base44Client';
 
-// The final-interview tab lists the people the employer has actually invited on, so it opens
-// with the invite button and nothing before it.
+const PAGE_SIZE = 10;
 const INTERVIEW_STATUSES = ['final_interview', 'interview_scheduled', 'hired'];
-
-// Anyone the screening has recommended — and anyone who has moved further along — is on the
-// shortlist, so a second screening run adds to the list instead of replacing it.
 const SHORTLIST_STATUSES = ['top10', 'mini_interview', 'final_interview', 'interview_scheduled', 'hired'];
 
 export default function Applicants() {
@@ -36,18 +43,20 @@ export default function Applicants() {
   const [counts, setCounts] = useState({ total: 0, interview: 0 });
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState(null);
-  // Held by id so the dialog always shows the freshest record, including email status.
   const [detailId, setDetailId] = useState('');
   const [screening, setScreening] = useState(false);
-
-  const topN = company && company.ai_top_n || 10;
+  const [activeTab, setActiveTab] = useState('shortlist');
+  const [page, setPage] = useState(1);
 
   const loadJobs = useCallback(async () => {
     if (!activeBranch) return;
-    const page = await base44.entities.Job.filter({ branch_id: activeBranch.id }, { sort: '-created_date', limit: 100 });
-    const list = page.items || [];
+    const pageData = await base44.entities.Job.filter(
+      { branch_id: activeBranch.id },
+      { sort: '-created_date', limit: 100 }
+    );
+    const list = pageData.items || [];
     setJobs(list);
-    setJobId((prev) => prev && list.some((j) => j.id === prev) ? prev : list[0] ? list[0].id : '');
+    setJobId((prev) => (prev && list.some((j) => j.id === prev) ? prev : list[0] ? list[0].id : ''));
   }, [activeBranch]);
 
   useEffect(() => {
@@ -63,13 +72,13 @@ export default function Applicants() {
     }
     setLoading(true);
     const [currentJob, list, total, interviewCount] = await Promise.all([
-    base44.entities.Job.get(jobId).catch(() => null),
-    base44.entities.Applicant.
-    filter({ job_id: jobId }, { sort: '-ai_score', limit: 200 }).
-    then((page) => page.items || []),
-    base44.entities.Applicant.count({ job_id: jobId }).catch(() => 0),
-    base44.entities.Applicant.count({ job_id: jobId, status: { $in: INTERVIEW_STATUSES } }).catch(() => 0)]
-    );
+      base44.entities.Job.get(jobId).catch(() => null),
+      base44.entities.Applicant.filter({ job_id: jobId }, { sort: '-ai_score', limit: 300 }).then(
+        (pageData) => pageData.items || []
+      ),
+      base44.entities.Applicant.count({ job_id: jobId }).catch(() => 0),
+      base44.entities.Applicant.count({ job_id: jobId, status: { $in: INTERVIEW_STATUSES } }).catch(() => 0)
+    ]);
     setJob(currentJob);
     setApplicants(list);
     setCounts({ total, interview: interviewCount });
@@ -80,15 +89,24 @@ export default function Applicants() {
     loadApplicants();
   }, [loadApplicants]);
 
+  // 탭이나 공고가 바뀌면 페이지 번호를 1페이지로 리셋
+  useEffect(() => {
+    setPage(1);
+  }, [activeTab, jobId]);
+
   const viewResume = async (applicant) => {
     if (!applicant.resume_file_uri) {
-      toast({ title: 'No resume attached', variant: 'destructive' });
+      toast({ title: '이력서 파일이 첨부되어 있지 않습니다.', variant: 'destructive' });
       return;
     }
-    const { signed_url } = await base44.integrations.Core.CreateFileSignedUrl({
-      file_uri: applicant.resume_file_uri
-    });
-    window.open(signed_url, '_blank', 'noopener');
+    try {
+      const { signed_url } = await base44.integrations.Core.CreateFileSignedUrl({
+        file_uri: applicant.resume_file_uri
+      });
+      window.open(signed_url, '_blank', 'noopener');
+    } catch (e) {
+      toast({ title: '이력서를 열 수 없습니다.', variant: 'destructive' });
+    }
   };
 
   const act = async (applicant, action) => {
@@ -100,14 +118,14 @@ export default function Applicants() {
           origin: window.location.origin
         });
         if (response.data?.error) throw new Error(response.data.error);
-        toast({ title: `Video interview link sent to ${applicant.full_name}` });
+        toast({ title: `화상 면접 안내 메일을 ${applicant.full_name}님께 전송했습니다.` });
       } else if (action === 'mini') {
         const response = await base44.functions.invoke('sendMiniInterview', {
           applicant_id: applicant.id,
           origin: window.location.origin
         });
         if (response.data?.error) throw new Error(response.data.error);
-        toast({ title: `Voice interview link sent to ${applicant.full_name}` });
+        toast({ title: `미니 음성면접 안내를 ${applicant.full_name}님께 전송했습니다.` });
       } else if (action === 'invite') {
         const response = await base44.functions.invoke('notifyApplicant', {
           applicant_id: applicant.id,
@@ -115,14 +133,14 @@ export default function Applicants() {
           origin: window.location.origin
         });
         if (response.data?.error) throw new Error(response.data.error);
-        toast({ title: `Interview invitation sent to ${applicant.full_name}` });
+        toast({ title: `최종 면접 초대 메일을 ${applicant.full_name}님께 전송했습니다.` });
       } else if (action === 'hire') {
         const response = await base44.functions.invoke('hireApplicant', {
           applicant_id: applicant.id,
           origin: window.location.origin
         });
         if (response.data?.error) throw new Error(response.data.error);
-        toast({ title: `Hired · employee no. ${response.data.employee.employee_number}` });
+        toast({ title: `채용 완료 · 사원번호 ${response.data.employee?.employee_number || ''}` });
       } else if (action === 'reject') {
         const response = await base44.functions.invoke('notifyApplicant', {
           applicant_id: applicant.id,
@@ -130,7 +148,7 @@ export default function Applicants() {
           origin: window.location.origin
         });
         if (response.data?.error) throw new Error(response.data.error);
-        toast({ title: `Rejection email sent to ${applicant.full_name}` });
+        toast({ title: `${applicant.full_name} 지원자 거절 처리가 완료되었습니다.` });
       }
       await loadApplicants();
     } catch (error) {
@@ -140,8 +158,6 @@ export default function Applicants() {
     }
   };
 
-  // Scores every resume that has not been read yet, then adds one more batch to the shortlist.
-  // The batch is the size set in company settings, and it never re-picks anyone already picked.
   const runScreening = async () => {
     if (!job) return;
     setScreening(true);
@@ -159,9 +175,9 @@ export default function Applicants() {
       });
       if (extended.data?.error) throw new Error(extended.data.error);
       toast({
-        title: t('applicants.screened').
-        replace('{count}', String(analysed)).
-        replace('{added}', String(extended.data.added || 0))
+        title: t('applicants.screened')
+          .replace('{count}', String(analysed))
+          .replace('{added}', String(extended.data.added || 0))
       });
       await loadApplicants();
     } catch (error) {
@@ -173,74 +189,87 @@ export default function Applicants() {
 
   const rejectUnselected = async () => {
     if (!job) return;
-    const response = await base44.functions.invoke('analyzeApplicants', {
-      job_id: job.id,
-      action: 'send_rejections'
-    });
-    if (response.data?.error) {
-      toast({ title: response.data.error, variant: 'destructive' });
-      return;
+    try {
+      const response = await base44.functions.invoke('analyzeApplicants', {
+        job_id: job.id,
+        action: 'send_rejections'
+      });
+      if (response.data?.error) {
+        toast({ title: response.data.error, variant: 'destructive' });
+        return;
+      }
+      toast({ title: `${response.data.sent || 0}명의 미선별자 거절 메일 전송 및 상태 정리가 완료되었습니다.` });
+      await loadApplicants();
+    } catch (err) {
+      toast({ title: err.message || '거절 처리 중 오류가 발생했습니다.', variant: 'destructive' });
     }
-    toast({ title: `${response.data.sent || 0} rejection email(s) sent` });
-    await loadApplicants();
   };
 
   const shortlist = applicants.filter((a) => SHORTLIST_STATUSES.includes(a.status));
   const interviewList = applicants.filter((a) => INTERVIEW_STATUSES.includes(a.status));
 
-  const actionButtons = (applicant) =>
-  <>
-      {miniAllowed && job && job.mini_interview_enabled !== false &&
-    !['rejected', 'hired'].includes(applicant.status) &&
-    <Button size="sm" variant="secondary" disabled={busyId === applicant.id} onClick={() => act(applicant, 'mini')}>
-          {applicant.mini_interview_status === 'sent' ?
-      <Check className="mr-1.5 h-3.5 w-3.5" /> :
+  // 현재 활성 탭에 따른 리스트 계산
+  const currentList =
+    activeTab === 'shortlist' ? shortlist : activeTab === 'interview' ? interviewList : applicants;
+  const totalPages = Math.max(1, Math.ceil(currentList.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const paginatedList = currentList.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
-      <UserPlus className="mr-1.5 h-3.5 w-3.5" />
-      }
-          {applicant.mini_interview_status === 'sent' ? t('applicants.miniInterviewSent') : t('applicants.miniInterview')}
-        </Button>
-    }
-      {videoAllowed &&
-    job &&
-    job.video_interview_enabled !== false && (
-    !company || company.video_interview_enabled !== false) &&
-    !['rejected', 'hired'].includes(applicant.status) &&
-    applicant.video_interview_status !== 'completed' &&
-    <Button size="sm" variant="secondary" disabled={busyId === applicant.id} onClick={() => act(applicant, 'video')}>
-            {applicant.video_interview_status === 'sent' ?
-      <Check className="mr-1.5 h-3.5 w-3.5" /> :
-
-      <Video className="mr-1.5 h-3.5 w-3.5" />
-      }
-            {applicant.video_interview_status === 'sent' ?
-      t('applicants.videoInterviewSent') :
-      t('applicants.videoInterview')}
+  const actionButtons = (applicant) => (
+    <>
+      {miniAllowed &&
+        job &&
+        job.mini_interview_enabled !== false &&
+        !['rejected', 'hired'].includes(applicant.status) && (
+          <Button size="sm" variant="secondary" disabled={busyId === applicant.id} onClick={() => act(applicant, 'mini')}>
+            {applicant.mini_interview_status === 'sent' ? (
+              <Check className="mr-1.5 h-3.5 w-3.5" />
+            ) : (
+              <UserPlus className="mr-1.5 h-3.5 w-3.5" />
+            )}
+            {applicant.mini_interview_status === 'sent' ? t('applicants.miniInterviewSent') : t('applicants.miniInterview')}
           </Button>
-    }
-      {!['rejected', 'hired'].includes(applicant.status) &&
-    <Button size="sm" disabled={busyId === applicant.id} onClick={() => act(applicant, 'invite')}>
+        )}
+      {videoAllowed &&
+        job &&
+        job.video_interview_enabled !== false &&
+        (!company || company.video_interview_enabled !== false) &&
+        !['rejected', 'hired'].includes(applicant.status) &&
+        applicant.video_interview_status !== 'completed' && (
+          <Button size="sm" variant="secondary" disabled={busyId === applicant.id} onClick={() => act(applicant, 'video')}>
+            {applicant.video_interview_status === 'sent' ? (
+              <Check className="mr-1.5 h-3.5 w-3.5" />
+            ) : (
+              <Video className="mr-1.5 h-3.5 w-3.5" />
+            )}
+            {applicant.video_interview_status === 'sent'
+              ? t('applicants.videoInterviewSent')
+              : t('applicants.videoInterview')}
+          </Button>
+        )}
+      {!['rejected', 'hired'].includes(applicant.status) && (
+        <Button size="sm" disabled={busyId === applicant.id} onClick={() => act(applicant, 'invite')}>
           <Sparkles className="mr-1.5 h-3.5 w-3.5" /> {t('applicants.invite')}
         </Button>
-    }
-      {['final_interview', 'interview_scheduled'].includes(applicant.status) &&
-    <Button size="sm" variant="default" disabled={busyId === applicant.id} onClick={() => act(applicant, 'hire')}>
+      )}
+      {['final_interview', 'interview_scheduled'].includes(applicant.status) && (
+        <Button size="sm" variant="default" disabled={busyId === applicant.id} onClick={() => act(applicant, 'hire')}>
           <UserCheck className="mr-1.5 h-3.5 w-3.5" /> {t('applicants.hire')}
         </Button>
-    }
-      {applicant.status !== 'rejected' && applicant.status !== 'hired' &&
-    <Button
-      size="sm"
-      variant="ghost"
-      className="text-destructive hover:text-destructive"
-      disabled={busyId === applicant.id}
-      onClick={() => act(applicant, 'reject')}>
-      
+      )}
+      {applicant.status !== 'rejected' && applicant.status !== 'hired' && (
+        <Button
+          size="sm"
+          variant="ghost"
+          className="text-destructive hover:text-destructive"
+          disabled={busyId === applicant.id}
+          onClick={() => act(applicant, 'reject')}
+        >
           <UserX className="mr-1.5 h-3.5 w-3.5" /> {t('applicants.reject')}
         </Button>
-    }
-    </>;
-
+      )}
+    </>
+  );
 
   return (
     <div>
@@ -248,21 +277,21 @@ export default function Applicants() {
         title={t('applicants.title')}
         subtitle={activeBranch ? activeBranch.name : t('applicants.title')}
         actions={
-        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Select value={jobId} onValueChange={setJobId}>
               <SelectTrigger className="w-64">
                 <SelectValue placeholder={t('jobs.title')} />
               </SelectTrigger>
               <SelectContent>
-                {jobs.map((j) =>
-              <SelectItem key={j.id} value={j.id}>
+                {jobs.map((j) => (
+                  <SelectItem key={j.id} value={j.id}>
                     {j.title}
                   </SelectItem>
-              )}
+                ))}
               </SelectContent>
             </Select>
-            {job &&
-          <>
+            {job && (
+              <>
                 <Button variant="outline" onClick={runScreening} disabled={screening}>
                   {screening ? <AiSpinner className="mr-2" /> : <Sparkles className="mr-2 h-4 w-4" />}
                   {screening ? t('jobs.aiRunning') : t('applicants.addScreening')}
@@ -271,22 +300,22 @@ export default function Applicants() {
                   <MailWarning className="mr-2 h-4 w-4" /> {t('applicants.rejectAll')}
                 </Button>
               </>
-          }
+            )}
           </div>
-        } />
-      
+        }
+      />
 
-      {!jobId ?
-      <Card>
+      {!jobId ? (
+        <Card>
           <CardContent className="p-10 text-center text-sm text-muted-foreground">{t('common.none')}</CardContent>
-        </Card> :
-      loading ?
-      <p className="py-10 text-center text-sm text-muted-foreground">
+        </Card>
+      ) : loading ? (
+        <p className="py-10 text-center text-sm text-muted-foreground">
           <Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin" />
           {t('common.loading')}
-        </p> :
-
-      <Tabs defaultValue="shortlist">
+        </p>
+      ) : (
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList>
             <TabsTrigger value="shortlist">
               {t('applicants.tabTop')} ({shortlist.length})
@@ -299,88 +328,93 @@ export default function Applicants() {
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="shortlist" className="mt-6">
-            
-
-
-
-
-
-          
-
-            {shortlist.length === 0 ?
-          <Card>
+          <TabsContent value={activeTab} className="mt-6">
+            {currentList.length === 0 ? (
+              <Card>
                 <CardContent className="p-10 text-center text-sm text-muted-foreground">
                   {t('applicants.empty')}
                 </CardContent>
-              </Card> :
+              </Card>
+            ) : (
+              <>
+                <div className="space-y-3">
+                  {paginatedList.map((applicant) => (
+                    <ApplicantCard
+                      key={applicant.id}
+                      applicant={applicant}
+                      actions={actionButtons(applicant)}
+                      onOpen={() => setDetailId(applicant.id)}
+                      onViewResume={() => viewResume(applicant)}
+                    />
+                  ))}
+                </div>
 
-          <div className="space-y-3">
-                {shortlist.map((applicant) =>
-            <ApplicantCard
-              key={applicant.id}
-              applicant={applicant}
-              actions={actionButtons(applicant)}
-              onOpen={() => setDetailId(applicant.id)}
-              onViewResume={() => viewResume(applicant)} />
+                {/* 10명 단위 페이지네이션 컨트롤러 */}
+                {totalPages > 1 && (
+                  <div className="mt-6 flex flex-wrap items-center justify-between gap-4 rounded-xl border bg-card p-4">
+                    <p className="text-xs text-muted-foreground">
+                      전체 {currentList.length}명 중 {(currentPage - 1) * PAGE_SIZE + 1} ~{' '}
+                      {Math.min(currentPage * PAGE_SIZE, currentList.length)}명 표시 (페이지 {currentPage} / {totalPages})
+                    </p>
+                    <div className="flex items-center gap-1.5">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={currentPage <= 1}
+                        onClick={() => setPage((p) => Math.max(1, p - 1))}
+                        className="h-8 px-2.5 text-xs"
+                      >
+                        <ChevronLeft className="mr-1 h-3.5 w-3.5" /> 이전
+                      </Button>
 
+                      {Array.from({ length: totalPages }, (_, i) => i + 1).map((pNum) => {
+                        if (totalPages > 7 && Math.abs(pNum - currentPage) > 2 && pNum !== 1 && pNum !== totalPages) {
+                          if (pNum === 2 || pNum === totalPages - 1) {
+                            return (
+                              <span key={pNum} className="px-1 text-xs text-muted-foreground">
+                                ...
+                              </span>
+                            );
+                          }
+                          return null;
+                        }
+                        return (
+                          <Button
+                            key={pNum}
+                            variant={currentPage === pNum ? 'default' : 'outline'}
+                            size="sm"
+                            onClick={() => setPage(pNum)}
+                            className="h-8 w-8 p-0 text-xs font-semibold"
+                          >
+                            {pNum}
+                          </Button>
+                        );
+                      })}
+
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={currentPage >= totalPages}
+                        onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                        className="h-8 px-2.5 text-xs"
+                      >
+                        다음 <ChevronRight className="ml-1 h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </>
             )}
-              </div>
-          }
-          </TabsContent>
-
-          <TabsContent value="interview" className="mt-6">
-            {interviewList.length === 0 ?
-          <Card>
-                <CardContent className="p-10 text-center text-sm text-muted-foreground">
-                  {t('applicants.empty')}
-                </CardContent>
-              </Card> :
-
-          <div className="space-y-3">
-                {interviewList.map((applicant) =>
-            <ApplicantCard
-              key={applicant.id}
-              applicant={applicant}
-              actions={actionButtons(applicant)}
-              onOpen={() => setDetailId(applicant.id)}
-              onViewResume={() => viewResume(applicant)} />
-
-            )}
-              </div>
-          }
-          </TabsContent>
-
-          <TabsContent value="all" className="mt-6">
-            {applicants.length === 0 ?
-          <Card>
-                <CardContent className="p-10 text-center text-sm text-muted-foreground">
-                  {t('applicants.empty')}
-                </CardContent>
-              </Card> :
-
-          <div className="space-y-3">
-                {applicants.map((applicant) =>
-            <ApplicantCard
-              key={applicant.id}
-              applicant={applicant}
-              actions={actionButtons(applicant)}
-              onOpen={() => setDetailId(applicant.id)}
-              onViewResume={() => viewResume(applicant)} />
-
-            )}
-              </div>
-          }
           </TabsContent>
         </Tabs>
-      }
+      )}
 
       <ApplicantDetailDialog
         applicant={applicants.find((a) => a.id === detailId) || null}
         open={Boolean(detailId)}
         onOpenChange={(v) => !v && setDetailId('')}
-        onResent={loadApplicants} />
-      
-    </div>);
-
+        onResent={loadApplicants}
+      />
+    </div>
+  );
 }

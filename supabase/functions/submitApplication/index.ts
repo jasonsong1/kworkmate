@@ -54,12 +54,10 @@ async function handler(req: Request) {
       ? await base44.asServiceRole.entities.Company.get(job.company_id).catch(() => null)
       : null;
 
-    // 중복 지원 확인
+    // 중복 지원 확인: 해당 공고(job_id)에 동일한 이메일(email)로 이미 지원한 경우만 차단
     const byEmail = await base44.asServiceRole.entities.Applicant.filter({ job_id: jobId, email });
-    const byPhone = phone
-      ? await base44.asServiceRole.entities.Applicant.filter({ job_id: jobId, phone })
-      : [];
-    if (byEmail.length > 0 || byPhone.length > 0) {
+    const existingList = Array.isArray(byEmail) ? byEmail : (byEmail?.items || []);
+    if (existingList.length > 0) {
       return Response.json({ ok: false, duplicate: true });
     }
 

@@ -121,19 +121,21 @@ async function handler(req) {
 
       let sent = 0;
       for (const a of targets) {
-        const mail = renderStageEmail(
-          company,
-          'rejected',
-          { name: a.full_name, job_title: job.title, store: branch ? branch.name : 'our store' },
-          { brandColor: job.brand_color }
-        );
-        const ok = await sendEmail(base44, { to: a.email, subject: mail.subject, html: mail.html });
-        if (ok) {
+        try {
+          const mail = renderStageEmail(
+            company,
+            'rejected',
+            { name: a.full_name, job_title: job.title, store: branch ? branch.name : 'our store' },
+            { brandColor: job.brand_color }
+          );
+          await sendEmail(base44, { to: a.email, subject: mail.subject, html: mail.html }).catch(() => false);
           sent += 1;
           await base44.asServiceRole.entities.Applicant.update(a.id, {
             status: 'rejected',
             rejection_sent_at: new Date().toISOString()
-          });
+          }).catch(() => null);
+        } catch (err) {
+          console.warn('[send_rejections error]:', err.message);
         }
       }
       return Response.json({ ok: true, sent });

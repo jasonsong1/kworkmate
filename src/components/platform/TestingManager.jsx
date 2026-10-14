@@ -56,15 +56,18 @@ export default function TestingManager() {
     setCounts(Object.fromEntries(list.map((job, index) => [job.id, totals[index]])));
   };
 
+  const selectedBranch = branches.find((b) => b.id === branchId) || activeBranch;
+
   const seed = async (job) => {
     setBusy(true);
     try {
-      const response = await base44.functions.invoke('seedTestApplicants', { job_id: job.id });
+      const response = await base44.functions.invoke('seedTestApplicants', {
+        job_id: job.id,
+        branch_id: branchId
+      });
       if (response.data?.error) throw new Error(response.data.error);
       toast({
-        title: t('testing.created')
-          .replace('{count}', String(response.data.created))
-          .replace('{total}', String(response.data.total))
+        title: `[${selectedBranch ? selectedBranch.name : '선택 지점'}] ${job.title} 공고에 더미 지원자 ${response.data.created || BATCH}명이 생성되었습니다. (총 ${response.data.total || 0}명)`
       });
       await loadCounts(jobs);
       setPickOpen(false);
@@ -81,15 +84,10 @@ export default function TestingManager() {
       return;
     }
     if (jobs.length === 0) {
-      toast({ title: t('testing.noJobs'), variant: 'destructive' });
+      toast({ title: '선택하신 지점에 활성화된 공고가 없습니다.', variant: 'destructive' });
       return;
     }
-    // One job here is no choice at all, so it is filled straight away; several are handed to
-    // the person pressing the button.
-    if (jobs.length === 1) {
-      await seed(jobs[0]);
-      return;
-    }
+    // 공고 선택 모달 오픈
     setPickOpen(true);
     await loadCounts(jobs);
   };
@@ -107,7 +105,10 @@ export default function TestingManager() {
         <div className="flex flex-wrap items-end gap-3">
           <div className="w-full sm:w-64">
             <Label className="mb-1 block text-xs">{t('testing.branch')}</Label>
-            <Select value={branchId} onValueChange={setBranchId}>
+            <Select value={branchId} onValueChange={(val) => {
+              setBranchId(val);
+              setCounts({});
+            }}>
               <SelectTrigger>
                 <SelectValue placeholder={t('testing.pickBranch')} />
               </SelectTrigger>
@@ -132,9 +133,9 @@ export default function TestingManager() {
       <Dialog open={pickOpen} onOpenChange={setPickOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{t('testing.pickTitle')}</DialogTitle>
+            <DialogTitle>어느 공고에 지원자를 추가할까요?</DialogTitle>
             <DialogDescription>
-              {t('testing.pickHint').replace('{count}', String(BATCH))}
+              선택한 지점 <strong>[{selectedBranch ? selectedBranch.name : '선택 지점'}]</strong>의 지정된 공고에만 지원자 {BATCH}명이 추가됩니다.
             </DialogDescription>
           </DialogHeader>
           <div className="divide-y rounded-lg border">
@@ -144,17 +145,21 @@ export default function TestingManager() {
                 type="button"
                 onClick={() => seed(job)}
                 disabled={busy}
-                className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left text-sm hover:bg-muted disabled:opacity-50"
+                className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left text-sm hover:bg-muted disabled:opacity-50 transition-colors"
               >
                 <span className="min-w-0">
-                  <span className="block truncate font-medium">{job.title}</span>
+                  <span className="block truncate font-medium text-foreground">{job.title}</span>
                   <span className="text-xs text-muted-foreground">
-                    {[job.position, t('testing.count').replace('{count}', String(counts[job.id] ?? 0))]
+                    {[job.position, `지원자 ${counts[job.id] ?? '...'}명`]
                       .filter(Boolean)
                       .join(' · ')}
                   </span>
                 </span>
-                {busy && <Loader2 className="h-4 w-4 shrink-0 animate-spin" />}
+                {busy ? (
+                  <Loader2 className="h-4 w-4 shrink-0 animate-spin text-primary" />
+                ) : (
+                  <span className="text-xs font-semibold text-primary">+ 15명 추가</span>
+                )}
               </button>
             ))}
           </div>
