@@ -391,11 +391,11 @@ export default function StaffOnboardingCard({ onProfileUpdated }) {
                     )}
 
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <p className="text-sm font-medium text-foreground">{displayName}</p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-sm font-medium text-foreground break-words">{displayName}</p>
                         {item.secure && (
                           <span
-                            className="inline-flex items-center gap-1 rounded-md bg-amber-500/10 px-1.5 py-0.5 text-[11px] font-medium text-amber-500"
+                            className="inline-flex shrink-0 items-center gap-1 rounded-md bg-amber-500/10 px-1.5 py-0.5 text-[11px] font-medium text-amber-500"
                             title="암호화 보안 서류 (열람 시 본인 인증 필요)"
                           >
                             <Lock className="h-3 w-3" />
@@ -403,9 +403,13 @@ export default function StaffOnboardingCard({ onProfileUpdated }) {
                           </span>
                         )}
                       </div>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        {item.required ? '필수' : '선택'}
-                        {item.file && ` · 파일명: ${item.file.name}`}
+                      <p className="text-xs text-muted-foreground mt-0.5 break-all">
+                        <span>{item.required ? '필수' : '선택'}</span>
+                        {item.file && item.file.name && (
+                          <span className="text-slate-600 dark:text-slate-300 font-mono text-[11px] block sm:inline sm:before:content-['·_파일명:_']">
+                            {item.file.name}
+                          </span>
+                        )}
                       </p>
                     </div>
 

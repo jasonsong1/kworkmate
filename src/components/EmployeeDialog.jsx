@@ -270,7 +270,7 @@ export default function EmployeeDialog({ open, onOpenChange, branch, employee, o
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto overflow-x-hidden w-full break-words">
         <DialogHeader>
           <DialogTitle>{employee ? t('common.edit') : t('employees.add')}</DialogTitle>
         </DialogHeader>

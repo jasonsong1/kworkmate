@@ -176,6 +176,7 @@ export function checklistFor(profile, company, lang) {
       required: type.required !== false,
       secure: Boolean(type.secure),
       complete,
+      done: complete, // OnboardingStatusList 및 StaffOnboardingCard 하위 호환
       file: file || null
     };
   });
@@ -185,6 +186,8 @@ export function checklistFor(profile, company, lang) {
     items,
     requiredCount,
     completedCount,
+    requiredDone: completedCount, // OnboardingStatusList 호환
+    requiredTotal: requiredCount, // OnboardingStatusList 호환
     progress: requiredCount > 0 ? Math.round((completedCount / requiredCount) * 100) : 100
   };
 }

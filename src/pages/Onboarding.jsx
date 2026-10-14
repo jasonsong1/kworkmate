@@ -29,8 +29,9 @@ const STEPS = [
   { id: 'personal', title: '1. 인적사항', subtitle: 'Personal Details & Name' },
   { id: 'address', title: '2. 거주 주소', subtitle: 'Home Address in Australia' },
   { id: 'tax', title: '3. 세무 신고', subtitle: 'ATO TFN Declaration (NAT 3092)' },
-  { id: 'super_bank', title: '4. 연금 및 계좌', subtitle: 'Superannuation & Bank' },
-  { id: 'sign', title: '5. 서명 및 제출', subtitle: 'Declaration & Signature' }
+  { id: 'docs', title: '4. 서류 제출', subtitle: 'Photo ID & Right to Work' },
+  { id: 'super_bank', title: '5. 연금 및 계좌', subtitle: 'Superannuation & Bank' },
+  { id: 'sign', title: '6. 서명 및 제출', subtitle: 'Declaration & Signature' }
 ];
 
 export default function Onboarding() {
@@ -43,6 +44,10 @@ export default function Onboarding() {
   const [saving, setSaving] = useState(false);
   const [signature, setSignature] = useState('');
   const [declaration, setDeclaration] = useState(false);
+  const [uploadedDocs, setUploadedDocs] = useState({}); // { [doc_key]: { name, file_uri } }
+  const [uploadingDocKey, setUploadingDocKey] = useState('');
+  const docFileInputRef = useRef(null);
+  const currentPickingDocKey = useRef('');
 
   // 1. 인적사항 상태 (Section A Q2, Q4, Q5, Q6)
   const [personal, setPersonal] = useState({
@@ -187,7 +192,7 @@ export default function Onboarding() {
 
   // 최종 제출 처리
   const handleSubmit = async () => {
-    const err = validateStep(4);
+    const err = validateStep(5);
     if (err) {
       setError(err);
       return;
@@ -810,7 +815,7 @@ export default function Onboarding() {
           )}
 
           {/* Step 4: 연금 및 급여 계좌 (Super & Bank) */}
-          {currentStep === 3 && (
+          {currentStep === 5 && (
             <div className="space-y-6">
               {/* 연금 선택 */}
               <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4 space-y-3">
@@ -919,7 +924,7 @@ export default function Onboarding() {
           )}
 
           {/* Step 5: 서명 및 최종 제출 (Review & Signature) */}
-          {currentStep === 4 && (
+          {currentStep === 5 && (
             <div className="space-y-5">
               {/* 공식 선언문 확인 */}
               <div className="rounded-xl border border-blue-900/40 bg-blue-950/20 p-4 space-y-2">

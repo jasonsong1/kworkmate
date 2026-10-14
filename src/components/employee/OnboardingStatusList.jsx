@@ -28,10 +28,14 @@ export default function OnboardingStatusList({ profile, company, onOpen, loading
               <Clock className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
             )}
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm">{item.label}</p>
-              <p className="truncate text-xs text-muted-foreground">
-                {item.required ? t('ob.required') : t('ob.optional')}
-                {item.file && item.file.name ? ` · ${item.file.name}` : ''}
+              <p className="text-sm font-medium break-words">{item.label}</p>
+              <p className="text-xs text-muted-foreground break-all">
+                <span>{item.required ? t('ob.required') : t('ob.optional')}</span>
+                {item.file && item.file.name ? (
+                  <span className="text-slate-600 dark:text-slate-300 font-mono text-[11px] block sm:inline sm:before:content-['·_']">
+                    {item.file.name}
+                  </span>
+                ) : ''}
               </p>
             </div>
             {item.done ? (

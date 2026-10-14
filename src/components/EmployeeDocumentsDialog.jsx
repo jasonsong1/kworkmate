@@ -108,7 +108,7 @@ export default function EmployeeDocumentsDialog({ open, onOpenChange, employee }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[85vh] max-w-3xl overflow-y-auto">
+      <DialogContent className="max-h-[85vh] max-w-3xl overflow-y-auto overflow-x-hidden w-full">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <span>{t('employees.vault')} — {employee ? employee.full_name : ''}</span>
@@ -166,10 +166,10 @@ export default function EmployeeDocumentsDialog({ open, onOpenChange, employee }
                     <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
                   )}
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium flex items-center gap-2">
-                      <span>{doc.name || 'Document'}</span>
+                    <p className="text-sm font-medium flex flex-wrap items-center gap-2 break-all">
+                      <span className="break-all">{doc.name || 'Document'}</span>
                       {ato && (
-                        <span className="inline-flex items-center gap-1 rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 border border-emerald-200">
+                        <span className="inline-flex shrink-0 items-center gap-1 rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 border border-emerald-200">
                           <Shield className="h-2.5 w-2.5" /> ATO Official
                         </span>
                       )}

@@ -180,6 +180,82 @@ async function handler(req: any) {
       return Response.json({ ok: true, profile: sealRecord(updated) });
     }
 
+    // ==============================================================================
+    // [서류 추가 및 다시 올리기(Re-upload) 핸들러]
+    // 내 공간 또는 서류보관함에서 서류를 업로드하거나 다시 올릴 때 호출됩니다.
+    // 동일한 doc_type(신분증, 비자 등)의 파일이 이미 있다면 새로운 파일로 완벽 교체(replace)합니다.
+    // ==============================================================================
+    if (action === 'add_document') {
+      const uri = String(body.file_uri || '');
+      const name = String(body.name || '').trim().slice(0, 120) || 'Document';
+      if (!uri) {
+        return Response.json({ error: 'file_uri is required' }, { status: 400 });
+      }
+
+      const wanted = String(body.doc_type || '');
+      const docs = Array.isArray(profile.docs) ? profile.docs : [];
+
+      // 동일한 서류 종류(doc_type)가 이미 있다면 기존 서류를 필터링하여 교체(다시 올리기 보장)
+      const kept = wanted
+        ? docs.filter((doc: any) => !(doc && (doc.doc_type === wanted || doc.type === wanted)))
+        : docs.filter((doc: any) => !(doc && doc.file_uri === uri));
+
+      const newDoc = {
+        name,
+        type: wanted || 'staff_upload',
+        doc_type: wanted || 'staff_upload',
+        file_uri: uri,
+        url: uri,
+        created_at: new Date().toISOString(),
+        uploaded_by: 'self'
+      };
+
+      const nextDocs = [...kept, newDoc];
+
+      const saved = await base44.asServiceRole.entities.EmployeeProfile.update(profile.id, {
+        docs: nextDocs
+      });
+
+      return Response.json({
+        ok: true,
+        docs: nextDocs,
+        profile: sealRecord(saved || { ...profile, docs: nextDocs })
+      });
+    }
+
+    // ==============================================================================
+    // [서류 삭제 핸들러]
+    // ==============================================================================
+    if (action === 'delete_document') {
+      const uri = String(body.file_uri || '');
+      const docs = Array.isArray(profile.docs) ? profile.docs : [];
+      const nextDocs = docs.filter((doc: any) => !(doc && (doc.file_uri === uri || doc.url === uri)));
+
+      const saved = await base44.asServiceRole.entities.EmployeeProfile.update(profile.id, {
+        docs: nextDocs
+      });
+
+      return Response.json({
+        ok: true,
+        docs: nextDocs,
+        profile: sealRecord(saved || { ...profile, docs: nextDocs })
+      });
+    }
+
+    // ==============================================================================
+    // [온보딩 개인정보 저장 핸들러]
+    // ==============================================================================
+    if (action === 'save_onboarding') {
+      const data = body.data || {};
+      const saved = await base44.asServiceRole.entities.EmployeeProfile.update(profile.id, {
+        ...data
+      });
+      return Response.json({
+        ok: true,
+        profile: sealRecord(saved || { ...profile, ...data })
+      });
+    }
+
     if (action === 'sign_document') {
       const fileUri = String(body.file_uri || '').trim();
       if (!fileUri) return Response.json({ error: 'file_uri is required' }, { status: 400 });
