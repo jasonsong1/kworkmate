@@ -16,18 +16,19 @@ import { useWorkspace } from '@/lib/WorkspaceContext';
 import { hoursLabel, joinTypes, typeName } from '@/lib/leave';
 import { base44 } from '@/api/base44Client';
 
-// Leave, from both sides: a person sees what they have and asks for more, a manager sees who
-// is waiting, what everyone holds, and the settings behind it.
+// 휴가 관리 페이지 컴포넌트:
+// 일반 직원은 본인의 휴가 잔액 확인 및 신청을 진행하고,
+// 관리자(슈퍼어드민/회사관리자/지점매니저)는 대기 중인 승인 요청과 지점 소속 직원들의 휴가 잔액 목록을 조회하고 관리합니다.
 export default function Leave() {
   const { t, lang } = useI18n();
   const { activeBranch, isManager, isPlatformAdmin, company } = useWorkspace();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
-  // A manager opens this screen to answer what is waiting, so the requests show first.
+  // 관리자는 결재 대기 요청을 먼저 확인할 수 있도록 'approvals' 탭을 기본값으로 엽니다.
   const [tab, setTab] = useState('approvals');
   const [requestOpen, setRequestOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  // The platform owner moves a store onto KWorkMate with the leave balances it already has.
+  // 플랫폼 관리자(슈퍼어드민)가 직원의 기존 누적 휴가 잔액을 일괄 설정할 수 있는 다이얼로그
   const [adminOpen, setAdminOpen] = useState(false);
 
   const load = useCallback(async () => {
@@ -50,34 +51,77 @@ export default function Leave() {
   const balances = joinTypes(data && data.balances, data && data.types);
   const requests = (data && data.requests) || [];
   const pending = requests.filter((item) => item.status === 'pending');
-  // What the company offers right now, and everything it has ever set up: a leave switched
-  // off stays in the settings list so it can simply be switched back on.
+  // 회사가 현재 활성화한 휴가 종류 및 설정된 전체 휴가 종류
   const types = (data && data.types) || [];
   const allTypes = (data && data.all_types) || types;
-  // The hours at which a leave is called out in red: the manager sets, per leave type, the
-  // balance worth a look. It follows what the person holds, never the length of a request.
+
+  // 관리자가 지정한 초과 경고 기준 시간(flag_hours)을 초과한 잔액이 있는지 확인
   const flagHours = types.reduce((map, type) => {
     const hours = Number(type.flag_hours) || 0;
     if (hours > 0) map[type.key] = hours;
     return map;
   }, {});
+
   const flaggedHours = (email, typeKey) => {
     const limit = flagHours[typeKey];
     if (!limit) return 0;
     const row = balances.find(
-      (balance) => balance.employee_email === email && balance.leave_type_key === typeKey
+      (balance) =>
+        String(balance.employee_email || '').toLowerCase() === String(email || '').toLowerCase() &&
+        balance.leave_type_key === typeKey
     );
     return row && Number(row.available_hours) >= limit ? limit : 0;
   };
 
-  const teamRows = Array.from(
-    balances.reduce((map, row) => {
-      const current = map.get(row.employee_email) || { email: row.employee_email, name: row.employee_name, cells: {} };
-      current.cells[row.leave_type_key] = row.available_hours;
-      map.set(row.employee_email, current);
-      return map;
-    }, new Map()).values()
+  // [직원별 잔액 목록 생성]:
+  // 1. 슈퍼어드민(sym910403@gmail.com)은 지점 일반 직원이 아니므로 목록에서 완전히 제외합니다.
+  // 2. data.staff(지점 소속 6명의 직원 목록)를 기준으로 행을 생성하여 잔액 생성 전인 직원도 누락 없이 표시합니다.
+  const staffList = (data && data.staff) || [];
+  const filteredStaff = staffList.filter(
+    (person) =>
+      String(person.email || '').toLowerCase() !== 'sym910403@gmail.com' &&
+      person.app_role !== 'super_admin'
   );
+
+  const teamRows =
+    filteredStaff.length > 0
+      ? filteredStaff.map((person) => {
+          const cells = {};
+          types.forEach((type) => {
+            const row = balances.find(
+              (b) =>
+                String(b.employee_email || '').toLowerCase() === String(person.email || '').toLowerCase() &&
+                b.leave_type_key === type.key
+            );
+            if (row) {
+              cells[type.key] = row.available_hours;
+            }
+          });
+          return {
+            email: person.email,
+            name: person.name,
+            employee_number: person.employee_number,
+            cells
+          };
+        })
+      : Array.from(
+          balances
+            .filter(
+              (row) =>
+                String(row.employee_email || '').toLowerCase() !== 'sym910403@gmail.com'
+            )
+            .reduce((map, row) => {
+              const current = map.get(row.employee_email) || {
+                email: row.employee_email,
+                name: row.employee_name,
+                cells: {}
+              };
+              current.cells[row.leave_type_key] = row.available_hours;
+              map.set(row.employee_email, current);
+              return map;
+            }, new Map())
+            .values()
+        );
 
   return (
     <div>
@@ -157,7 +201,14 @@ export default function Leave() {
                           {teamRows.map((row) => (
                             <TableRow key={row.email}>
                               <TableCell className="font-medium">
-                                {row.name}
+                                <div className="flex items-center gap-2">
+                                  <span>{row.name}</span>
+                                  {row.employee_number ? (
+                                    <Badge variant="outline" className="text-[11px] font-normal">
+                                      {row.employee_number}
+                                    </Badge>
+                                  ) : null}
+                                </div>
                                 <span className="block text-xs font-normal text-muted-foreground">{row.email}</span>
                               </TableCell>
                               {types.map((type) => {

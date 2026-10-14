@@ -1,5 +1,5 @@
-// 자동 생성 파일입니다. 직접 수정하지 마세요.
-// 원본: base44/functions/leaveSummary/entry.ts (변환 도구: supabase/tools/port_function.mjs)
+// supabase/functions/leaveSummary/index.ts
+// 휴가 관리 화면에서 현재 유효한 휴가 잔액과 요청 내역, 휴가 설정을 반환하는 함수입니다.
 
 import { createBase44Like } from '../_shared/server.ts';
 import { withCors } from '../_shared/http.mjs';
@@ -23,9 +23,7 @@ function monthsAgoIso(months: number) {
   return date.toISOString().slice(0, 10);
 }
 
-// The leave balances in force right now: the hours that have accrued from the ordinary hours
-// actually worked, the allowance handed out for the current period, what is booked, and what
-// is only waiting for approval. Every screen reads this instead of working it out again.
+// 휴가 잔액 및 신청 현황을 계산하여 반환합니다.
 async function handler(req: Request) {
   try {
     const base44 = createBase44Like();
@@ -35,8 +33,16 @@ async function handler(req: Request) {
     const body = await req.json().catch(() => ({}));
     const today = todayIso();
     const branchId = body.branch_id || me.branch_id || '';
+
+    // 슈퍼어드민(sym910403@gmail.com), 회사 관리자, 지점 매니저 권한 판별
+    const meEmail = String(me.email || '').trim().toLowerCase();
+    const isSuper = me.role === 'admin' || me.app_role === 'super_admin' || meEmail === 'sym910403@gmail.com';
+    const isCompanyAdmin = isSuper || me.app_role === 'company_admin';
     const manages =
-      me.role === 'admin' || (branchId && Array.isArray(me.branch_ids) && me.branch_ids.includes(branchId));
+      isSuper ||
+      isCompanyAdmin ||
+      me.role === 'admin' ||
+      (branchId && Array.isArray(me.branch_ids) && me.branch_ids.includes(branchId));
     const teamView = Boolean(body.team) && Boolean(manages);
 
     const branch = branchId ? await base44.asServiceRole.entities.Branch.get(branchId).catch(() => null) : null;
@@ -46,22 +52,29 @@ async function handler(req: Request) {
     const caller = rowsOf(
       await base44.asServiceRole.entities.EmployeeProfile.filter({ user_email: me.email }, { limit: 1 }).catch(() => [])
     )[0];
-    // Who may change the leave settings: the company admin, and any position the employer runs
-    // the store with — the same people who approve the requests.
+
+    // 휴가 정책 설정 변경 권한
     const runsStore =
+      isSuper ||
+      isCompanyAdmin ||
       me.role === 'admin' ||
-      me.app_role === 'company_admin' ||
       me.app_role === 'branch_manager' ||
       holdsManagerPosition(caller, managerPositionLabels(company && company.custom_roles));
 
     let staff: any[] = [];
     if (teamView) {
-      staff = rowsOf(
+      // 해당 지점의 활성 직원 전체를 가져옵니다.
+      // 슈퍼어드민 본인은 지점 일반 직원이 아니므로 목록에서 확실히 제외합니다.
+      const allBranchStaff = rowsOf(
         await base44.asServiceRole.entities.EmployeeProfile.filter(
           { branch_id: branchId, status: 'active' },
           { limit: 500 }
         )
       );
+      staff = allBranchStaff.filter((person: any) => {
+        const email = String(person.user_email || '').trim().toLowerCase();
+        return email !== 'sym910403@gmail.com' && person.app_role !== 'super_admin';
+      });
     } else {
       const profile = rowsOf(
         await base44.asServiceRole.entities.EmployeeProfile.filter({ user_email: me.email }, { limit: 1 })
@@ -72,8 +85,7 @@ async function handler(req: Request) {
     const stored = rowsOf(
       await base44.asServiceRole.entities.LeaveType.filter({ company_id: companyId }, { limit: 100 })
     );
-    // Every leave the company has set up, and the ones it is offering right now. A leave
-    // switched off keeps its settings and its balances, so it can be switched back on.
+    // 회사가 제공하는 모든 휴가 유형과 현재 활성화된 유형 목록
     const allTypes = leaveTypesFrom(stored);
     const types = activeTypes(allTypes);
 
@@ -83,6 +95,7 @@ async function handler(req: Request) {
         scope: teamView ? 'team' : 'self',
         types,
         all_types: allTypes,
+        staff: [],
         balances: [],
         requests: [],
         can_manage: Boolean(manages),
@@ -95,8 +108,7 @@ async function handler(req: Request) {
     );
     const balanceBy = new Map(balances.map((row: any) => [`${row.employee_email}::${row.leave_type_key}`, row]));
 
-    // Accrual is measured from the day a balance was opened, so it grows with the hours the
-    // person has actually worked since then.
+    // 실제 근무 기록을 통해 자동 누적(accrual) 시간 계산
     const earliest =
       balances.reduce((min: string, row: any) => {
         const anchor = String(row.accrual_anchor_at || '').slice(0, 10);
@@ -128,7 +140,7 @@ async function handler(req: Request) {
       const employment = person.employment_type || 'casual';
       const worked = workedBy[person.user_email] || [];
       for (const type of types) {
-        if (!eligibleFor(type, employment)) continue;
+        const eligible = eligibleFor(type, employment);
         const existing = balanceBy.get(`${person.user_email}::${type.key}`);
         const anchor = String(
           (existing && existing.accrual_anchor_at) || person.start_date || today
@@ -147,7 +159,7 @@ async function handler(req: Request) {
           leave_type_name: type.name,
           accrual_anchor_at: `${anchor}T00:00:00.000Z`,
           opening_hours: Number((existing && existing.opening_hours) || 0),
-          accrued_hours: type.accrual_method === 'ordinary_hours' ? round2(type.accrual_rate * ordinaryHours) : 0,
+          accrued_hours: eligible && type.accrual_method === 'ordinary_hours' ? round2(type.accrual_rate * ordinaryHours) : 0,
           granted_hours: Number((existing && existing.granted_hours) || 0),
           adjustment_hours: Number((existing && existing.adjustment_hours) || 0),
           used_hours: Number((existing && existing.used_hours) || 0),
@@ -158,9 +170,7 @@ async function handler(req: Request) {
           last_accrued_at: new Date().toISOString()
         };
 
-        // A new allowance period either replaces whatever is left (use it or lose it) or
-        // carries the remainder forward as a correction on the balance.
-        if (type.grant_enabled && grantsFor(type, employment)) {
+        if (eligible && type.grant_enabled && grantsFor(type, employment)) {
           const period = grantPeriod(type, today, person.start_date || anchor);
           if (next.grant_period !== period.key) {
             const remainder = Math.max(0, next.granted_hours - next.used_hours - next.pending_hours);
@@ -178,7 +188,7 @@ async function handler(req: Request) {
         }
 
         if (!existing) {
-          creates.push(next);
+          if (eligible) creates.push(next);
           result.push(next);
           continue;
         }
@@ -232,6 +242,7 @@ async function handler(req: Request) {
       requests
     });
   } catch (error: any) {
+    console.error('[leaveSummary] Error:', error);
     return Response.json({ error: error.message }, { status: 500 });
   }
 }
