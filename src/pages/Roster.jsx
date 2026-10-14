@@ -398,81 +398,78 @@ export default function Roster() {
         title={t('roster.title')}
         subtitle={activeBranch ? activeBranch.name : t('roster.subtitle')}
         actions={
-          <>
-            <div className="flex items-center gap-1 rounded-lg border px-2 py-1">
+          <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2 w-full sm:w-auto">
+            <div className="flex items-center justify-between sm:justify-start gap-1 rounded-lg border px-2 py-1 bg-card/50">
               <Button
                 variant="ghost"
                 size="icon"
+                className="h-8 w-8"
                 onClick={() => setWeekStart(addDaysIso(weekStart, -7))}
                 disabled={weekStart <= firstWeek}
               >
                 <ChevronLeft className="h-4 w-4" />
               </Button>
-              <span className="px-2 text-sm font-medium">
+              <span className="px-2 text-xs sm:text-sm font-medium tabular-nums">
                 {weekStart} → {weekEnd}
               </span>
               <Button
                 variant="ghost"
                 size="icon"
+                className="h-8 w-8"
                 onClick={() => setWeekStart(addDaysIso(weekStart, 7))}
                 disabled={weekStart >= lastWeek}
               >
                 <ChevronRight className="h-4 w-4" />
               </Button>
-              {fetching ? <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /> : null}
+              {fetching ? <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground ml-1" /> : null}
             </div>
-            <Button variant="outline" onClick={() => setSettingsOpen(true)} disabled={!activeBranch || !canManageRoster}>
-              <Settings2 className="mr-2 h-4 w-4" /> {t('roster.settings')}
-            </Button>
-            <Button
-              variant="outline"
-              onClick={autoBuild}
-              disabled={!activeBranch || generating || !canManageRoster || !feature('auto_roster')}
-            >
-              {generating ? <AiSpinner className="mr-2" /> : <Sparkles className="mr-2 h-4 w-4" />}
-              {generating ? t('roster.building') : t('roster.autoBuild')}
-            </Button>
-            {/* Anyone can keep their own shifts and approved leave in their phone calendar. */}
-            <Button variant="outline" onClick={() => setCalendarOpen(true)} disabled={!activeBranch}>
-              <CalendarPlus className="mr-2 h-4 w-4" /> {t('leave.calendar')}
-            </Button>
-            {/* Emptying the week is the manager's own clean slate. */}
-            <Button
-              variant="outline"
-              onClick={() => setClearOpen(true)}
-              disabled={!activeBranch || shifts.length === 0 || !canManageRoster}
-            >
-              <Trash2 className="mr-2 h-4 w-4" /> {t('roster.clear')}
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setDialogDate(todayIso());
-                setDialogEmployee(null);
-                setDialogOpen(true);
-              }}
-              disabled={!activeBranch || employees.length === 0}
-              className="hidden"
-            >
-              <Plus className="mr-2 h-4 w-4" /> {t('roster.addShift')}
-            </Button>
-            <Button
-              variant="outline"
-              onClick={saveWeek}
-              disabled={!activeBranch || draftCount === 0 || !canManageRoster}
-            >
-              {t('roster.save')}
-            </Button>
-            {savedCount > 0 && (
-              <Button variant="outline" onClick={cancelSave} disabled={!activeBranch || !canManageRoster}>
-                {t('roster.cancelSaved')}
+
+            <div className="flex flex-wrap items-center gap-1.5 overflow-x-auto pb-0.5">
+              <Button variant="outline" size="sm" onClick={() => setSettingsOpen(true)} disabled={!activeBranch || !canManageRoster} className="h-8 text-xs">
+                <Settings2 className="mr-1.5 h-3.5 w-3.5" /> {t('roster.settings')}
               </Button>
-            )}
-            <Button onClick={sendWeek} disabled={!activeBranch || shifts.length === 0 || sending || !canManageRoster}>
-              {sending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
-              {t('roster.send')}
-            </Button>
-          </>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={autoBuild}
+                disabled={!activeBranch || generating || !canManageRoster || !feature('auto_roster')}
+                className="h-8 text-xs"
+              >
+                {generating ? <AiSpinner className="mr-1.5" /> : <Sparkles className="mr-1.5 h-3.5 w-3.5" />}
+                {generating ? t('roster.building') : t('roster.autoBuild')}
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => setCalendarOpen(true)} disabled={!activeBranch} className="h-8 text-xs">
+                <CalendarPlus className="mr-1.5 h-3.5 w-3.5" /> {t('leave.calendar')}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setClearOpen(true)}
+                disabled={!activeBranch || shifts.length === 0 || !canManageRoster}
+                className="h-8 text-xs"
+              >
+                <Trash2 className="mr-1.5 h-3.5 w-3.5" /> {t('roster.clear')}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={saveWeek}
+                disabled={!activeBranch || draftCount === 0 || !canManageRoster}
+                className="h-8 text-xs"
+              >
+                {t('roster.save')}
+              </Button>
+              {savedCount > 0 && (
+                <Button variant="outline" size="sm" onClick={cancelSave} disabled={!activeBranch || !canManageRoster} className="h-8 text-xs">
+                  {t('roster.cancelSaved')}
+                </Button>
+              )}
+              <Button size="sm" onClick={sendWeek} disabled={!activeBranch || shifts.length === 0 || sending || !canManageRoster} className="h-8 text-xs">
+                {sending ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Send className="mr-1.5 h-3.5 w-3.5" />}
+                {t('roster.send')}
+              </Button>
+            </div>
+          </div>
         }
       />
 

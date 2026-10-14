@@ -1,10 +1,20 @@
+// ============================================================
+// Applicants.jsx
+// 목적: 고용주 및 관리자가 지점별 채용 공고에 접수된 지원자들을 확인하고,
+//       비자 종류, 근무 가능 시작 시점(Notice Period), 요일별 근무 가능 여부(Availability 다중 선택)로
+//       조건에 맞는 지원자를 빠르게 필터링 및 관리할 수 있는 화면입니다.
+// ============================================================
+
 import React, { useCallback, useEffect, useState } from 'react';
 import {
+  CalendarDays,
   Check,
   ChevronLeft,
   ChevronRight,
+  Filter,
   Loader2,
   MailWarning,
+  RotateCcw,
   Sparkles,
   UserCheck,
   UserPlus,
@@ -15,6 +25,7 @@ import PageHeader from '@/components/PageHeader';
 import AiSpinner from '@/components/AiSpinner';
 import ApplicantCard from '@/components/ApplicantCard';
 import ApplicantDetailDialog from '@/components/ApplicantDetailDialog';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -23,8 +34,18 @@ import { useToast } from '@/components/ui/use-toast';
 import { useI18n } from '@/lib/i18n';
 import { useWorkspace } from '@/lib/WorkspaceContext';
 import { featureAllowed, videoInterviewAllowed } from '@/lib/packages';
+import {
+  DAYS,
+  NOTICE_PERIODS,
+  VISA_TYPES,
+  isDayAvailable,
+  normalizeAvailability,
+  visaKey
+} from '@/lib/bh';
+import { cn } from '@/lib/utils';
 import { base44 } from '@/api/base44Client';
 
+// 한 페이지당 표시할 지원자 수
 const PAGE_SIZE = 10;
 const INTERVIEW_STATUSES = ['final_interview', 'interview_scheduled', 'hired'];
 const SHORTLIST_STATUSES = ['top10', 'mini_interview', 'final_interview', 'interview_scheduled', 'hired'];
@@ -48,6 +69,15 @@ export default function Applicants() {
   const [activeTab, setActiveTab] = useState('shortlist');
   const [page, setPage] = useState(1);
 
+  // ------------------------------------------------------------
+  // 지원자 상세 필터 상태 관리 (비자, Notice Period, 요일별 Availability)
+  // ------------------------------------------------------------
+  const [visaFilter, setVisaFilter] = useState('all'); // 'all' 또는 특정 비자 코드
+  const [noticeFilter, setNoticeFilter] = useState('all'); // 'all' 또는 notice_period 값
+  const [selectedDays, setSelectedDays] = useState([]); // 선택된 요일 키 목록 (예: ['mon', 'tue'])
+  const [dayMatchMode, setDayMatchMode] = useState('any'); // 'any' (선택 요일 중 하루라도 가능) 또는 'all' (선택 요일 모두 가능)
+
+  // 지점의 공고 목록 로드
   const loadJobs = useCallback(async () => {
     if (!activeBranch) return;
     const pageData = await base44.entities.Job.filter(
@@ -63,6 +93,7 @@ export default function Applicants() {
     loadJobs();
   }, [loadJobs]);
 
+  // 선택된 공고의 지원자 목록 로드
   const loadApplicants = useCallback(async () => {
     if (!jobId) {
       setApplicants([]);
@@ -89,11 +120,69 @@ export default function Applicants() {
     loadApplicants();
   }, [loadApplicants]);
 
-  // 탭이나 공고가 바뀌면 페이지 번호를 1페이지로 리셋
+  // 탭, 공고, 필터 조건이 변경되면 1페이지로 자동 리셋
   useEffect(() => {
     setPage(1);
-  }, [activeTab, jobId]);
+  }, [activeTab, jobId, visaFilter, noticeFilter, selectedDays, dayMatchMode]);
 
+  // 요일 토글 함수 (다중 선택 지원)
+  const toggleDay = (dayKey) => {
+    setSelectedDays((prev) =>
+      prev.includes(dayKey) ? prev.filter((k) => k !== dayKey) : [...prev, dayKey]
+    );
+  };
+
+  // 모든 필터 초기화 함수
+  const resetFilters = () => {
+    setVisaFilter('all');
+    setNoticeFilter('all');
+    setSelectedDays([]);
+    setDayMatchMode('any');
+  };
+
+  // 현재 필터 적용 여부 확인
+  const isFiltered = visaFilter !== 'all' || noticeFilter !== 'all' || selectedDays.length > 0;
+
+  // ------------------------------------------------------------
+  // 지원자 필터링 로직 (비자, Notice period, 요일별 Availability)
+  // ------------------------------------------------------------
+  const filteredApplicants = applicants.filter((applicant) => {
+    // 1. 비자 필터 검사
+    if (visaFilter !== 'all') {
+      const vk = visaKey(applicant.visa_type);
+      if (vk !== visaFilter && applicant.visa_type !== visaFilter) {
+        return false;
+      }
+    }
+
+    // 2. Notice period (근무 시작 가능 시점) 필터 검사
+    if (noticeFilter !== 'all') {
+      if (noticeFilter === 'immediately') {
+        const isImm = applicant.available_immediately || applicant.notice_period === 'immediately';
+        if (!isImm) return false;
+      } else {
+        if (applicant.notice_period !== noticeFilter) return false;
+      }
+    }
+
+    // 3. 요일별 Availability 필터 검사 (다중 요일 선택 대응)
+    if (selectedDays.length > 0) {
+      const avail = normalizeAvailability(applicant.availability);
+      if (dayMatchMode === 'all') {
+        // 선택된 모든 요일에 근무 시간이 지정되어 있어야 통과
+        const allOk = selectedDays.every((dayKey) => isDayAvailable(avail[dayKey]));
+        if (!allOk) return false;
+      } else {
+        // 선택된 요일 중 적어도 하루 이상 근무 가능하면 통과
+        const anyOk = selectedDays.some((dayKey) => isDayAvailable(avail[dayKey]));
+        if (!anyOk) return false;
+      }
+    }
+
+    return true;
+  });
+
+  // 이력서 파일 열람 (비공개 버킷에서 서명된 일회용 URL 생성)
   const viewResume = async (applicant) => {
     if (!applicant.resume_file_uri) {
       toast({ title: '이력서 파일이 첨부되어 있지 않습니다.', variant: 'destructive' });
@@ -109,6 +198,7 @@ export default function Applicants() {
     }
   };
 
+  // 각 단계별 액션 (미니면접, 비디오면접, 면접조율, 채용, 거절)
   const act = async (applicant, action) => {
     setBusyId(applicant.id);
     try {
@@ -118,45 +208,33 @@ export default function Applicants() {
           origin: window.location.origin
         });
         if (response.data?.error) throw new Error(response.data.error);
-        if (response.data?.sent === false && response.data?.error) {
-          toast({ title: `화상 면접 링크 생성 완료 (이메일 발송 실패: ${response.data.error})`, variant: 'destructive' });
-        } else {
-          toast({ title: `화상 면접 안내 메일을 ${applicant.full_name}님께 전송했습니다.` });
-        }
+        toast({ title: `${applicant.full_name} 지원자에게 화상 면접 요청 링크가 발송되었습니다.` });
       } else if (action === 'mini') {
         const response = await base44.functions.invoke('sendMiniInterview', {
           applicant_id: applicant.id,
           origin: window.location.origin
         });
         if (response.data?.error) throw new Error(response.data.error);
-        if (response.data?.sent === false && response.data?.error) {
-          toast({ title: `음성 면접 링크 생성 완료 (이메일 발송 실패: ${response.data.error})`, variant: 'destructive' });
-        } else {
-          toast({ title: `미니 음성면접 안내를 ${applicant.full_name}님께 전송했습니다.` });
-        }
+        toast({ title: `${applicant.full_name} 지원자에게 미니 면접 질문 링크가 발송되었습니다.` });
       } else if (action === 'invite') {
         const response = await base44.functions.invoke('notifyApplicant', {
           applicant_id: applicant.id,
-          type: 'interview_invite',
+          action: 'invite',
           origin: window.location.origin
         });
         if (response.data?.error) throw new Error(response.data.error);
-        if (response.data?.sent === false && response.data?.error) {
-          toast({ title: `면접 초대 완료 (이메일 발송 실패: ${response.data.error})`, variant: 'destructive' });
-        } else {
-          toast({ title: `최종 면접 초대 메일을 ${applicant.full_name}님께 전송했습니다.` });
-        }
+        toast({ title: `${applicant.full_name} 지원자에게 면접 슬롯 예약 안내 메일이 발송되었습니다.` });
       } else if (action === 'hire') {
         const response = await base44.functions.invoke('hireApplicant', {
           applicant_id: applicant.id,
           origin: window.location.origin
         });
         if (response.data?.error) throw new Error(response.data.error);
-        toast({ title: `채용 완료 · 사원번호 ${response.data.employee?.employee_number || ''}` });
+        toast({ title: `${applicant.full_name} 지원자 채용 확정 및 온보딩 서약서 발송이 완료되었습니다.` });
       } else if (action === 'reject') {
         const response = await base44.functions.invoke('notifyApplicant', {
           applicant_id: applicant.id,
-          type: 'rejection',
+          action: 'reject',
           origin: window.location.origin
         });
         if (response.data?.error) throw new Error(response.data.error);
@@ -174,6 +252,7 @@ export default function Applicants() {
     }
   };
 
+  // AI 이력서 심사 실행
   const runScreening = async () => {
     if (!job) return;
     setScreening(true);
@@ -203,6 +282,7 @@ export default function Applicants() {
     }
   };
 
+  // 미선별자 일괄 거절 안내 발송
   const rejectUnselected = async () => {
     if (!job) return;
     try {
@@ -221,16 +301,18 @@ export default function Applicants() {
     }
   };
 
-  const shortlist = applicants.filter((a) => SHORTLIST_STATUSES.includes(a.status));
-  const interviewList = applicants.filter((a) => INTERVIEW_STATUSES.includes(a.status));
+  // 탭별 목록 필터링 (필터 조건이 반영된 filteredApplicants 기반)
+  const shortlist = filteredApplicants.filter((a) => SHORTLIST_STATUSES.includes(a.status));
+  const interviewList = filteredApplicants.filter((a) => INTERVIEW_STATUSES.includes(a.status));
 
-  // 현재 활성 탭에 따른 리스트 계산
+  // 현재 활성 탭에 따른 리스트 계산 및 페이지네이션
   const currentList =
-    activeTab === 'shortlist' ? shortlist : activeTab === 'interview' ? interviewList : applicants;
+    activeTab === 'shortlist' ? shortlist : activeTab === 'interview' ? interviewList : filteredApplicants;
   const totalPages = Math.max(1, Math.ceil(currentList.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
   const paginatedList = currentList.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
+  // 카드 내 액션 버튼 모음
   const actionButtons = (applicant) => (
     <>
       {miniAllowed &&
@@ -288,14 +370,15 @@ export default function Applicants() {
   );
 
   return (
-    <div>
+    <div className="space-y-4">
+      {/* 반응형 페이지 헤더 */}
       <PageHeader
         title={t('applicants.title')}
         subtitle={activeBranch ? activeBranch.name : t('applicants.title')}
         actions={
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
             <Select value={jobId} onValueChange={setJobId}>
-              <SelectTrigger className="w-64">
+              <SelectTrigger className="w-full sm:w-64">
                 <SelectValue placeholder={t('jobs.title')} />
               </SelectTrigger>
               <SelectContent>
@@ -307,15 +390,15 @@ export default function Applicants() {
               </SelectContent>
             </Select>
             {job && (
-              <>
-                <Button variant="outline" onClick={runScreening} disabled={screening}>
-                  {screening ? <AiSpinner className="mr-2" /> : <Sparkles className="mr-2 h-4 w-4" />}
+              <div className="flex flex-wrap items-center gap-2">
+                <Button variant="outline" size="sm" onClick={runScreening} disabled={screening}>
+                  {screening ? <AiSpinner className="mr-1.5" /> : <Sparkles className="mr-1.5 h-4 w-4" />}
                   {screening ? t('jobs.aiRunning') : t('applicants.addScreening')}
                 </Button>
-                <Button variant="outline" onClick={rejectUnselected}>
-                  <MailWarning className="mr-2 h-4 w-4" /> {t('applicants.rejectAll')}
+                <Button variant="outline" size="sm" onClick={rejectUnselected}>
+                  <MailWarning className="mr-1.5 h-4 w-4" /> {t('applicants.rejectAll')}
                 </Button>
-              </>
+              </div>
             )}
           </div>
         }
@@ -331,106 +414,212 @@ export default function Applicants() {
           {t('common.loading')}
         </p>
       ) : (
-        <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList>
-            <TabsTrigger value="shortlist">
-              {t('applicants.tabTop')} ({shortlist.length})
-            </TabsTrigger>
-            <TabsTrigger value="interview">
-              {t('applicants.tabInterview')} ({counts.interview})
-            </TabsTrigger>
-            <TabsTrigger value="all">
-              {t('applicants.tabAll')} ({counts.total})
-            </TabsTrigger>
-          </TabsList>
-
-          <TabsContent value={activeTab} className="mt-6">
-            {currentList.length === 0 ? (
-              <Card>
-                <CardContent className="p-10 text-center text-sm text-muted-foreground">
-                  {t('applicants.empty')}
-                </CardContent>
-              </Card>
-            ) : (
-              <>
-                <div className="space-y-3">
-                  {paginatedList.map((applicant) => (
-                    <ApplicantCard
-                      key={applicant.id}
-                      applicant={applicant}
-                      actions={actionButtons(applicant)}
-                      onOpen={() => setDetailId(applicant.id)}
-                      onViewResume={() => viewResume(applicant)}
-                    />
-                  ))}
+        <div className="space-y-4">
+          {/* ============================================================ */}
+          {/* 지원자 상세 필터 카드 (비자, Notice period, 요일별 Availability) */}
+          {/* ============================================================ */}
+          <Card className="border-slate-200/80 bg-card/60 shadow-sm backdrop-blur-sm">
+            <CardContent className="p-3.5 sm:p-4 space-y-3">
+              {/* 1행: 비자 선택, Notice Period 선택, 필터 초기화 버튼 */}
+              <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                <div className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+                  <Filter className="h-3.5 w-3.5 text-primary" />
+                  <span>필터:</span>
                 </div>
 
-                {/* 10명 단위 페이지네이션 컨트롤러 */}
-                {totalPages > 1 && (
-                  <div className="mt-6 flex flex-wrap items-center justify-between gap-4 rounded-xl border bg-card p-4">
-                    <p className="text-xs text-muted-foreground">
-                      전체 {currentList.length}명 중 {(currentPage - 1) * PAGE_SIZE + 1} ~{' '}
-                      {Math.min(currentPage * PAGE_SIZE, currentList.length)}명 표시 (페이지 {currentPage} / {totalPages})
-                    </p>
-                    <div className="flex items-center gap-1.5">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={currentPage <= 1}
-                        onClick={() => setPage((p) => Math.max(1, p - 1))}
-                        className="h-8 px-2.5 text-xs"
-                      >
-                        <ChevronLeft className="mr-1 h-3.5 w-3.5" /> 이전
-                      </Button>
+                {/* 비자 필터 드롭다운 */}
+                <div className="w-full sm:w-auto flex-1 min-w-[140px] max-w-full sm:max-w-[200px]">
+                  <Select value={visaFilter} onValueChange={setVisaFilter}>
+                    <SelectTrigger className="h-8 text-xs">
+                      <SelectValue placeholder="비자 종류" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">전체 비자 (All Visas)</SelectItem>
+                      {VISA_TYPES.map((v) => (
+                        <SelectItem key={v.value} value={v.value}>
+                          {v.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
 
-                      {Array.from({ length: totalPages }, (_, i) => i + 1).map((pNum) => {
-                        if (totalPages > 7 && Math.abs(pNum - currentPage) > 2 && pNum !== 1 && pNum !== totalPages) {
-                          if (pNum === 2 || pNum === totalPages - 1) {
-                            return (
-                              <span key={pNum} className="px-1 text-xs text-muted-foreground">
-                                ...
-                              </span>
-                            );
-                          }
-                          return null;
-                        }
-                        return (
-                          <Button
-                            key={pNum}
-                            variant={currentPage === pNum ? 'default' : 'outline'}
-                            size="sm"
-                            onClick={() => setPage(pNum)}
-                            className="h-8 w-8 p-0 text-xs font-semibold"
-                          >
-                            {pNum}
-                          </Button>
-                        );
-                      })}
+                {/* Notice Period 필터 드롭다운 */}
+                <div className="w-full sm:w-auto flex-1 min-w-[140px] max-w-full sm:max-w-[200px]">
+                  <Select value={noticeFilter} onValueChange={setNoticeFilter}>
+                    <SelectTrigger className="h-8 text-xs">
+                      <SelectValue placeholder="근무 시작 가능" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">전체 시작 시점 (All Notice)</SelectItem>
+                      {NOTICE_PERIODS.map((n) => (
+                        <SelectItem key={n.value} value={n.value}>
+                          {n.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
 
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={currentPage >= totalPages}
-                        onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                        className="h-8 px-2.5 text-xs"
+                {/* 활성 필터 초기화 버튼 */}
+                {isFiltered && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={resetFilters}
+                    className="h-8 px-2.5 text-xs text-muted-foreground hover:text-foreground gap-1"
+                  >
+                    <RotateCcw className="h-3.5 w-3.5" />
+                    초기화
+                  </Button>
+                )}
+
+                {/* 필터링 결과 카운트 안내 */}
+                {isFiltered && (
+                  <span className="text-xs text-primary font-medium ml-auto">
+                    {filteredApplicants.length}명 조회됨 (전체 {applicants.length}명)
+                  </span>
+                )}
+              </div>
+
+              {/* 2행: 요일별 Availability 필터 (다중 선택 칩 버튼) */}
+              <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-border/50">
+                <span className="text-xs text-muted-foreground font-medium flex items-center gap-1 shrink-0">
+                  <CalendarDays className="h-3.5 w-3.5 text-primary" />
+                  근무 가능 요일:
+                </span>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {DAYS.map((d) => {
+                    const isSelected = selectedDays.includes(d.key);
+                    return (
+                      <button
+                        key={d.key}
+                        type="button"
+                        onClick={() => toggleDay(d.key)}
+                        className={cn(
+                          "h-7 px-2.5 text-xs font-medium transition-all rounded-md border flex items-center justify-center",
+                          isSelected
+                            ? "bg-primary border-primary text-primary-foreground shadow-sm font-semibold"
+                            : "bg-background border-border text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                        )}
                       >
-                        다음 <ChevronRight className="ml-1 h-3.5 w-3.5" />
-                      </Button>
-                    </div>
+                        {d.short}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {selectedDays.length > 1 && (
+                  <div className="flex items-center gap-1 ml-auto text-[11px] text-muted-foreground">
+                    <span>조건:</span>
+                    <button
+                      type="button"
+                      onClick={() => setDayMatchMode(dayMatchMode === 'any' ? 'all' : 'any')}
+                      className="text-primary underline font-medium hover:opacity-80"
+                    >
+                      {dayMatchMode === 'any' ? '선택 요일 중 하루 이상 가능' : '선택 요일 모두 가능 (AND)'}
+                    </button>
                   </div>
                 )}
-              </>
-            )}
-          </TabsContent>
-        </Tabs>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* 탭 목록 (모바일 가로 스크롤 대응) */}
+          <Tabs value={activeTab} onValueChange={setActiveTab}>
+            <div className="overflow-x-auto pb-1">
+              <TabsList className="inline-flex w-auto min-w-full sm:min-w-0 justify-start">
+                <TabsTrigger value="shortlist" className="text-xs sm:text-sm">
+                  {t('applicants.tabTop')} ({shortlist.length})
+                </TabsTrigger>
+                <TabsTrigger value="interview" className="text-xs sm:text-sm">
+                  {t('applicants.tabInterview')} ({interviewList.length})
+                </TabsTrigger>
+                <TabsTrigger value="all" className="text-xs sm:text-sm">
+                  {t('applicants.tabAll')} ({filteredApplicants.length})
+                </TabsTrigger>
+              </TabsList>
+            </div>
+
+            <TabsContent value={activeTab} className="mt-4">
+              {currentList.length === 0 ? (
+                <Card>
+                  <CardContent className="p-10 text-center text-sm text-muted-foreground">
+                    {isFiltered ? '설정하신 필터 조건에 부합하는 지원자가 없습니다.' : t('applicants.empty')}
+                  </CardContent>
+                </Card>
+              ) : (
+                <>
+                  <div className="space-y-3">
+                    {paginatedList.map((applicant) => (
+                      <ApplicantCard
+                        key={applicant.id}
+                        applicant={applicant}
+                        actions={actionButtons(applicant)}
+                        onOpen={() => setDetailId(applicant.id)}
+                        onViewResume={() => viewResume(applicant)}
+                      />
+                    ))}
+                  </div>
+
+                  {/* 10명 단위 페이지네이션 */}
+                  {totalPages > 1 && (
+                    <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4">
+                      <p className="text-xs text-muted-foreground">
+                        총 {currentList.length}명 중 {(currentPage - 1) * PAGE_SIZE + 1}–
+                        {Math.min(currentPage * PAGE_SIZE, currentList.length)}명 표시 (페이지 {currentPage} / {totalPages})
+                      </p>
+                      <div className="flex items-center gap-1.5">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={currentPage <= 1}
+                          onClick={() => setPage((p) => Math.max(1, p - 1))}
+                        >
+                          <ChevronLeft className="h-4 w-4 mr-1" />
+                          이전
+                        </Button>
+                        <div className="flex items-center gap-1 px-1">
+                          {Array.from({ length: totalPages }, (_, i) => i + 1).map((pageNum) => (
+                            <Button
+                              key={pageNum}
+                              variant={pageNum === currentPage ? 'default' : 'ghost'}
+                              size="sm"
+                              className="h-8 w-8 p-0 text-xs"
+                              onClick={() => setPage(pageNum)}
+                            >
+                              {pageNum}
+                            </Button>
+                          ))}
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={currentPage >= totalPages}
+                          onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                        >
+                          다음
+                          <ChevronRight className="h-4 w-4 ml-1" />
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </TabsContent>
+          </Tabs>
+        </div>
       )}
 
-      <ApplicantDetailDialog
-        applicant={applicants.find((a) => a.id === detailId) || null}
-        open={Boolean(detailId)}
-        onOpenChange={(v) => !v && setDetailId('')}
-        onResent={loadApplicants}
-      />
+      {detailId && (
+        <ApplicantDetailDialog
+          applicantId={detailId}
+          open={Boolean(detailId)}
+          onClose={() => setDetailId('')}
+          onUpdate={loadApplicants}
+          job={job}
+        />
+      )}
     </div>
   );
 }

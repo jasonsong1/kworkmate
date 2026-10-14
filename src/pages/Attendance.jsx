@@ -135,39 +135,57 @@ export default function Attendance() {
         title={t('attendance.title')}
         subtitle={activeBranch ? activeBranch.name : t('attendance.subtitle')}
         actions={
-        <div className="flex flex-wrap items-center gap-2">
-            <div className="flex items-center gap-2">
-              <Input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className="w-40" />
-              <span className="text-muted-foreground">→</span>
-              <Input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className="w-40" />
+          <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2 w-full sm:w-auto">
+            <div className="flex items-center gap-1.5 w-full sm:w-auto">
+              <Input
+                type="date"
+                value={fromDate}
+                onChange={(e) => setFromDate(e.target.value)}
+                className="flex-1 sm:w-36 h-9 text-xs"
+              />
+              <span className="text-muted-foreground text-xs shrink-0">→</span>
+              <Input
+                type="date"
+                value={toDate}
+                onChange={(e) => setToDate(e.target.value)}
+                className="flex-1 sm:w-36 h-9 text-xs"
+              />
             </div>
             {!selfOnly && (
-            <Select value={employeeFilter} onValueChange={setEmployeeFilter}>
-              <SelectTrigger className="w-48">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={ALL}>{t('common.all')}</SelectItem>
-                {employees.map((person) =>
-              <SelectItem key={person.id} value={person.user_email}>
-                    {person.full_name}
-                  </SelectItem>
-              )}
-              </SelectContent>
-            </Select>
+              <Select value={employeeFilter} onValueChange={setEmployeeFilter}>
+                <SelectTrigger className="w-full sm:w-44 h-9 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ALL}>{t('common.all')}</SelectItem>
+                  {employees.map((person) => (
+                    <SelectItem key={person.id} value={person.user_email}>
+                      {person.full_name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             )}
-            
-
-          
-            <Button
-              variant="outline"
-              onClick={() => window.open(kioskUrl(activeBranch.id, todayFor(activeBranch)), '_blank', 'noopener')}
-              disabled={!activeBranch || !canEdit('attendance')}>
-              <QrCode className="mr-2 h-4 w-4" /> {t('attendance.qrButton')}
-            </Button>
-            <Button variant="outline" onClick={() => setReportOpen(true)} disabled={!activeBranch}>
-              <FileBarChart className="mr-2 h-4 w-4" /> {t('attendance.report')}
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex-1 sm:flex-none h-9 text-xs"
+                onClick={() => window.open(kioskUrl(activeBranch.id, todayFor(activeBranch)), '_blank', 'noopener')}
+                disabled={!activeBranch || !canEdit('attendance')}
+              >
+                <QrCode className="mr-1.5 h-3.5 w-3.5" /> {t('attendance.qrButton')}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex-1 sm:flex-none h-9 text-xs"
+                onClick={() => setReportOpen(true)}
+                disabled={!activeBranch}
+              >
+                <FileBarChart className="mr-1.5 h-3.5 w-3.5" /> {t('attendance.report')}
+              </Button>
+            </div>
           </div>
         } />
       

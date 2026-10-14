@@ -193,13 +193,15 @@ export default function CompanySettings() {
         } />
 
       <Tabs value={activeTab} onValueChange={setTab}>
-        <TabsList className="mb-6 flex-wrap">
-          {CATEGORIES.map((category) =>
-          <TabsTrigger key={category.key} value={category.key}>
-              {category.label}
-            </TabsTrigger>
-          )}
-        </TabsList>
+        <div className="overflow-x-auto pb-1 mb-6">
+          <TabsList className="inline-flex w-auto min-w-full sm:min-w-0 justify-start">
+            {CATEGORIES.map((category) => (
+              <TabsTrigger key={category.key} value={category.key} className="text-xs sm:text-sm whitespace-nowrap">
+                {category.label}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </div>
 
         <TabsContent value="company" className="space-y-6">
           <PackageCard />
