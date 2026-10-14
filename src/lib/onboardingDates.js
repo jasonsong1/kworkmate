@@ -38,18 +38,50 @@ export function maskDate(value, format) {
   return blocks.join('-');
 }
 
-// A complete answer in the chosen style, with a day and a month that exist.
+// A complete answer in the chosen style, or standard ISO / Australian date format.
 export function validDate(value, format) {
-  const parts = partsOf(format);
-  const blocks = String(value || '').trim().split('-');
-  if (blocks.length !== parts.length) return false;
-  const seen = {};
-  for (let index = 0; index < parts.length; index += 1) {
-    const part = parts[index];
-    if (!new RegExp(`^\\d{${part.length}}$`).test(blocks[index])) return false;
-    seen[part.type] = Number(blocks[index]);
+  if (!value || typeof value !== 'string') return false;
+  const clean = value.trim();
+  if (!clean) return false;
+
+  // 1. HTML5 input[type=date] 기본 표준 포맷: YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}$/.test(clean)) {
+    const [y, m, d] = clean.split('-').map(Number);
+    if (m < 1 || m > 12) return false;
+    if (d < 1 || d > 31) return false;
+    if (y < 1900 || y > 2100) return false;
+    return true;
   }
-  if (seen.D !== undefined && (seen.D < 1 || seen.D > 31)) return false;
-  if (seen.M !== undefined && (seen.M < 1 || seen.M > 12)) return false;
-  return true;
+
+  // 2. 호주/영국식 일반 표기: DD/MM/YYYY 또는 DD-MM-YYYY
+  if (/^\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}$/.test(clean)) {
+    const parts = clean.split(/[\/\-]/).map(Number);
+    const d = parts[0];
+    const m = parts[1];
+    const y = parts[2] < 100 ? (parts[2] > 30 ? 1900 + parts[2] : 2000 + parts[2]) : parts[2];
+    if (m < 1 || m > 12) return false;
+    if (d < 1 || d > 31) return false;
+    if (y < 1900 || y > 2100) return false;
+    return true;
+  }
+
+  // 3. 기존 포맷 분할 매칭
+  try {
+    const parts = partsOf(format);
+    const blocks = clean.split(/[\/\-]/);
+    if (blocks.length === parts.length) {
+      const seen = {};
+      for (let index = 0; index < parts.length; index += 1) {
+        const part = parts[index];
+        seen[part.type] = Number(blocks[index]);
+      }
+      if (seen.D !== undefined && (seen.D < 1 || seen.D > 31)) return false;
+      if (seen.M !== undefined && (seen.M < 1 || seen.M > 12)) return false;
+      return true;
+    }
+  } catch (_) {}
+
+  // 4. 일반 Date 파싱 검사
+  const parsed = Date.parse(clean);
+  return !Number.isNaN(parsed);
 }

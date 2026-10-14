@@ -207,9 +207,16 @@ export default function Onboarding() {
           }
         }
       }
-      // 2. 생년월일
+      // 2. 생년월일 (YYYY-MM-DD 정규화)
       if (id === 'default_dob' || id.includes('dob') || id.includes('birth')) {
-        next.dob = str;
+        if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
+          next.dob = str;
+        } else if (/^\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4}$/.test(str)) {
+          const p = str.split(/[\/\-]/);
+          next.dob = `${p[2]}-${String(p[1]).padStart(2, '0')}-${String(p[0]).padStart(2, '0')}`;
+        } else {
+          next.dob = str;
+        }
       }
       // 3. 성명
       if (id === 'default_name' || id === 'full_name') {
