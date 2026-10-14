@@ -1,5 +1,5 @@
-// 자동 생성 파일입니다. 직접 수정하지 마세요.
-// 원본: base44/functions/adminLeaveBalances/entry.ts (변환 도구: supabase/tools/port_function.mjs)
+// supabase/functions/adminLeaveBalances/index.ts
+// 최고 관리자(슈퍼어드민) 전용: 회사의 직원들의 기존 휴가 잔액을 일괄 조회 및 조정하는 함수입니다.
 
 import { createBase44Like } from '../_shared/server.ts';
 import { withCors } from '../_shared/http.mjs';
@@ -7,16 +7,19 @@ import { resolveCaller } from '../_shared/kwAuth.ts';
 import { activeTypes, availableHours, leaveTypesFrom, round2 } from '../_shared/leave.ts';
 import { rowsOf, todayIso } from '../_shared/util.ts';
 
-// The leave balances a store already has on its books when it is moved onto KWorkMate. Only the
-// platform owner opens this: the hours typed in are stored as an adjustment, so what the person
-// has already accrued or used by working is left exactly where it stands.
+// 플랫폼 최고 관리자(슈퍼어드민)만 진입하여 직원의 휴가 잔액을 조정합니다.
 async function handler(req: Request) {
   try {
     const base44 = createBase44Like();
     const me = await resolveCaller(base44, req);
     if (!me) return Response.json({ error: 'Unauthorized' }, { status: 401 });
-    if (me.role !== 'admin') {
-      return Response.json({ error: 'Only the super admin can adjust leave balances' }, { status: 403 });
+
+    // [슈퍼어드민 단독 권한 검사]:
+    // Supabase Auth 세션의 me.role이 'admin'이거나, app_role이 'super_admin'이거나, 지정된 슈퍼어드민 이메일(sym910403@gmail.com)인 경우만 허용
+    const meEmail = String(me.email || '').trim().toLowerCase();
+    const isSuper = me.role === 'admin' || me.app_role === 'super_admin' || meEmail === 'sym910403@gmail.com';
+    if (!isSuper) {
+      return Response.json({ error: '슈퍼어드민만 휴가 잔액을 조정할 수 있습니다.' }, { status: 403 });
     }
 
     const body = await req.json().catch(() => ({}));
@@ -29,12 +32,18 @@ async function handler(req: Request) {
     const allTypes = leaveTypesFrom(stored);
     const types = activeTypes(allTypes);
 
-    const staff = rowsOf(
+    // 해당 회사에 소속된 활성 직원 전체를 조회합니다.
+    // 슈퍼어드민 본인은 휴가 잔액 조정 대상 직원이 아니므로 목록에서 제외합니다.
+    const rawStaff = rowsOf(
       await base44.asServiceRole.entities.EmployeeProfile.filter(
         { company_id: companyId, status: 'active' },
         { sort: 'full_name', limit: 500 }
       )
-    ).filter((person: any) => person.user_email);
+    );
+    const staff = rawStaff.filter((person: any) => {
+      const email = String(person.user_email || '').trim().toLowerCase();
+      return email && email !== 'sym910403@gmail.com' && person.app_role !== 'super_admin';
+    });
 
     const balances = rowsOf(
       await base44.asServiceRole.entities.LeaveBalance.filter({ company_id: companyId }, { limit: 2000 })
@@ -43,6 +52,8 @@ async function handler(req: Request) {
       balances.map((row: any) => [`${row.employee_email}::${row.leave_type_key}`, row])
     );
 
+    // [잔액 저장 동작]:
+    // 원하는 목표 시간(target_hours)과 현재 시간의 차이를 계산하여 adjustment_hours(조정값)로 안전하게 저장합니다.
     if (body.action === 'save') {
       const inputs = Array.isArray(body.rows) ? body.rows : [];
       const known = new Set(types.map((type: any) => type.key));
@@ -121,6 +132,7 @@ async function handler(req: Request) {
       }))
     });
   } catch (error: any) {
+    console.error('[adminLeaveBalances] Error:', error);
     return Response.json({ error: error.message }, { status: 500 });
   }
 }
