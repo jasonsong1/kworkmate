@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Loader2, Plus, X, Copy, Send, Check, ExternalLink } from 'lucide-react';
+import { Loader2, Plus, X, Copy, Send, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -243,8 +243,8 @@ export default function EmployeeDialog({ open, onOpenChange, branch, employee, o
       onOpenChange(false);
       onSaved && onSaved();
 
-      // 계정 권한 및 이메일 전송은 저장 후 비동기 호출
-      if (savedId) {
+      // 신규 등록 시에만 초대 및 온보딩 이메일 자동 발송 옵션 전달
+      if (savedId && !employee) {
         base44.functions.
         invoke('manageEmployee', {
           action: 'grant_access',
@@ -259,24 +259,7 @@ export default function EmployeeDialog({ open, onOpenChange, branch, employee, o
             toast({ variant: 'destructive', title: access.error });
             return;
           }
-          // 온보딩 이메일 발송 스위치가 켜져 있었던 경우 명확한 토스트 알림 표시
-          if (form.send_onboarding_email) {
-            if (access.email_sent) {
-              toast({
-                title: '온보딩 링크 발송 완료',
-                description: `${form.user_email} (으)로 온보딩 안내 이메일이 전송되었습니다.`
-              });
-            } else if (access.email_error) {
-              toast({
-                variant: 'destructive',
-                title: '온보딩 이메일 발송 실패',
-                description: access.email_error
-              });
-            }
-          }
-          if (!employee) {
-            toast({ title: accessNote(access) });
-          }
+          toast({ title: accessNote(access) });
         }).
         catch(() => {});
       }
@@ -284,9 +267,6 @@ export default function EmployeeDialog({ open, onOpenChange, branch, employee, o
       setSaving(false);
     }
   };
-
-  const activeToken = currentOnboardingToken || (employee && employee.onboarding_token);
-  const activeLink = activeToken ? `${window.location.origin}/onboarding/${activeToken}` : '';
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -477,49 +457,36 @@ export default function EmployeeDialog({ open, onOpenChange, branch, employee, o
             </>
           )}
 
-          {/* 기존 직원 수정 시 온보딩 통합 제어 카드 */}
+          {/* 기존 직원 수정 시 온보딩 제어 카드 (다크/라이트 테마 일체화) */}
           {employee && (
-            <div className="sm:col-span-2 space-y-4 rounded-xl border border-blue-100 bg-blue-50/40 p-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-blue-100 pb-3">
+            <div className="sm:col-span-2 space-y-3 rounded-lg border border-border bg-muted/20 p-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
-                  <h4 className="font-semibold text-slate-800 text-sm flex items-center gap-1.5">
-                    📋 직원 온보딩 링크 및 서류 관리
-                  </h4>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    직원에게 온보딩 링크를 전달하여 TFN 및 Super 설문을 작성하도록 합니다.
-                  </p>
+                  <h4 className="font-semibold text-sm text-foreground">온보딩</h4>
+                  {!onboardingSubmitted && (
+                    <p className="text-xs text-muted-foreground mt-0.5">{t('employees.statusLocked')}</p>
+                  )}
                 </div>
                 <div className="flex items-center gap-2">
                   <Button
                     type="button"
                     size="sm"
                     variant="outline"
-                    className="bg-white hover:bg-slate-50 text-xs h-8 border-blue-200"
+                    className="text-xs h-8"
                     disabled={copying}
                     onClick={copyOnboardingLink}>
                     {copied ? (
                       <>
-                        <Check className="mr-1.5 h-3.5 w-3.5 text-emerald-600" />
+                        <Check className="mr-1.5 h-3.5 w-3.5 text-emerald-500" />
                         복사됨!
                       </>
                     ) : (
                       <>
-                        <Copy className="mr-1.5 h-3.5 w-3.5 text-blue-600" />
+                        <Copy className="mr-1.5 h-3.5 w-3.5" />
                         {copying ? '생성 중...' : '온보딩 링크 복사'}
                       </>
                     )}
                   </Button>
-                  {activeLink && (
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="ghost"
-                      className="text-xs h-8 px-2 text-slate-600"
-                      onClick={() => window.open(activeLink, '_blank')}
-                      title="새 창에서 온보딩 폼 열기">
-                      <ExternalLink className="h-3.5 w-3.5" />
-                    </Button>
-                  )}
                   <Button
                     type="button"
                     size="sm"
@@ -541,43 +508,25 @@ export default function EmployeeDialog({ open, onOpenChange, branch, employee, o
                 </div>
               </div>
 
-              {/* 링크 주소 안내 */}
-              {activeLink && (
-                <div className="rounded bg-white/80 border border-blue-100 p-2 text-xs font-mono text-slate-600 truncate select-all">
-                  🔗 {activeLink}
-                </div>
-              )}
-
-              <div className="grid gap-3 sm:grid-cols-2 pt-1">
-                <div className="flex items-center justify-between gap-4 rounded-lg bg-white p-3 border border-slate-200">
-                  <span className="text-sm font-medium text-slate-700">저장 시 이메일 자동 발송</span>
-                  <Switch
-                    checked={form.send_onboarding_email}
-                    onCheckedChange={(v) => set('send_onboarding_email', v)} />
-                </div>
-                <div className="flex items-center justify-between gap-4 rounded-lg bg-white p-3 border border-slate-200">
-                  <span className="text-sm font-medium text-slate-700">{t('employees.onboarding')}</span>
-                  <Select
-                    value={form.onboarding_status}
-                    onValueChange={(v) => set('onboarding_status', v)}>
-                    <SelectTrigger className="w-32 h-8 text-xs">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="pending">{t('employees.statusPending')}</SelectItem>
-                      <SelectItem value="in_progress">{t('employees.statusInProgress')}</SelectItem>
-                      <SelectItem
-                        value="completed"
-                        disabled={!onboardingSubmitted && form.onboarding_status !== 'completed'}>
-                        {t('employees.statusCompleted')}
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+              <div className="flex items-center justify-between gap-4 pt-2 border-t border-border/50">
+                <span className="text-sm text-foreground">{t('employees.onboarding')}</span>
+                <Select
+                  value={form.onboarding_status}
+                  onValueChange={(v) => set('onboarding_status', v)}>
+                  <SelectTrigger className="w-40 h-8 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="pending">{t('employees.statusPending')}</SelectItem>
+                    <SelectItem value="in_progress">{t('employees.statusInProgress')}</SelectItem>
+                    <SelectItem
+                      value="completed"
+                      disabled={!onboardingSubmitted && form.onboarding_status !== 'completed'}>
+                      {t('employees.statusCompleted')}
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
-              {!onboardingSubmitted && (
-                <p className="text-xs text-muted-foreground pl-1">{t('employees.statusLocked')}</p>
-              )}
             </div>
           )}
         </div>
