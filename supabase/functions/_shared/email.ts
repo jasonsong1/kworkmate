@@ -8,7 +8,7 @@ export const secrets = {
 };
 
 const RESEND_ENDPOINT = 'https://api.resend.com/emails';
-const RESEND_FROM = (typeof Deno !== 'undefined' ? Deno.env.get('RESEND_FROM') : '') || 'K-Workmate <onboarding@resend.dev>';
+const RESEND_FROM = (typeof Deno !== 'undefined' ? Deno.env.get('RESEND_FROM') : '') || 'K-Workmate <noreply@kworkmate.com>';
 
 function plainText(value) {
   return String(value || '')
