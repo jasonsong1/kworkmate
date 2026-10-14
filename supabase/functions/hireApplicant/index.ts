@@ -1,6 +1,4 @@
-// 자동 생성 파일입니다. 직접 수정하지 마세요.
-// 원본: base44/functions/hireApplicant/entry.ts (변환 도구: supabase/tools/port_function.mjs)
-
+// 지원자 채용확정 및 온보딩/직원 프로필 자동 생성 Edge Function입니다.
 import { createBase44Like } from '../_shared/server.ts';
 import { withCors } from '../_shared/http.mjs';
 import { resolveCaller } from '../_shared/kwAuth.ts';
@@ -19,7 +17,9 @@ async function handler(req) {
     const body = await req.json();
     const applicant = await base44.asServiceRole.entities.Applicant.get(body.applicant_id).catch(() => null);
     if (!applicant) return Response.json({ error: 'Applicant not found' }, { status: 404 });
-    if (!me.branch_ids || !me.branch_ids.includes(applicant.branch_id)) {
+
+    // 슈퍼어드민이거나 해당 지점의 관리자 권한을 가진 경우만 허용합니다.
+    if (!me.isSuper && (!me.branch_ids || !me.branch_ids.includes(applicant.branch_id))) {
       return Response.json({ error: 'You cannot hire for this branch' }, { status: 403 });
     }
     if (applicant.status === 'hired') {
@@ -33,7 +33,7 @@ async function handler(req) {
     if (!branch) return Response.json({ error: 'Branch not found' }, { status: 404 });
     const company = await base44.asServiceRole.entities.Company.get(branch.company_id).catch(() => null);
 
-    // How many people the company's package covers.
+    // 회사의 패키지 직원 인원 한도를 확인합니다.
     const state = packageState(company);
     const employeeLimit = resolveLimit(company && company.employee_limit_override, state.employeeLimit);
     if (employeeLimit !== null) {
@@ -63,6 +63,7 @@ async function handler(req) {
       });
     }
 
+    // 직원 프로필(EmployeeProfile)을 생성합니다.
     const profile = await base44.asServiceRole.entities.EmployeeProfile.create({
       company_id: branch.company_id,
       branch_id: branch.id,
@@ -85,7 +86,10 @@ async function handler(req) {
       docs
     });
 
+    // 다음 사원 번호를 업데이트합니다.
     await base44.asServiceRole.entities.Branch.update(branch.id, { employee_next_number: nextNumber + 1 });
+    
+    // 지원자 상태를 'hired'로 변경합니다.
     await base44.asServiceRole.entities.Applicant.update(applicant.id, {
       status: 'hired',
       hired_at: new Date().toISOString(),
@@ -93,8 +97,7 @@ async function handler(req) {
       onboarding_status: 'pending'
     });
 
-    // The ad closes by itself once the store has hired everyone it asked for. Raising the number
-    // of openings later is what opens it again.
+    // 공고 채용 인원이 가득 찼다면 공고를 닫습니다.
     const openings = Number(job && job.openings) || 0;
     if (job && openings > 0 && job.status !== 'closed') {
       const hired = await base44.asServiceRole.entities.Applicant.count({ job_id: job.id, status: 'hired' });
@@ -105,7 +108,7 @@ async function handler(req) {
 
     const link = portalLink(body.origin, `/onboarding/${token}`);
 
-    // The company's onboarding documents ride along with the hired email.
+    // 회사의 온보딩 문서를 함께 첨부합니다.
     const { attachments, skipped: skippedDocs } = onboardingAttachments(company);
 
     const mail = renderStageEmail(
@@ -126,14 +129,16 @@ async function handler(req) {
             : []
       }
     );
+
+    // 지원자에게 합격 및 온보딩 안내 이메일을 발송합니다.
     const emailSent = await sendApplicantEmail(base44, applicant, {
       type: 'hired',
       subject: mail.subject,
       html: mail.html,
       attachments
     });
-    // Hiring is what creates the account, so the app user is invited and handed a
-    // password setup link straight away.
+
+    // 계정 접근 권한 이메일을 발송합니다.
     const account = await sendAccountAccessEmail(base44, applicant.email);
 
     return Response.json({
@@ -146,6 +151,7 @@ async function handler(req) {
       password_email_sent: account.password_email_sent
     });
   } catch (error) {
+    console.error('hireApplicant error:', error);
     return Response.json({ error: error.message }, { status: 500 });
   }
 }

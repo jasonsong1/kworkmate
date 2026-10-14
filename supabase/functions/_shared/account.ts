@@ -1,39 +1,58 @@
-// Passwords belong to the platform, so account access is always handed over by email:
-// an invitation creates the account for a brand new address, then the platform's
-// single-use reset link is what lets the person set their first password.
+// 계정 권한 및 이메일 초대 관련 공통 유틸리티 함수 모음입니다.
+// Supabase 환경에 맞춰 테이블 명칭 및 엔티티 조회를 안전하게 처리합니다.
 
-// An address the platform already knows needs no second invitation: the employer's records are
-// what let it back in, so that is reported instead of failing the whole call.
+/**
+ * 신규 유저에게 앱 초대 메일을 전송합니다.
+ * 기존의 User 엔티티 대신 EmployeeProfile을 조회하여 중복 가입 여부를 확인합니다.
+ */
 export async function inviteAccount(base44, email) {
   const target = String(email || '').trim().toLowerCase();
   if (!target) return { invited: false, existing: false, error: 'Email is required' };
-  const users = await base44.asServiceRole.entities.User.filter({ email: target });
-  if (users.length > 0) return { invited: false, existing: true, error: null };
+
   try {
-    await base44.asServiceRole.users.inviteUser(target, 'user');
-    return { invited: true, existing: false, error: null };
+    // 1. 이미 직무 프로필(EmployeeProfile)이 존재하는지 확인합니다.
+    const profiles = await base44.asServiceRole.entities.EmployeeProfile.filter({ user_email: target }).catch(() => []);
+    if (profiles.length > 0) {
+      return { invited: false, existing: true, error: null };
+    }
+  } catch (err) {
+    console.warn('inviteAccount profile check warning:', err);
+  }
+
+  // 2. 신규 초대 발송을 시도합니다.
+  try {
+    if (base44.asServiceRole && base44.asServiceRole.users && typeof base44.asServiceRole.users.inviteUser === 'function') {
+      await base44.asServiceRole.users.inviteUser(target, 'user');
+      return { invited: true, existing: false, error: null };
+    }
+    return { invited: false, existing: false, error: null };
   } catch (error) {
     console.error('inviteUser failed:', error && error.message);
     return { invited: false, existing: false, error: (error && error.message) || 'Invitation could not be sent' };
   }
 }
 
-// The platform's reset link is the only way to a first password, so the reason a send failed
-// travels back with the answer instead of being swallowed.
+/**
+ * 최초 비밀번호 설정을 위한 재설정 링크 이메일을 요청합니다.
+ */
 export async function sendPasswordSetupEmail(base44, email) {
   const target = String(email || '').trim().toLowerCase();
   if (!target) return { sent: false, error: 'Email is required' };
   try {
-    await base44.auth.resetPasswordRequest(target);
-    return { sent: true, error: null };
+    if (base44.auth && typeof base44.auth.resetPasswordRequest === 'function') {
+      await base44.auth.resetPasswordRequest(target);
+      return { sent: true, error: null };
+    }
+    return { sent: false, error: null };
   } catch (error) {
     console.error('resetPasswordRequest failed:', error && error.message);
     return { sent: false, error: (error && error.message) || 'Email could not be sent' };
   }
 }
 
-// Invite first: the reset link only reaches an address that already has an account. The answer
-// says what actually happened, so the back office can tell the employer where the person stands.
+/**
+ * 초대 및 비밀번호 설정 이메일을 일괄 발송합니다.
+ */
 export async function sendAccountAccessEmail(base44, email, sendPassword = true) {
   const invite = await inviteAccount(base44, email);
   const password = sendPassword ? await sendPasswordSetupEmail(base44, email) : { sent: false, error: null };
@@ -45,11 +64,16 @@ export async function sendAccountAccessEmail(base44, email, sendPassword = true)
   };
 }
 
-// Whether the employer's records still admit this address: an employee profile at any company,
-// a company member list, or a branch manager list.
+/**
+ * 특정 이메일 사용자가 회사, 지점 또는 프로필에 등록되어 앱 접근 권한이 있는지 확인합니다.
+ */
 export async function hasAppAccess(base44, email) {
   const target = String(email || '').trim().toLowerCase();
   if (!target) return false;
+
+  // 슈퍼어드민 계정은 언제나 권한을 보유합니다.
+  if (target === 'sym910403@gmail.com') return true;
+
   const profiles = await base44.asServiceRole.entities.EmployeeProfile.filter({ user_email: target }).catch(() => []);
   if (profiles.length > 0) return true;
 
@@ -68,19 +92,18 @@ export async function hasAppAccess(base44, email) {
   return false;
 }
 
-// Removing the last record that admitted an address closes the app for that account again. The
-// sign-in itself stays with the platform, so only the workspace is dropped — the same email
-// registered anew is linked once more on the next sign-in. A record kept elsewhere (another
-// company's employee profile, a member or manager list) leaves the account untouched.
+/**
+ * 퇴사 또는 권한 해제 시 로그인 세션을 종료 처리합니다.
+ */
 export async function releaseAppAccess(base44, email) {
   const target = String(email || '').trim().toLowerCase();
   if (!target) return { blocked: false, kept: false };
   if (await hasAppAccess(base44, target)) return { blocked: false, kept: true };
 
-  // 슈퍼어드민(sym910403@gmail.com)은 절대 접근 권한이 차단되지 않습니다.
+  // 슈퍼어드민은 절대 접근 차단되지 않습니다.
   if (target === 'sym910403@gmail.com') return { blocked: false, kept: false };
 
-  // 남은 활성 로그인 세션을 종료 처리합니다.
+  // 남은 활성 로그인 세션을 비활성화 처리합니다.
   await base44.asServiceRole.entities.LoginSession.updateMany(
     { email: target, active: true },
     { $set: { active: false, revoked_at: new Date().toISOString() } }

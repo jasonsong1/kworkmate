@@ -1,5 +1,9 @@
+// 면접 일정 및 슬롯을 관리하는 페이지입니다.
+// 매니저 1명이 전체 인터뷰를 진행하므로 슬롯은 전체(지점 공용) 기준으로 생성되며,
+// 특정 공고의 지원자가 예약하면 해당 슬롯이 마감되어 중복 예약이 방지됩니다.
+
 import React, { useCallback, useEffect, useState } from 'react';
-import { CalendarClock, Loader2, Plus, XCircle } from 'lucide-react';
+import { CalendarClock, Filter, Info, Loader2, Plus, XCircle } from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -14,6 +18,9 @@ import { useWorkspace } from '@/lib/WorkspaceContext';
 import { todayIso } from '@/lib/bh';
 import { base44 } from '@/api/base44Client';
 
+/**
+ * 시작 시간부터 종료 시간까지 간격(step 분) 단위로 슬롯 시간 배열을 계산합니다.
+ */
 function slotTimes(from, to, step) {
   const [fh, fm] = from.split(':').map(Number);
   const [th, tm] = to.split(':').map(Number);
@@ -32,13 +39,12 @@ export default function Interviews() {
   const { toast } = useToast();
 
   const [jobs, setJobs] = useState([]);
-  // The whole store's schedule is the default view; one ad can still be picked to narrow it.
+  // 'all'이면 전체 공용 슬롯 관리 모드, 특정 ID면 해당 공고 필터(Read-only) 모드입니다.
   const [jobId, setJobId] = useState('all');
   const [slots, setSlots] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [savingToggle, setSavingToggle] = useState(false);
-  // The switch is only a draft until Save is pressed: flipping it on its own stores nothing.
   const [rescheduleDraft, setRescheduleDraft] = useState(null);
   const [form, setForm] = useState({ date: todayIso(), from: '14:00', to: '17:00', step: 20 });
 
@@ -51,7 +57,6 @@ export default function Interviews() {
   const rescheduleValue = rescheduleDraft === null ? allowReschedule : rescheduleDraft;
   const rescheduleDirty = rescheduleDraft !== null && rescheduleDraft !== allowReschedule;
 
-  // A company that has just been reloaded is the truth again, so a half-made change is dropped.
   useEffect(() => {
     setRescheduleDraft(null);
   }, [company]);
@@ -68,7 +73,6 @@ export default function Interviews() {
     loadJobs();
   }, [loadJobs]);
 
-  // The store's whole interview schedule is shown at once: every job ad in one list.
   const loadSlots = useCallback(async () => {
     if (!activeBranch) {
       setSlots([]);
@@ -85,42 +89,58 @@ export default function Interviews() {
     loadSlots();
   }, [loadSlots]);
 
-  // The position a booked time belongs to, so a merged schedule still reads clearly.
+  // 부킹된 슬롯의 공고명 또는 직무를 반환합니다.
   const jobLabel = (slot) => {
+    if (!slot.job_id) return '';
     const job = jobs.find((item) => item.id === slot.job_id);
     return job ? job.position || job.title : '';
   };
 
+  /**
+   * 전체 기준으로 지점 공용 면접 슬롯을 생성합니다.
+   * 공고별이 아닌 매니저 1명의 통합 슬롯이므로 중복 시간을 배제하고 1개씩만 생성합니다.
+   */
   const generate = async () => {
-    if (!jobId || jobId === 'all' || !activeBranch) return;
+    if (!activeBranch) return;
     const times = slotTimes(form.from, form.to, Number(form.step) || 20);
     if (times.length === 0) {
-      toast({ title: 'End time must be after start time', variant: 'destructive' });
+      toast({ title: '종료 시간은 시작 시간 이후여야 합니다.', variant: 'destructive' });
       return;
     }
     setSaving(true);
-    const existing = slots.filter((s) => s.job_id === jobId && s.date === form.date).map((s) => s.start_time);
+    // 동일 날짜에 취소되지 않은 슬롯이 이미 있으면 중복 생성을 방지합니다.
+    const existing = slots
+      .filter((s) => s.date === form.date && s.status !== 'cancelled')
+      .map((s) => s.start_time);
+
     const rows = times
       .filter((start) => !existing.includes(start))
       .map((start) => ({
         company_id: activeBranch.company_id,
         branch_id: activeBranch.id,
-        job_id: jobId,
+        job_id: null, // 전체 기준 공용 슬롯으로 생성
         date: form.date,
         start_time: start,
         duration_min: Number(form.step) || 20,
         status: 'open'
       }));
-    if (rows.length > 0) await base44.entities.InterviewSlot.bulkCreate(rows);
+
+    if (rows.length > 0) {
+      await base44.entities.InterviewSlot.bulkCreate(rows);
+      toast({ title: `${rows.length}개의 통합 면접 슬롯이 생성되었습니다.` });
+    } else {
+      toast({ title: '선택하신 시간대에 이미 생성된 슬롯이 있습니다.', variant: 'default' });
+    }
     setSaving(false);
-    toast({ title: `${rows.length} interview slot(s) opened` });
     await loadSlots();
   };
 
+  /**
+   * 슬롯을 취소합니다. 이미 부킹한 지원자가 있다면 취소 메일 및 재예약 링크가 발송됩니다.
+   */
   const cancelSlot = async (slot) => {
     await base44.entities.InterviewSlot.update(slot.id, { status: 'cancelled' });
     if (slot.booked_by_applicant_id) {
-      // The applicant hears about it directly: the cancellation email carries a fresh booking link.
       const response = await base44.functions.invoke('notifyApplicant', {
         applicant_id: slot.booked_by_applicant_id,
         type: 'interview_cancelled',
@@ -134,11 +154,13 @@ export default function Interviews() {
         return;
       }
     }
-    toast({ title: 'Slot cancelled — the applicant has been emailed to rebook' });
+    toast({ title: '슬롯이 취소되었습니다. 예약자에게 재예약 안내 메일이 발송되었습니다.' });
     await loadSlots();
   };
 
-  // Only Save writes the setting; the switch on its own changes nothing.
+  /**
+   * 지원자의 일정 변경 허용 설정을 토글합니다.
+   */
   const toggleReschedule = async (value) => {
     if (!company) return;
     setSavingToggle(true);
@@ -149,21 +171,27 @@ export default function Interviews() {
     toast({ title: value ? t('interviews.rescheduleOn') : t('interviews.rescheduleOff') });
   };
 
-  // A cancelled time is handed back to the pool: the employer reopens it and the next applicant
-  // — the same person or someone else — can book it again.
+  /**
+   * 취소된 슬롯을 다시 오픈 상태로 복구합니다.
+   */
   const reopenSlot = async (slot) => {
     await base44.entities.InterviewSlot.update(slot.id, {
       status: 'open',
       booked_by_applicant_id: '',
       booked_by_name: '',
-      booked_at: ''
+      booked_at: '',
+      job_id: null
     });
     toast({ title: t('interviews.reopened') });
     await loadSlots();
   };
 
-  // '전체' shows every ad's times together; picking one ad shows only that ad's times.
-  const visible = jobId === 'all' ? slots : slots.filter((slot) => slot.job_id === jobId);
+  // '전체'일 때는 모든 슬롯을 보여주고,
+  // 공고별 필터일 때는 해당 공고로 부킹된 슬롯만 보여줍니다 (Read-only 모드).
+  const visible =
+    jobId === 'all'
+      ? slots
+      : slots.filter((slot) => slot.job_id === jobId);
 
   const grouped = visible.reduce((acc, slot) => {
     acc[slot.date] = acc[slot.date] || [];
@@ -171,27 +199,31 @@ export default function Interviews() {
     return acc;
   }, {});
 
+  const isFilterMode = jobId !== 'all';
+  const selectedJob = jobs.find((j) => j.id === jobId);
+
   return (
     <div>
       <PageHeader title={t('interviews.title')} subtitle={activeBranch ? activeBranch.name : t('interviews.subtitle')} />
 
       <div className="grid gap-6 lg:grid-cols-[340px_1fr]">
         <div className="space-y-6">
+          {/* 공고 선택 필터 카드 */}
           <Card>
-            <CardHeader>
+            <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-base">
-                <CalendarClock className="h-4 w-4" /> {t('interviews.open')}
+                <Filter className="h-4 w-4" /> 공고별 조회 필터
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div>
                 <Label>{t('interviews.job')}</Label>
                 <Select value={jobId} onValueChange={setJobId}>
-                  <SelectTrigger>
+                  <SelectTrigger className="mt-1">
                     <SelectValue placeholder={t('jobs.title')} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">{t('common.all')}</SelectItem>
+                    <SelectItem value="all">{t('common.all')} (전체 기준 관리)</SelectItem>
                     {jobs.map((j) => (
                       <SelectItem key={j.id} value={j.id}>
                         {j.title}
@@ -200,39 +232,67 @@ export default function Interviews() {
                   </SelectContent>
                 </Select>
               </div>
-              <div>
-                <Label>{t('common.date')}</Label>
-                <Input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label>{t('interviews.from')}</Label>
-                  <Input type="time" value={form.from} onChange={(e) => setForm({ ...form, from: e.target.value })} />
+
+              {isFilterMode ? (
+                <div className="rounded-md border border-sky-100 bg-sky-50/50 p-3 text-xs text-sky-800">
+                  <div className="flex items-center gap-1.5 font-medium">
+                    <Info className="h-4 w-4 text-sky-600" />
+                    <span>공고별 조회 모드 (Read-only)</span>
+                  </div>
+                  <p className="mt-1 text-slate-600">
+                    현재 <b>'{selectedJob ? selectedJob.title : ''}'</b> 공고에 부킹된 지원자 현황만 읽기 전용으로 표시됩니다.
+                  </p>
+                  <p className="mt-1 text-slate-500">
+                    새로운 면접 슬롯 생성 및 일정 관리는 상단 필터를 <b>'전체'</b>로 선택하시면 가능합니다.
+                  </p>
                 </div>
-                <div>
-                  <Label>{t('interviews.to')}</Label>
-                  <Input type="time" value={form.to} onChange={(e) => setForm({ ...form, to: e.target.value })} />
-                </div>
-              </div>
-              <div>
-                <Label>{t('interviews.slotLength')}</Label>
-                <Input
-                  type="number"
-                  value={form.step}
-                  onChange={(e) => setForm({ ...form, step: e.target.value })}
-                />
-              </div>
-              <Button className="w-full" onClick={generate} disabled={saving || jobId === 'all'}>
-                {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
-                {t('interviews.generate')}
-              </Button>
-              {jobId === 'all' && <p className="text-xs text-muted-foreground">{t('interviews.pickJob')}</p>}
-              <p className="text-xs text-muted-foreground">
-                Applicants booking the same time are resolved first-come-first-served — only one booking is accepted per slot.
-              </p>
+              ) : null}
             </CardContent>
           </Card>
 
+          {/* 슬롯 생성 카드 (전체 기준일 때만 표시, 공고별 필터 시에는 숨김) */}
+          {!isFilterMode ? (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <CalendarClock className="h-4 w-4" /> {t('interviews.open')} (전체 공용)
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <Label>{t('common.date')}</Label>
+                  <Input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label>{t('interviews.from')}</Label>
+                    <Input type="time" value={form.from} onChange={(e) => setForm({ ...form, from: e.target.value })} />
+                  </div>
+                  <div>
+                    <Label>{t('interviews.to')}</Label>
+                    <Input type="time" value={form.to} onChange={(e) => setForm({ ...form, to: e.target.value })} />
+                  </div>
+                </div>
+                <div>
+                  <Label>{t('interviews.slotLength')}</Label>
+                  <Input
+                    type="number"
+                    value={form.step}
+                    onChange={(e) => setForm({ ...form, step: e.target.value })}
+                  />
+                </div>
+                <Button className="w-full" onClick={generate} disabled={saving}>
+                  {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
+                  전체 공용 슬롯 생성
+                </Button>
+                <p className="text-xs text-muted-foreground">
+                  지점 전체 기준 1개의 공용 슬롯으로 열리며, 어느 공고에서든 한 지원자가 부킹하면 해당 시간은 다른 공고에서도 자동 마감됩니다.
+                </p>
+              </CardContent>
+            </Card>
+          ) : null}
+
+          {/* 일정 재조율 허용 토글 카드 */}
           <Card>
             <CardContent className="flex items-start justify-between gap-4 pt-6">
               <div>
@@ -256,7 +316,17 @@ export default function Interviews() {
           </Card>
         </div>
 
+        {/* 오른쪽 슬롯 목록 영역 */}
         <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-slate-700">
+              {isFilterMode ? `'${selectedJob?.title || ''}' 예약 현황` : '전체 면접 슬롯 및 예약 현황'}
+            </h3>
+            <span className="text-xs text-muted-foreground">
+              총 {visible.length}개 슬롯 {isFilterMode && '(이 공고 예약자)'}
+            </span>
+          </div>
+
           {loading ? (
             <p className="py-10 text-center text-sm text-muted-foreground">
               <Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin" />
@@ -265,7 +335,9 @@ export default function Interviews() {
           ) : Object.keys(grouped).length === 0 ? (
             <Card>
               <CardContent className="p-10 text-center text-sm text-muted-foreground">
-                {t('common.none')}
+                {isFilterMode
+                  ? '이 공고로 예약된 면접자가 아직 없습니다.'
+                  : '생성된 면접 슬롯이 없습니다. 왼쪽 폼에서 슬롯을 생성해 주세요.'}
               </CardContent>
             </Card>
           ) : (
@@ -299,15 +371,19 @@ export default function Interviews() {
                               {jobLabel(slot) ? `${slot.booked_by_name} · ${jobLabel(slot)}` : slot.booked_by_name}
                             </Badge>
                           ) : slot.status === 'cancelled' ? (
-                            <button type="button" title={t('interviews.reopen')} onClick={() => reopenSlot(slot)}>
-                              <Badge variant="secondary" className="cursor-pointer hover:bg-accent">
-                                {t('interviews.cancelled')}
-                              </Badge>
-                            </button>
+                            !isFilterMode ? (
+                              <button type="button" title={t('interviews.reopen')} onClick={() => reopenSlot(slot)}>
+                                <Badge variant="secondary" className="cursor-pointer hover:bg-accent">
+                                  {t('interviews.cancelled')}
+                                </Badge>
+                              </button>
+                            ) : (
+                              <Badge variant="secondary">{t('interviews.cancelled')}</Badge>
+                            )
                           ) : (
                             <Badge variant="outline">{t('interviews.slots')}</Badge>
                           )}
-                          {slot.status !== 'cancelled' && (
+                          {!isFilterMode && slot.status !== 'cancelled' && (
                             <button onClick={() => cancelSlot(slot)} title={t('interviews.cancel')}>
                               <XCircle className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
                             </button>

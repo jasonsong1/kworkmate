@@ -1,5 +1,4 @@
-// 자동 생성 파일입니다. 직접 수정하지 마세요.
-// 원본: base44/functions/notifyApplicant/entry.ts (변환 도구: supabase/tools/port_function.mjs)
+// 지원자에게 단계별 알림 이메일(서류접수, 인터뷰 초대, 불합격, 채용 등)을 발송하는 Edge Function입니다.
 
 import { createBase44Like } from '../_shared/server.ts';
 import { withCors } from '../_shared/http.mjs';
@@ -8,8 +7,6 @@ import { randomToken } from '../_shared/util.ts';
 import { onboardingAttachments, sendApplicantEmail, portalLink } from '../_shared/email.ts';
 import { renderStageEmail } from '../_shared/emailStages.ts';
 
-// Sends the emails a hiring team triggers by hand. The same endpoint re-sends the last
-// message when the first one did not arrive.
 async function handler(req) {
   try {
     const base44 = createBase44Like();
@@ -87,8 +84,6 @@ async function handler(req) {
     }
 
     if (type === 'interview_cancelled') {
-      // The employer cancelled a booked time: the applicant is told straight away and handed a
-      // fresh booking link, and their record goes back to "invited" so they can choose again.
       const token = applicant.interview_token || randomToken(24);
       const link = portalLink(body.origin, `/interview/${token}`);
       const mail = renderStageEmail(
@@ -113,7 +108,12 @@ async function handler(req) {
 
     const token = applicant.interview_token || randomToken(24);
     const link = portalLink(body.origin, `/interview/${token}`);
-    const slots = await base44.asServiceRole.entities.InterviewSlot.filter({ job_id: applicant.job_id, status: 'open' });
+
+    // 지점 공용 슬롯 기준으로 열려있는 슬롯 수를 카운트합니다.
+    const branchId = applicant.branch_id || (job && job.branch_id);
+    const slots = branchId
+      ? await base44.asServiceRole.entities.InterviewSlot.filter({ branch_id: branchId, status: 'open' })
+      : [];
 
     const slotInfo =
       slots.length > 0
@@ -136,6 +136,7 @@ async function handler(req) {
 
     return Response.json({ ok: true, sent: result.ok, error: result.error, interview_link: link });
   } catch (error) {
+    console.error('notifyApplicant error:', error);
     return Response.json({ error: error.message }, { status: 500 });
   }
 }

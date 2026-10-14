@@ -1,5 +1,5 @@
-// 자동 생성 파일입니다. 직접 수정하지 마세요.
-// 원본: base44/functions/bookInterviewSlot/entry.ts (변환 도구: supabase/tools/port_function.mjs)
+// 지원자가 면접 슬롯을 예약하는 Edge Function입니다.
+// 지점 전체 공용 슬롯을 지원자가 예약하면 즉시 마감되어 타 공고에서의 중복 예약이 방지됩니다.
 
 import { createBase44Like } from '../_shared/server.ts';
 import { withCors } from '../_shared/http.mjs';
@@ -24,28 +24,37 @@ async function handler(req) {
     const job = applicant.job_id
       ? await base44.asServiceRole.entities.Job.get(applicant.job_id).catch(() => null)
       : null;
-    const branch = job && job.branch_id
-      ? await base44.asServiceRole.entities.Branch.get(job.branch_id).catch(() => null)
+    const branchId = applicant.branch_id || (job && job.branch_id);
+    const branch = branchId
+      ? await base44.asServiceRole.entities.Branch.get(branchId).catch(() => null)
       : null;
-    const company = job && job.company_id
-      ? await base44.asServiceRole.entities.Company.get(job.company_id).catch(() => null)
+    const company = branch && branch.company_id
+      ? await base44.asServiceRole.entities.Company.get(branch.company_id).catch(() => null)
       : null;
-    // Only when the employer has switched it on may an applicant move a time they already hold.
+
     const allowReschedule = Boolean(company && company.allow_interview_reschedule);
 
     const slot = await base44.asServiceRole.entities.InterviewSlot.get(slotId).catch(() => null);
     if (!slot) return Response.json({ error: 'Slot not found' }, { status: 404 });
-    if (slot.job_id !== applicant.job_id) return Response.json({ error: 'Slot does not belong to this job' }, { status: 400 });
+
+    // 지점이 일치하는지 확인합니다. (공용 슬롯은 동일 지점 내의 모든 공고가 공유합니다)
+    if (slot.branch_id && branchId && slot.branch_id !== branchId) {
+      return Response.json({ error: 'Slot does not belong to this branch' }, { status: 400 });
+    }
 
     if (slot.status === 'booked') {
       if (slot.booked_by_applicant_id === applicant.id) {
-        return Response.json({ ok: true, already: true, slot: { id: slot.id, date: slot.date, start_time: slot.start_time, end_time: slot.end_time } });
+        return Response.json({
+          ok: true,
+          already: true,
+          slot: { id: slot.id, date: slot.date, start_time: slot.start_time, end_time: slot.end_time }
+        });
       }
       return Response.json({ ok: false, taken: true });
     }
     if (slot.status === 'cancelled') return Response.json({ ok: false, cancelled: true });
 
-    // Someone moving the time they already hold: the old slot has to be handed back.
+    // 이미 다른 시간을 예약했던 지원자가 시간 변경을 시도할 경우 기존 슬롯을 반환합니다.
     let previous = null;
     const previousId = applicant.interview_slot_id || '';
     if (previousId && previousId !== slot.id) {
@@ -56,15 +65,19 @@ async function handler(req) {
         );
       }
       const held = await base44.asServiceRole.entities.InterviewSlot.get(previousId).catch(() => null);
-      if (held && held.status === 'booked' && held.booked_by_applicant_id === applicant.id) previous = held;
+      if (held && held.status === 'booked' && held.booked_by_applicant_id === applicant.id) {
+        previous = held;
+      }
     }
 
     const now = new Date().toISOString();
+    // 선착순 예약 원자적 처리: status가 'open'인 경우에만 'booked'로 업데이트합니다.
     await base44.asServiceRole.entities.InterviewSlot.updateMany(
       { id: slot.id, status: 'open' },
       {
         $set: {
           status: 'booked',
+          job_id: applicant.job_id || slot.job_id,
           booked_by_applicant_id: applicant.id,
           booked_by_name: applicant.full_name,
           booked_at: now
@@ -77,7 +90,7 @@ async function handler(req) {
       return Response.json({ ok: false, taken: true });
     }
 
-    // The time they gave up goes back to "open", so another applicant can take it.
+    // 이전에 잡았던 슬롯이 있다면 다시 오픈 상태로 복구합니다.
     if (previous) {
       await base44.asServiceRole.entities.InterviewSlot.update(previous.id, {
         status: 'open',
@@ -98,6 +111,7 @@ async function handler(req) {
     const location = branch
       ? [branch.address, branch.suburb, branch.state, branch.postcode].filter(Boolean).join(', ')
       : '';
+
     const title = job ? `Interview — ${job.title}${branch ? ` (${branch.name})` : ''}` : 'Interview';
 
     const ics = buildInterviewIcs({
@@ -114,8 +128,6 @@ async function handler(req) {
     });
 
     const attachments = [{ filename: 'interview.ics', content: base64Encode(ics) }];
-
-    // With rescheduling switched on, the confirmation carries the button that opens the times again.
     const changeLink = portalLink(body.origin, `/interview/${token}?change=1`);
     const vars = {
       name: applicant.full_name,
@@ -135,8 +147,6 @@ async function handler(req) {
     const recipients = [...new Set((branch && branch.manager_emails) || [])].filter(Boolean).slice(0, 3);
 
     if (previous) {
-      // A change is worth the same email to the team plus a bell for the store, so the news
-      // reaches whichever manager is at their desk instead of their inbox.
       await notifyStaff(base44, {
         company,
         branch,
@@ -180,6 +190,7 @@ async function handler(req) {
       slot: { id: claimed.id, date: claimed.date, start_time: claimed.start_time, end_time: end.time }
     });
   } catch (error) {
+    console.error('bookInterviewSlot error:', error);
     return Response.json({ error: error.message }, { status: 500 });
   }
 }

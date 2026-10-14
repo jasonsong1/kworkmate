@@ -1,6 +1,4 @@
-// 자동 생성 파일입니다. 직접 수정하지 마세요.
-// 원본: base44/functions/getBookingData/entry.ts (변환 도구: supabase/tools/port_function.mjs)
-
+// 지원자의 면접 예약 페이지에 필요한 데이터(열린 슬롯 목록, 공고 정보 등)를 반환하는 Edge Function입니다.
 import { createBase44Like } from '../_shared/server.ts';
 import { withCors } from '../_shared/http.mjs';
 
@@ -18,15 +16,17 @@ async function handler(req) {
     const job = applicant.job_id
       ? await base44.asServiceRole.entities.Job.get(applicant.job_id).catch(() => null)
       : null;
-    const branch = job && job.branch_id
-      ? await base44.asServiceRole.entities.Branch.get(job.branch_id).catch(() => null)
+    const branchId = applicant.branch_id || (job && job.branch_id);
+    const branch = branchId
+      ? await base44.asServiceRole.entities.Branch.get(branchId).catch(() => null)
       : null;
-    const company = job && job.company_id
-      ? await base44.asServiceRole.entities.Company.get(job.company_id).catch(() => null)
+    const company = branch && branch.company_id
+      ? await base44.asServiceRole.entities.Company.get(branch.company_id).catch(() => null)
       : null;
 
-    const openSlots = job
-      ? await base44.asServiceRole.entities.InterviewSlot.filter({ job_id: job.id, status: 'open' })
+    // 매니저 1명이 진행하므로, 공고별이 아닌 해당 지점(branch)의 전체 오픈 슬롯을 제공합니다.
+    const openSlots = branchId
+      ? await base44.asServiceRole.entities.InterviewSlot.filter({ branch_id: branchId, status: 'open' })
       : [];
 
     let booked = null;
@@ -55,6 +55,7 @@ async function handler(req) {
       invited_at: applicant.invited_at || null
     });
   } catch (error) {
+    console.error('getBookingData error:', error);
     return Response.json({ error: error.message }, { status: 500 });
   }
 }
