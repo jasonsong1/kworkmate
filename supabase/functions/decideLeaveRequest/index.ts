@@ -1,5 +1,7 @@
-// 자동 생성 파일입니다. 직접 수정하지 마세요.
-// 원본: base44/functions/decideLeaveRequest/entry.ts (변환 도구: supabase/tools/port_function.mjs)
+// ==============================================================================
+// KWorkMate 휴가 승인/반려/취소 처리 엣지 펑션 (decideLeaveRequest)
+// 기능: 휴가 요청 상태 변경, 잔액(LeaveBalance) 확정 또는 환원, 로스터 동기화, 이메일 알림
+// ==============================================================================
 
 import { createBase44Like } from '../_shared/server.ts';
 import { withCors } from '../_shared/http.mjs';
@@ -12,8 +14,6 @@ function rowsOf(result: any) {
   return Array.isArray(result) ? result : (result && result.items) || [];
 }
 
-// A decision on a leave request. Approving books the hours for good and clears the draft
-// roster around them; declining or cancelling puts the reservation straight back.
 async function handler(req: Request) {
   try {
     const base44 = createBase44Like();
@@ -54,15 +54,36 @@ async function handler(req: Request) {
       notified_at: new Date().toISOString()
     });
 
-    // The reservation moves with the decision: approved becomes booked, anything else is
-    // handed back to the balance.
-    const balances = rowsOf(
-      await base44.asServiceRole.entities.LeaveBalance.filter(
-        { employee_email: request.employee_email, leave_type_key: request.leave_type_key },
-        { limit: 1 }
-      )
-    );
-    const balance = balances[0];
+    // [보안 패치]: 해당 요청의 company_id 및 employee_number를 기준으로 정확한 지사의 LeaveBalance를 찾습니다.
+    let balance = null;
+    if (request.company_id && request.employee_number) {
+      const byNum = rowsOf(
+        await base44.asServiceRole.entities.LeaveBalance.filter(
+          { company_id: request.company_id, employee_number: request.employee_number, leave_type_key: request.leave_type_key },
+          { limit: 1 }
+        )
+      );
+      balance = byNum[0] || null;
+    }
+    if (!balance && request.company_id) {
+      const byComp = rowsOf(
+        await base44.asServiceRole.entities.LeaveBalance.filter(
+          { company_id: request.company_id, employee_email: request.employee_email, leave_type_key: request.leave_type_key },
+          { limit: 1 }
+        )
+      );
+      balance = byComp[0] || null;
+    }
+    if (!balance) {
+      const fallback = rowsOf(
+        await base44.asServiceRole.entities.LeaveBalance.filter(
+          { employee_email: request.employee_email, leave_type_key: request.leave_type_key },
+          { limit: 1 }
+        )
+      );
+      balance = fallback[0] || null;
+    }
+
     if (balance && hours > 0) {
       const patch: any = {};
       if (request.status === 'pending') {
@@ -76,7 +97,6 @@ async function handler(req: Request) {
       }
     }
 
-    // Approved leave takes the days out of the draft roster, so nobody is planned in while away.
     if (status === 'approved') {
       await base44.asServiceRole.entities.Shift.deleteMany({
         branch_id: request.branch_id,

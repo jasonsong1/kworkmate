@@ -49,9 +49,22 @@ async function handler(req: Request) {
     const companyId = (branch && branch.company_id) || me.company_id || '';
     const company = companyId ? await base44.asServiceRole.entities.Company.get(companyId).catch(() => null) : null;
 
-    const caller = rowsOf(
-      await base44.asServiceRole.entities.EmployeeProfile.filter({ user_email: me.email }, { limit: 1 }).catch(() => [])
-    )[0];
+    let caller = null;
+    const targetCallerId = me.profile_id || me.id;
+    if (targetCallerId) {
+      caller = await base44.asServiceRole.entities.EmployeeProfile.get(targetCallerId).catch(() => null);
+    }
+    if (!caller && companyId) {
+      const byComp = rowsOf(
+        await base44.asServiceRole.entities.EmployeeProfile.filter({ user_email: me.email, company_id: companyId }, { limit: 1 }).catch(() => [])
+      );
+      caller = byComp[0] || null;
+    }
+    if (!caller) {
+      caller = rowsOf(
+        await base44.asServiceRole.entities.EmployeeProfile.filter({ user_email: me.email }, { limit: 1 }).catch(() => [])
+      )[0];
+    }
 
     // 휴가 정책 설정 변경 권한
     const runsStore =
@@ -76,9 +89,22 @@ async function handler(req: Request) {
         return email !== 'sym910403@gmail.com' && person.app_role !== 'super_admin';
       });
     } else {
-      const profile = rowsOf(
-        await base44.asServiceRole.entities.EmployeeProfile.filter({ user_email: me.email }, { limit: 1 })
-      )[0];
+      let profile = null;
+      const targetProfileId = me.profile_id || me.id;
+      if (targetProfileId) {
+        profile = await base44.asServiceRole.entities.EmployeeProfile.get(targetProfileId).catch(() => null);
+      }
+      if (!profile && companyId) {
+        const byComp = rowsOf(
+          await base44.asServiceRole.entities.EmployeeProfile.filter({ user_email: me.email, company_id: companyId }, { limit: 1 })
+        );
+        profile = byComp[0] || null;
+      }
+      if (!profile) {
+        profile = rowsOf(
+          await base44.asServiceRole.entities.EmployeeProfile.filter({ user_email: me.email }, { limit: 1 })
+        )[0];
+      }
       if (profile) staff = [profile];
     }
 

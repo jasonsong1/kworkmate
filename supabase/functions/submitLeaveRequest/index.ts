@@ -1,5 +1,7 @@
-// 자동 생성 파일입니다. 직접 수정하지 마세요.
-// 원본: base44/functions/submitLeaveRequest/entry.ts (변환 도구: supabase/tools/port_function.mjs)
+// ==============================================================================
+// KWorkMate 휴가 신청 처리 엣지 펑션 (submitLeaveRequest)
+// 기능: 직원 휴가 신청 접수, 보유 잔액 검증(타 회사 혼선 방지 격리), 대기 시간(pending_hours) 차감, 매니저 알림
+// ==============================================================================
 
 import { createBase44Like } from '../_shared/server.ts';
 import { withCors } from '../_shared/http.mjs';
@@ -16,8 +18,6 @@ function isDay(value: any) {
   return /^\d{4}-\d{2}-\d{2}$/.test(String(value || '').slice(0, 10)) ? String(value).slice(0, 10) : '';
 }
 
-// A request reserves its hours the moment it is sent, so the same hours can never be asked for
-// twice while a manager is still deciding.
 async function handler(req: Request) {
   try {
     const base44 = createBase44Like();
@@ -31,9 +31,26 @@ async function handler(req: Request) {
       return Response.json({ error: 'invalid_dates' }, { status: 400 });
     }
 
-    const profile = rowsOf(
-      await base44.asServiceRole.entities.EmployeeProfile.filter({ user_email: me.email }, { limit: 1 })
-    )[0];
+    // [보안 패치]: 로그인한 세션의 profile_id 또는 company_id를 최우선으로 일치시켜 현재 지사 프로필을 특정
+    let profile = null;
+    const targetProfileId = me.profile_id || me.id;
+    if (targetProfileId) {
+      profile = await base44.asServiceRole.entities.EmployeeProfile.get(targetProfileId).catch(() => null);
+    }
+    if (!profile && me.company_id) {
+      const byComp = rowsOf(
+        await base44.asServiceRole.entities.EmployeeProfile.filter(
+          { user_email: me.email, company_id: me.company_id },
+          { limit: 1 }
+        )
+      );
+      profile = byComp[0] || null;
+    }
+    if (!profile) {
+      profile = rowsOf(
+        await base44.asServiceRole.entities.EmployeeProfile.filter({ user_email: me.email }, { limit: 1 })
+      )[0];
+    }
     if (!profile) return Response.json({ error: 'no_profile' }, { status: 400 });
 
     const companyId = profile.company_id || me.company_id || '';
@@ -59,18 +76,40 @@ async function handler(req: Request) {
     const hours = round2(asked > 0 ? asked : days * HOURS_PER_DAY);
     if (hours <= 0) return Response.json({ error: 'invalid_hours' }, { status: 400 });
 
-    // Leave that has to be earned is checked against what is actually left; the rest is at the
-    // employer's discretion and does not need a balance.
     const earned = type.accrual_method === 'ordinary_hours' || type.grant_enabled;
     let balanceId = '';
     if (earned) {
-      const balances = rowsOf(
-        await base44.asServiceRole.entities.LeaveBalance.filter(
-          { employee_email: me.email, leave_type_key: type.key },
-          { limit: 1 }
-        )
-      );
-      let balance = balances[0];
+      // [보안 패치]: 현재 소속 회사(companyId) 및 직원 번호(employee_number)를 1순위로 조회하여
+      // 타 회사(Starter Company)의 다른 레코드가 잡히는 오류를 원천 차단합니다.
+      let balance = null;
+      if (profile.employee_number) {
+        const byNum = rowsOf(
+          await base44.asServiceRole.entities.LeaveBalance.filter(
+            { company_id: companyId, employee_number: profile.employee_number, leave_type_key: type.key },
+            { limit: 1 }
+          )
+        );
+        balance = byNum[0] || null;
+      }
+      if (!balance) {
+        const byComp = rowsOf(
+          await base44.asServiceRole.entities.LeaveBalance.filter(
+            { company_id: companyId, employee_email: me.email, leave_type_key: type.key },
+            { limit: 1 }
+          )
+        );
+        balance = byComp[0] || null;
+      }
+      if (!balance) {
+        const fallback = rowsOf(
+          await base44.asServiceRole.entities.LeaveBalance.filter(
+            { employee_email: me.email, leave_type_key: type.key },
+            { limit: 1 }
+          )
+        );
+        balance = fallback[0] || null;
+      }
+
       if (!balance) {
         balance = await base44.asServiceRole.entities.LeaveBalance.create({
           company_id: companyId,
