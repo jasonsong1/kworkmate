@@ -346,8 +346,10 @@ export async function kwEntityOp(entity, op, args = []) {
     default:
       throw new Error(`Unsupported entity operation: ${op}`);
   }
-  const result = await kwCall('kwData', payload);
-  return result && result.data !== undefined ? result.data : result;
+  const res = await kwCall('kwData', payload);
+  if (res && res.result !== undefined) return res.result;
+  if (res && res.data !== undefined) return res.data;
+  return res;
 }
 
 function kwEntityHandler(entity) {
