@@ -145,8 +145,13 @@ export default function Kiosk() {
         />
         <div className="relative mx-auto max-w-xl text-center">
           {logoUrl ? (
-            <div className="mx-auto mb-4 h-16 w-40 overflow-hidden rounded-xl bg-white/95 p-3">
-              <Image src={logoUrl} alt={info.company_name || ''} fittingType="fit" className="h-full w-full" />
+            <div className="mx-auto mb-4 flex h-16 w-48 items-center justify-center overflow-hidden rounded-xl bg-white/95 p-2 shadow-sm">
+              <img
+                src={logoUrl}
+                alt={info.company_name || ''}
+                className="max-h-full max-w-full object-contain"
+                style={{ objectFit: 'contain' }}
+              />
             </div>
           ) : null}
           <p className="text-xs uppercase tracking-[0.2em] opacity-80">{info.company_name || ''}</p>

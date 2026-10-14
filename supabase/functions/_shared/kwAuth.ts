@@ -252,6 +252,10 @@ export function userFromSession(session) {
 async function tokenFromRequest(req) {
   const header = req.headers ? req.headers.get(SESSION_HEADER) : '';
   if (header) return clean(header);
+  const authHeader = req.headers ? req.headers.get('authorization') : '';
+  if (authHeader && (authHeader.startsWith('Bearer kw_') || authHeader.startsWith('bearer kw_'))) {
+    return clean(authHeader.replace(/^Bearer\s+/i, ''));
+  }
   if (typeof req.clone !== 'function') return '';
   try {
     const copy = req.clone();

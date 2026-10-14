@@ -77,9 +77,12 @@ export default function CompanySettings() {
         label: type.label || type.label_en || '',
         label_en: type.label_en || '',
         kind: type.kind || 'file',
-        required: type.required !== false
+        required: type.required !== false,
+        secure: Boolean(type.secure)
       })),
-      questions: toDraft(company.onboarding_questions)
+      questions: toDraft(company.onboarding_questions),
+      fieldVisibility: company.onboarding_field_visibility || {},
+      secureFields: company.onboarding_secure_fields || {}
     });
   }, [company]);
 
@@ -135,7 +138,9 @@ export default function CompanySettings() {
       // The onboarding paperwork is saved by this same button: the documents a new hire hands in,
       // and the questions the employee answers on their onboarding link.
       onboarding_doc_types: cleanDocTypes(onboarding.docTypes),
-      onboarding_questions: questionsFromDraft(onboarding.questions)
+      onboarding_questions: questionsFromDraft(onboarding.questions),
+      onboarding_field_visibility: onboarding.fieldVisibility || {},
+      onboarding_secure_fields: onboarding.secureFields || {}
     };
     try {
       // The server decides whether this person may save the company's settings, and it is the
@@ -228,6 +233,10 @@ export default function CompanySettings() {
           <OnboardingSetupCard
             types={onboarding.docTypes}
             onChange={(docTypes) => setOnboarding((prev) => ({ ...prev, docTypes }))}
+            fieldVisibility={onboarding.fieldVisibility}
+            onFieldVisibilityChange={(fieldVisibility) => setOnboarding((prev) => ({ ...prev, fieldVisibility }))}
+            secureFields={onboarding.secureFields}
+            onSecureFieldsChange={(secureFields) => setOnboarding((prev) => ({ ...prev, secureFields }))}
             canEdit={canSave}
           />
           <OnboardingQuestionsCard

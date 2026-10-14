@@ -100,6 +100,15 @@ async function handler(req) {
       return Response.json({ ok: true });
     }
 
+    // 본인 확인을 위한 비밀번호 검증 (보안 온보딩 서류 및 개인정보 열람용)
+    if (action === 'verify_password') {
+      const password = String(body.password || '');
+      if (!password) return Response.json({ ok: false, error: '비밀번호를 입력해 주세요.' }, { status: 400 });
+      const valid = await verifyPassword(password, profile.password_salt, profile.password_hash);
+      if (!valid) return Response.json({ ok: false, error: '비밀번호가 일치하지 않습니다.' }, { status: 401 });
+      return Response.json({ ok: true });
+    }
+
     // Their own paperwork, and only their own: the file has to be one this record already
     // carries before anything is signed, so nobody can ask for somebody else's document.
     if (action === 'sign_document') {

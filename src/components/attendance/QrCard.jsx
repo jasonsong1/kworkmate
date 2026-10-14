@@ -10,9 +10,20 @@ export default function QrCard({ url, design, fallbackTitle, fallbackNote, noteC
   const size = Math.min(320, Math.max(160, Number(saved.size) || 240));
   const title = saved.title || fallbackTitle;
   const note = saved.note || fallbackNote;
+  const logo = saved.logo_url;
 
   return (
     <div className="text-center">
+      {logo ? (
+        <div className="mx-auto mb-4 flex h-14 max-w-[200px] items-center justify-center overflow-hidden">
+          <img
+            src={logo}
+            alt="Logo"
+            className="max-h-full max-w-full object-contain"
+            style={{ objectFit: 'contain' }}
+          />
+        </div>
+      ) : null}
       {title ? (
         <p className="text-sm font-semibold" style={{ color }}>
           {title}

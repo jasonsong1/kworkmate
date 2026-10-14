@@ -40,7 +40,8 @@ export function cleanDocTypes(types) {
       label: String(type.label).trim(),
       label_en: String(type.label_en || '').trim(),
       kind: type.kind === 'info' ? 'info' : 'file',
-      required: type.required !== false
+      required: type.required !== false,
+      secure: Boolean(type.secure)
     }));
 }
 
@@ -142,6 +143,7 @@ export function checklistFor(profile, company, lang) {
       kind: info ? 'info' : 'file',
       label: docTypeLabel(type, lang),
       required: type.required !== false,
+      secure: Boolean(type.secure),
       done: info ? infoFilled(profile, type.key) : Boolean(file),
       file
     };

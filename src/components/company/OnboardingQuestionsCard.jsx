@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowDown, ArrowUp, FileText, Plus, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, FileText, Lock, Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -241,6 +241,21 @@ export default function OnboardingQuestionsCard({ questions = [], onChange, canE
                   onCheckedChange={(value) => set(index, { visible: value })}
                 />
                 {t('onboardingQ.visible')}
+              </div>
+              {/* 암호화 보안 스위치: 켜면 직원의 내 공간에서 답변이 블러 처리되고 본인 인증 후 열람 */}
+              <div
+                className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+                title="켜면 직원의 내 공간에서 이 질문의 답변이 블러 처리되며, 비밀번호 또는 얼굴인식(생체인증)을 통과해야 확인할 수 있습니다."
+              >
+                <Switch
+                  checked={Boolean(question.secure)}
+                  disabled={!canEdit}
+                  onCheckedChange={(value) => set(index, { secure: value })}
+                />
+                <div className="flex items-center gap-1">
+                  <Lock className={`h-3.5 w-3.5 ${question.secure ? 'text-amber-500' : 'text-muted-foreground'}`} />
+                  <span>암호화 보안</span>
+                </div>
               </div>
             </div>
           </div>
