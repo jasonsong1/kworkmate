@@ -43,6 +43,8 @@ import { base44 } from '@/api/base44Client';
 export default function StaffHome() {
   const { t } = useI18n();
   const { me, employeeProfile, company, activeBranch, hasModule, presetKey } = useWorkspace();
+  const [profileOverride, setProfileOverride] = useState(null);
+  const currentProfile = profileOverride || employeeProfile;
   const { toast } = useToast();
   // This week is the first week there is: the roster runs four weeks ahead and never backwards.
   const thisWeek = startOfWeekIso(todayIso());
@@ -174,26 +176,26 @@ export default function StaffHome() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            {employeeProfile ? (
+            {currentProfile ? (
               <>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div>
                     <p className="text-xs text-muted-foreground">{t('common.name')}</p>
-                    <p className="text-sm font-medium">{employeeProfile.full_name}</p>
+                    <p className="text-sm font-medium">{currentProfile.full_name}</p>
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground">{t('employees.number')}</p>
-                    <p className="font-mono text-sm">{employeeProfile.employee_number}</p>
+                    <p className="font-mono text-sm">{currentProfile.employee_number}</p>
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground">{t('common.position')}</p>
-                    <p className="text-sm">{employeeProfile.position || '—'}</p>
+                    <p className="text-sm">{currentProfile.position || '—'}</p>
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground">{t('common.rate')}</p>
                     <div className="flex items-center gap-2">
                       <p className={`text-sm ${showRate ? '' : 'blur-sm select-none'}`}>
-                        {employeeProfile.hourly_rate ? money(employeeProfile.hourly_rate) : '—'}
+                        {currentProfile.hourly_rate ? money(currentProfile.hourly_rate) : '—'}
                       </p>
                       <button
                         type="button"
@@ -209,8 +211,8 @@ export default function StaffHome() {
                 <div>
                   <p className="text-xs text-muted-foreground">{t('employees.onboarding')}</p>
                   {(() => {
-                    const checklist = employeeProfile ? checklistFor(employeeProfile, company, t) : null;
-                    const isDone = employeeProfile.onboarding_status === 'completed' || (checklist && checklist.complete);
+                    const checklist = currentProfile ? checklistFor(currentProfile, company, t) : null;
+                    const isDone = currentProfile.onboarding_status === 'completed' || (checklist && checklist.complete);
                     const doneCount = checklist ? checklist.requiredDone : 0;
                     const totalCount = checklist ? checklist.requiredTotal : 0;
 
@@ -331,9 +333,9 @@ export default function StaffHome() {
         )}
 
         {/* 3. 하단 카드: 온보딩 서류 및 정보 (접기/펼치기 숨김 토글이 적용된 통합 카드) */}
-        {(employeeProfile || me) && (
+        {(currentProfile || me) && (
           <div className="lg:col-span-2">
-            <StaffOnboardingCard />
+            <StaffOnboardingCard onProfileUpdated={setProfileOverride} />
           </div>
         )}
 

@@ -40,13 +40,30 @@ import { cn } from '@/lib/utils';
  * 3. 각 서류의 [파일 선택/업로드], [열기], [다시 올리기], [삭제] 기능 제공.
  * 4. 보안 설정된 서류나 질문 항목은 본인 인증(비밀번호 또는 모바일 얼굴/지문인식)을 통과해야 열람/블러 해제됩니다.
  */
-export default function StaffOnboardingCard() {
+export default function StaffOnboardingCard({ onProfileUpdated }) {
   const { t, lang } = useI18n();
-  const { me, company, employeeProfile, reload } = useWorkspace();
+  const { me, company, employeeProfile } = useWorkspace();
   const { toast } = useToast();
 
-  // 통합 카드 펼침/접힘 상태 (기본값: false 접힘)
-  const [isOpen, setIsOpen] = useState(false);
+  // 통합 카드 펼침/접힘 상태 (sessionStorage로 기억하여 새로고침/재렌더링 시에도 유지)
+  const [isOpen, setIsOpen] = useState(() => {
+    try {
+      return sessionStorage.getItem('kw_onboarding_open') === 'true';
+    } catch (_) {
+      return false;
+    }
+  });
+
+  const toggleOpen = () => {
+    setIsOpen((prev) => {
+      const next = !prev;
+      try {
+        sessionStorage.setItem('kw_onboarding_open', String(next));
+      } catch (_) {}
+      return next;
+    });
+  };
+
   const [record, setRecord] = useState(null);
   const [form, setForm] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -143,7 +160,8 @@ export default function StaffOnboardingCard() {
   const set = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
 
   // 온보딩 개인정보 저장 처리
-  const save = async () => {
+  const save = async (e) => {
+    if (e && e.preventDefault) e.preventDefault();
     setSaving(true);
     try {
       const saved = await kwSessionAction({
@@ -167,6 +185,7 @@ export default function StaffOnboardingCard() {
       if (saved && saved.profile) {
         setRecord(saved.profile);
         syncForm(saved.profile);
+        if (onProfileUpdated) onProfileUpdated(saved.profile);
       }
       toast({ title: t('ob.saved') || '온보딩 정보가 저장되었습니다.' });
     } catch (error) {
@@ -185,7 +204,7 @@ export default function StaffOnboardingCard() {
     }
   };
 
-  // 파일 업로드 수행
+  // 파일 업로드 수행 (화면 깜빡임이나 리프레시 없이 부드럽게 저장)
   const upload = async (event) => {
     const file = event.target.files && event.target.files[0];
     event.target.value = '';
@@ -210,7 +229,7 @@ export default function StaffOnboardingCard() {
       if (saved && saved.profile) {
         setRecord(saved.profile);
         syncForm(saved.profile);
-        try { reload && reload(); } catch (_) {}
+        if (onProfileUpdated) onProfileUpdated(saved.profile);
       }
       toast({ title: t('ob.uploaded') || '서류가 성공적으로 업로드되었습니다.' });
     } catch (error) {
@@ -288,7 +307,7 @@ export default function StaffOnboardingCard() {
       if (saved && saved.profile) {
         setRecord(saved.profile);
         syncForm(saved.profile);
-        try { reload && reload(); } catch (_) {}
+        if (onProfileUpdated) onProfileUpdated(saved.profile);
       }
       toast({ title: t('ob.removed') || '서류가 삭제되었습니다.' });
     } catch (error) {
@@ -317,7 +336,7 @@ export default function StaffOnboardingCard() {
           type="button"
           variant="outline"
           size="sm"
-          onClick={() => setIsOpen((prev) => !prev)}
+          onClick={toggleOpen}
           className="h-8 gap-1.5 px-3 text-xs font-medium"
           title={isOpen ? '숨기기' : '펼치기'}
         >
@@ -725,7 +744,7 @@ export default function StaffOnboardingCard() {
 
             {/* 저장 버튼 */}
             <div className="flex justify-end pt-3">
-              <Button onClick={save} disabled={saving} className="gap-2">
+              <Button type="button" onClick={save} disabled={saving} className="gap-2">
                 {saving && <Loader2 className="h-4 w-4 animate-spin" />}
                 <span>온보딩 정보 저장하기</span>
               </Button>
