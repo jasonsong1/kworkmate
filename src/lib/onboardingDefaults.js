@@ -14,6 +14,40 @@ export const DEFAULT_ONBOARDING_QUESTIONS = [
     follow_up: null
   },
   {
+    id: 'default_suburb',
+    label: 'Suburb / Town',
+    type: 'text',
+    required: true,
+    visible: true,
+    page: 1,
+    page_title: '',
+    options: [],
+    follow_up: null
+  },
+  {
+    id: 'default_state',
+    label: 'State / Territory',
+    type: 'select',
+    required: true,
+    visible: true,
+    page: 1,
+    page_title: '',
+    options: ['NSW', 'VIC', 'QLD', 'WA', 'SA', 'TAS', 'ACT', 'NT'],
+    follow_up: null
+  },
+  {
+    id: 'default_postcode',
+    label: 'Postcode',
+    type: 'number',
+    required: true,
+    visible: true,
+    page: 1,
+    page_title: '',
+    options: [],
+    follow_up: null,
+    validation: { digits: 4 }
+  },
+  {
     id: 'default_phone',
     label: 'Mobile number',
     type: 'text',

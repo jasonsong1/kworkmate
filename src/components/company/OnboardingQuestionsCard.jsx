@@ -1,5 +1,5 @@
-import React from 'react';
-import { ArrowDown, ArrowUp, FileText, Lock, Plus, Trash2 } from 'lucide-react';
+import React, { useState } from 'react';
+import { ArrowDown, ArrowUp, FileText, GripVertical, Lock, Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -17,6 +17,8 @@ import { TYPE_KEYS, blankQuestion, toDraft } from '@/lib/onboardingQuestions';
 // settings page and saved with its own Save, so this card offers no button of its own.
 export default function OnboardingQuestionsCard({ questions = [], onChange, canEdit = false }) {
   const { t } = useI18n();
+  const [draggedIndex, setDraggedIndex] = useState(null);
+  const [dragOverIndex, setDragOverIndex] = useState(null);
 
   const set = (index, patch) =>
     onChange(questions.map((item, position) => (position === index ? { ...item, ...patch } : item)));
@@ -27,6 +29,39 @@ export default function OnboardingQuestionsCard({ questions = [], onChange, canE
     const next = [...questions];
     [next[index], next[target]] = [next[target], next[index]];
     onChange(next);
+  };
+
+  // 드래그 앤 드롭 핸들러
+  const handleDragStart = (e, index) => {
+    if (!canEdit) return;
+    setDraggedIndex(index);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', String(index));
+  };
+
+  const handleDragOver = (e, index) => {
+    e.preventDefault();
+    if (!canEdit || draggedIndex === null || draggedIndex === index) return;
+    e.dataTransfer.dropEffect = 'move';
+    setDragOverIndex(index);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedIndex(null);
+    setDragOverIndex(null);
+  };
+
+  const handleDrop = (e, targetIndex) => {
+    e.preventDefault();
+    if (!canEdit || draggedIndex === null || draggedIndex === targetIndex) {
+      handleDragEnd();
+      return;
+    }
+    const next = [...questions];
+    const [draggedItem] = next.splice(draggedIndex, 1);
+    next.splice(targetIndex, 0, draggedItem);
+    onChange(next);
+    handleDragEnd();
   };
 
   // A new question continues on the current page; "New page" opens the next one.
@@ -46,6 +81,9 @@ export default function OnboardingQuestionsCard({ questions = [], onChange, canE
         <div>
           <CardTitle className="text-base">{t('onboardingQ.title')}</CardTitle>
           <p className="mt-1 text-sm text-muted-foreground">{t('onboardingQ.hint')}</p>
+          <p className="mt-0.5 text-xs text-primary font-medium">
+            💡 왼쪽 그립 아이콘(⋮⋮)을 잡고 끌어서 마우스로 질문 순서를 자유롭게 바꿀 수 있습니다.
+          </p>
         </div>
         <Button variant="outline" size="sm" disabled={!canEdit} onClick={loadDefaults}>
           <FileText className="mr-2 h-4 w-4" /> {t('onboardingQ.makeDefault')}
@@ -54,15 +92,42 @@ export default function OnboardingQuestionsCard({ questions = [], onChange, canE
       <CardContent className="space-y-4">
         {questions.length === 0 && <p className="text-sm text-muted-foreground">{t('onboardingQ.empty')}</p>}
 
-        {questions.map((question, index) => (
-          <div key={question.id} className="space-y-3 rounded-xl border p-4">
-            <div className="flex items-start gap-2">
-              <Input
-                value={question.label}
-                disabled={!canEdit}
-                placeholder={t('onboardingQ.questionPlaceholder')}
-                onChange={(event) => set(index, { label: event.target.value })}
-              />
+        {questions.map((question, index) => {
+          const isDragging = draggedIndex === index;
+          const isDragOver = dragOverIndex === index;
+
+          return (
+            <div
+              key={question.id}
+              draggable={canEdit}
+              onDragStart={(e) => handleDragStart(e, index)}
+              onDragOver={(e) => handleDragOver(e, index)}
+              onDragEnd={handleDragEnd}
+              onDrop={(e) => handleDrop(e, index)}
+              className={`space-y-3 rounded-xl border p-4 transition-all duration-150 ${
+                isDragging
+                  ? 'opacity-40 border-dashed border-primary bg-primary/5 scale-[0.99]'
+                  : isDragOver
+                  ? 'border-primary ring-2 ring-primary/20 bg-primary/5'
+                  : 'bg-card hover:border-slate-300'
+              }`}
+            >
+              <div className="flex items-start gap-2">
+                {canEdit && (
+                  <div
+                    className="flex h-9 w-6 cursor-grab active:cursor-grabbing items-center justify-center text-muted-foreground hover:text-foreground shrink-0"
+                    title="드래그하여 순서 변경"
+                  >
+                    <GripVertical className="h-4 w-4" />
+                  </div>
+                )}
+                <Input
+                  value={question.label}
+                  disabled={!canEdit}
+                  placeholder={t('onboardingQ.questionPlaceholder')}
+                  onChange={(event) => set(index, { label: event.target.value })}
+                  className="flex-1"
+                />
               <Button
                 size="icon"
                 variant="ghost"
@@ -259,7 +324,8 @@ export default function OnboardingQuestionsCard({ questions = [], onChange, canE
               </div>
             </div>
           </div>
-        ))}
+        );
+      })}
 
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" disabled={!canEdit} onClick={() => add(false)}>

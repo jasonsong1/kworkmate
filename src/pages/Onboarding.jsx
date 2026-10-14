@@ -167,10 +167,10 @@ export default function Onboarding() {
   const totalSteps = pages.length;
   const currentPage = step < totalSteps ? pages[step] : null;
 
-  // 답변 핸들러
-  const setAnswer = (id, value) => {
+  // 답변 핸들러 (질문 라벨을 함께 넘겨 Tax 폼에 정확히 매핑)
+  const setAnswer = (id, value, label = '') => {
     setAnswers((prev) => ({ ...prev, [id]: { ...(prev[id] || {}), answer: value } }));
-    syncAnswerToTaxForm(id, value);
+    syncAnswerToTaxForm(id, value, label);
   };
 
   const setFollowUp = (id, field, value) => {
@@ -186,16 +186,37 @@ export default function Onboarding() {
   // ==============================================================================
   // [중복 질문 제거] 앞 단계 답변이 들어오면 Tax 폼에 실시간 자동 매핑
   // ==============================================================================
-  const syncAnswerToTaxForm = (id, val) => {
+  const syncAnswerToTaxForm = (id, val, questionLabel = '') => {
     const str = String(val || '').trim();
     if (!str) return;
+    const lowerId = String(id || '').toLowerCase();
+    const lowerLabel = String(questionLabel || '').toLowerCase();
 
     setTaxForm((prev) => {
       const next = { ...prev };
-      // 1. 주소
-      if (id === 'default_address' || id.includes('address')) {
+
+      // 1. Suburb (라벨 또는 ID 매칭)
+      if (lowerId.includes('suburb') || lowerLabel.includes('suburb')) {
+        next.suburb = str.toUpperCase();
+        return next;
+      }
+
+      // 2. State (라벨 또는 ID 매칭)
+      if (lowerId.includes('state') || lowerLabel.includes('state')) {
+        next.state = str.toUpperCase();
+        return next;
+      }
+
+      // 3. Postcode (라벨 또는 ID 매칭)
+      if (lowerId.includes('post') || lowerLabel.includes('post')) {
+        next.postcode = str.replace(/\D/g, '').slice(0, 4);
+        return next;
+      }
+
+      // 4. 주소 (Street address)
+      if (lowerId.includes('address') || lowerLabel.includes('address')) {
         next.addressLine = str;
-        // 간단한 주소 분리 (예: 123 George St, Sydney NSW 2000)
+        // 주소에 쉼표로 한 줄에 다 적었을 때 자동 분리 지원
         const parts = str.split(',').map((s) => s.trim());
         if (parts.length >= 2) {
           next.addressLine = parts[0];
@@ -701,7 +722,7 @@ export default function Onboarding() {
                   {question.type === 'yes_no' && (
                     <RadioGroup
                       value={value.answer || ''}
-                      onValueChange={(ans) => setAnswer(question.id, ans)}
+                      onValueChange={(ans) => setAnswer(question.id, ans, question.label)}
                       className="flex gap-4 pt-1"
                     >
                       <div className="flex items-center gap-2">
@@ -720,7 +741,7 @@ export default function Onboarding() {
                   )}
 
                   {question.type === 'select' && (
-                    <Select value={value.answer || ''} onValueChange={(ans) => setAnswer(question.id, ans)}>
+                    <Select value={value.answer || ''} onValueChange={(ans) => setAnswer(question.id, ans, question.label)}>
                       <SelectTrigger className="w-full">
                         <SelectValue placeholder="선택해 주세요" />
                       </SelectTrigger>
@@ -767,7 +788,7 @@ export default function Onboarding() {
                       inputMode="numeric"
                       value={value.answer || ''}
                       onChange={(e) =>
-                        setAnswer(question.id, digitsOnly(e.target.value, Number(validationOf(question).digits) || 0))
+                        setAnswer(question.id, digitsOnly(e.target.value, Number(validationOf(question).digits) || 0), question.label)
                       }
                       placeholder={
                         Number(validationOf(question).digits) > 0
@@ -781,7 +802,7 @@ export default function Onboarding() {
                     <Input
                       type="date"
                       value={value.answer || ''}
-                      onChange={(e) => setAnswer(question.id, e.target.value)}
+                      onChange={(e) => setAnswer(question.id, e.target.value, question.label)}
                     />
                   )}
 
@@ -792,7 +813,7 @@ export default function Onboarding() {
                     question.type !== 'date' && (
                       <Input
                         value={value.answer || ''}
-                        onChange={(e) => setAnswer(question.id, e.target.value)}
+                        onChange={(e) => setAnswer(question.id, e.target.value, question.label)}
                         placeholder="답변을 입력해 주세요"
                       />
                     )}
