@@ -306,11 +306,17 @@ export default function JobDetail() {
                     </div>
                     <Textarea
                       rows={4}
-                      value={job.screening_criteria || (company ? company.screening_criteria || '' : '')}
+                      value={job.screening_criteria || ''}
                       onChange={(e) => patch({ screening_criteria: e.target.value })}
-                      placeholder="예: 바리스타 경력 2년 이상, 주말 야간 근무 가능, 장기 근무 의향"
+                      placeholder={company && company.screening_criteria ? `[회사 설정 적용 중]: ${company.screening_criteria}` : "예: 바리스타 경력 2년 이상, 주말 근무 가능, 학생비자 제외"}
                     />
-                    <p className="mt-1 text-xs text-muted-foreground">{t('settings.screeningFocusHint')}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {job.screening_criteria
+                        ? '이 공고에 입력된 선별 중점 조건이 최우선으로 적용됩니다.'
+                        : (company && company.screening_criteria
+                            ? `현재 회사 설정("${company.screening_criteria}")이 자동 상속되어 적용 중입니다. 이 공고만의 특별한 기준이 있다면 입력해 주세요.`
+                            : t('settings.screeningFocusHint'))}
+                    </p>
                   </div>
                 </CardContent>
               </Card>

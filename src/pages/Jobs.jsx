@@ -95,6 +95,8 @@ export default function Jobs() {
         required_questions: defaultRequiredQuestions(),
         custom_questions: [],
         screening_min_score: 60,
+        // 회사 전체 선별 중점 설정 상속 (공고 자체 값이 없으면 회사 설정을 기본 사용)
+        screening_criteria: (company && company.screening_criteria) || '',
         auto_reject_email: company ? company.auto_reject_email !== false : true,
         mini_interview_enabled: company ? company.mini_interview_enabled !== false : true,
         video_interview_enabled: company ? company.video_interview_enabled !== false : false,

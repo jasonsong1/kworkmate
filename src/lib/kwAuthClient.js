@@ -294,6 +294,13 @@ export function createSupabaseAppClient() {
     },
     redirectToLogin: () => {
       window.location.href = '/login';
+    },
+    // 비밀번호 재설정 이메일 요청 메서드 (ForgotPassword 화면 및 비밀번호 찾기 호환)
+    resetPasswordRequest: async (email) => {
+      return functions.invoke('requestEmployeePasswordReset', {
+        email: (email || '').trim(),
+        origin: window.location.origin
+      });
     }
   };
 
