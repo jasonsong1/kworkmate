@@ -152,12 +152,14 @@ async function sendViaResend(key, { to, subject, html, attachments, from }) {
   if (!res.ok) {
     const detail = await res.text();
     console.error('Resend refused the message:', res.status, detail.slice(0, 200));
-    // A 4xx is a configuration refusal (unverified domain, revoked key): report it, so the
-    // message goes out through the platform mail service instead of being lost.
-    if (res.status >= 400 && res.status < 500) return false;
-    throw new Error(`Resend refused the message (${res.status}): ${detail}`);
+    let message = `Resend 발송 거부 (${res.status})`;
+    try {
+      const parsed = JSON.parse(detail);
+      if (parsed.message) message = parsed.message;
+    } catch (_) {}
+    return { ok: false, error: message };
   }
-  return true;
+  return { ok: true, error: '' };
 }
 
 // Returns the outcome instead of only a true/false, so the caller can record why a
@@ -165,21 +167,14 @@ async function sendViaResend(key, { to, subject, html, attachments, from }) {
 export async function sendEmailDetailed(base44, { to, subject, html, attachments, from, apiKey }) {
   try {
     const key = apiKey || (typeof Deno !== 'undefined' ? Deno.env.get('RESEND_API_KEY') : '') || '';
-    // Resend carries the message; anything it will not take (no key, or a configuration
-    // refusal) is handed to the platform mail service, so mail is never silently dropped.
-    if (!key || !(await sendViaResend(key, { to, subject, html, attachments, from }))) {
-      const payload = { to, subject, html };
-      if (Array.isArray(attachments) && attachments.length > 0) payload.attachments = attachments;
-      try {
-        if (base44?.asServiceRole?.integrations?.Core?.SendEmail) {
-          await base44.asServiceRole.integrations.Core.SendEmail(payload);
-        }
-      } catch (_) {}
+    if (!key) {
+      return { ok: false, error: 'RESEND_API_KEY가 설정되어 있지 않습니다.' };
     }
-    return { ok: true, error: '' };
+    const result = await sendViaResend(key, { to, subject, html, attachments, from });
+    return result;
   } catch (error) {
     console.error('SendEmail failed:', error && error.message);
-    return { ok: false, error: (error && error.message) || 'The email service refused the message.' };
+    return { ok: false, error: (error && error.message) || '이메일 발송 중 오류가 발생했습니다.' };
   }
 }
 
@@ -197,7 +192,7 @@ export async function sendApplicantEmail(base44, applicant, { type, subject, htm
   await base44.asServiceRole.entities.Applicant.update(applicant.id, {
     email_status: result.ok ? 'sent' : 'failed',
     email_type: type,
-    email_sent_at: result.ok ? attemptedAt : '',
+    email_sent_at: result.ok ? attemptedAt : null,
     email_attempted_at: attemptedAt,
     email_error: result.ok ? '' : result.error
   }).catch(() => null);

@@ -228,6 +228,11 @@ function forInsert(record, ctx) {
   if (!row.created_date) row.created_date = now;
   row.updated_date = now;
   if (!row.created_by_id && ctx && ctx.createdById) row.created_by_id = ctx.createdById;
+  for (const [k, v] of Object.entries(row)) {
+    if (v === '' && (k.endsWith('_at') || k.endsWith('_date') || k.endsWith('_expiry') || k === 'date')) {
+      row[k] = null;
+    }
+  }
   return row;
 }
 
@@ -251,6 +256,11 @@ function forUpdate(data) {
   delete row.id;
   delete row.branch_ids;
   row.updated_date = new Date().toISOString();
+  for (const [k, v] of Object.entries(row)) {
+    if (v === '' && (k.endsWith('_at') || k.endsWith('_date') || k.endsWith('_expiry') || k === 'date')) {
+      row[k] = null;
+    }
+  }
   return row;
 }
 

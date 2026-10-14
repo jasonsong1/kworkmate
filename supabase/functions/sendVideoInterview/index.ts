@@ -64,7 +64,7 @@ async function handler(req: Request) {
       video_interview_token: token,
       video_interview_status: 'sent',
       video_interview_sent_at: new Date().toISOString(),
-      video_interview_completed_at: '',
+      video_interview_completed_at: null,
       video_interview_responses: []
     });
 

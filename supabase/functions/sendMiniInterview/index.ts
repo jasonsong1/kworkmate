@@ -64,7 +64,7 @@ async function handler(req: Request) {
       mini_interview_token: token,
       mini_interview_status: 'sent',
       mini_interview_sent_at: new Date().toISOString(),
-      mini_interview_completed_at: '',
+      mini_interview_completed_at: null,
       mini_interview_responses: []
     });
 

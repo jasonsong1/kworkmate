@@ -118,14 +118,22 @@ export default function Applicants() {
           origin: window.location.origin
         });
         if (response.data?.error) throw new Error(response.data.error);
-        toast({ title: `화상 면접 안내 메일을 ${applicant.full_name}님께 전송했습니다.` });
+        if (response.data?.sent === false && response.data?.error) {
+          toast({ title: `화상 면접 링크 생성 완료 (이메일 발송 실패: ${response.data.error})`, variant: 'destructive' });
+        } else {
+          toast({ title: `화상 면접 안내 메일을 ${applicant.full_name}님께 전송했습니다.` });
+        }
       } else if (action === 'mini') {
         const response = await base44.functions.invoke('sendMiniInterview', {
           applicant_id: applicant.id,
           origin: window.location.origin
         });
         if (response.data?.error) throw new Error(response.data.error);
-        toast({ title: `미니 음성면접 안내를 ${applicant.full_name}님께 전송했습니다.` });
+        if (response.data?.sent === false && response.data?.error) {
+          toast({ title: `음성 면접 링크 생성 완료 (이메일 발송 실패: ${response.data.error})`, variant: 'destructive' });
+        } else {
+          toast({ title: `미니 음성면접 안내를 ${applicant.full_name}님께 전송했습니다.` });
+        }
       } else if (action === 'invite') {
         const response = await base44.functions.invoke('notifyApplicant', {
           applicant_id: applicant.id,
@@ -133,7 +141,11 @@ export default function Applicants() {
           origin: window.location.origin
         });
         if (response.data?.error) throw new Error(response.data.error);
-        toast({ title: `최종 면접 초대 메일을 ${applicant.full_name}님께 전송했습니다.` });
+        if (response.data?.sent === false && response.data?.error) {
+          toast({ title: `면접 초대 완료 (이메일 발송 실패: ${response.data.error})`, variant: 'destructive' });
+        } else {
+          toast({ title: `최종 면접 초대 메일을 ${applicant.full_name}님께 전송했습니다.` });
+        }
       } else if (action === 'hire') {
         const response = await base44.functions.invoke('hireApplicant', {
           applicant_id: applicant.id,
@@ -148,7 +160,11 @@ export default function Applicants() {
           origin: window.location.origin
         });
         if (response.data?.error) throw new Error(response.data.error);
-        toast({ title: `${applicant.full_name} 지원자 거절 처리가 완료되었습니다.` });
+        if (response.data?.sent === false && response.data?.error) {
+          toast({ title: `거절 처리 완료 (이메일 발송 실패: ${response.data.error})`, variant: 'destructive' });
+        } else {
+          toast({ title: `${applicant.full_name} 지원자 거절 및 불합격 안내 메일이 발송되었습니다.` });
+        }
       }
       await loadApplicants();
     } catch (error) {
