@@ -37,6 +37,7 @@ import {
   weeksBetweenCount
 } from '@/lib/bh';
 import { kioskUrl, todayFor } from '@/lib/kioskLink';
+import { checklistFor } from '@/lib/onboardingDocs';
 import { base44 } from '@/api/base44Client';
 
 export default function StaffHome() {
@@ -207,15 +208,37 @@ export default function StaffHome() {
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground">{t('employees.onboarding')}</p>
-                  {employeeProfile.onboarding_status === 'completed' ? (
-                    <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100">
-                      {t('employees.completed')}
-                    </Badge>
-                  ) : (
-                    <div className="mt-1">
-                      <Badge variant="secondary">{t('employees.pending')}</Badge>
-                    </div>
-                  )}
+                  {(() => {
+                    const checklist = employeeProfile ? checklistFor(employeeProfile, company, t) : null;
+                    const isDone = employeeProfile.onboarding_status === 'completed' || (checklist && checklist.complete);
+                    const doneCount = checklist ? checklist.requiredDone : 0;
+                    const totalCount = checklist ? checklist.requiredTotal : 0;
+
+                    if (isDone) {
+                      return (
+                        <div className="mt-1 flex items-center gap-2">
+                          <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100">
+                            {t('employees.completed')}
+                          </Badge>
+                          <span className="text-xs text-emerald-600 font-medium">전체 제출 완료</span>
+                        </div>
+                      );
+                    }
+                    if (doneCount > 0) {
+                      return (
+                        <div className="mt-1 flex items-center gap-2">
+                          <Badge className="bg-sky-100 text-sky-800 hover:bg-sky-100">
+                            진행 중 ({doneCount}/{totalCount})
+                          </Badge>
+                        </div>
+                      );
+                    }
+                    return (
+                      <div className="mt-1">
+                        <Badge variant="secondary">{t('employees.pending')}</Badge>
+                      </div>
+                    );
+                  })()}
                 </div>
               </>
             ) : me ? (

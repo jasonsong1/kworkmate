@@ -22,9 +22,23 @@ export default function EmployeeDocumentsDialog({ open, onOpenChange, employee }
   const [removingId, setRemovingId] = useState(null);
   const fileRef = useRef(null);
 
+  const [currentEmployee, setCurrentEmployee] = useState(employee);
+
   useEffect(() => {
+    setCurrentEmployee(employee);
     setDocs((employee && employee.docs) || []);
-  }, [employee]);
+
+    if (open && employee && employee.id) {
+      base44.entities.EmployeeProfile.get(employee.id)
+        .then((fresh) => {
+          if (fresh) {
+            setCurrentEmployee(fresh);
+            setDocs(fresh.docs || []);
+          }
+        })
+        .catch(() => null);
+    }
+  }, [open, employee]);
 
   // A signed-in employee holds this app's own session rather than a platform one, so their own
   // staff record is what signs the file — and only a file that record already carries is ever
@@ -57,6 +71,7 @@ export default function EmployeeDocumentsDialog({ open, onOpenChange, employee }
       const { file_uri } = await base44.integrations.Core.UploadPrivateFile({ file });
       const saved = await kwCall('kwSession', { action: 'add_document', file_uri, name: file.name });
       setDocs((saved && saved.docs) || docs);
+      if (saved && saved.profile) setCurrentEmployee(saved.profile);
       toast({ title: t('employees.docUploaded') });
     } catch (error) {
       toast({ title: error.message || t('employees.docUploadFailed'), variant: 'destructive' });
@@ -73,6 +88,7 @@ export default function EmployeeDocumentsDialog({ open, onOpenChange, employee }
     try {
       const saved = await kwCall('kwSession', { action: 'delete_document', file_uri: doc.file_uri });
       setDocs((saved && saved.docs) || docs.filter((item) => item.file_uri !== doc.file_uri));
+      if (saved && saved.profile) setCurrentEmployee(saved.profile);
       toast({ title: t('employees.docDeleted') });
     } catch (error) {
       toast({ title: error.message || t('employees.docDeleteFailed'), variant: 'destructive' });
@@ -119,16 +135,16 @@ export default function EmployeeDocumentsDialog({ open, onOpenChange, employee }
         )}
 
         {/* What their employer asks a new hire for, and what has arrived. */}
-        {employee && company && (
+        {(currentEmployee || employee) && company && (
           <OnboardingStatusList
-            profile={employee}
+            profile={currentEmployee || employee}
             company={company}
             onOpen={openDoc}
             loadingUri={loadingId}
           />
         )}
 
-        {employee && <OnboardingDetails profile={employee} company={company} />}
+        {(currentEmployee || employee) && <OnboardingDetails profile={currentEmployee || employee} company={company} />}
 
         {docs.length === 0 ? (
           <p className="py-8 text-center text-sm text-muted-foreground">{t('employees.noDocs')}</p>

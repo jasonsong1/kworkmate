@@ -65,8 +65,9 @@ async function handler(req: any) {
     const branch = profile.branch_id
       ? await base44.asServiceRole.entities.Branch.get(profile.branch_id).catch(() => null)
       : null;
-    const company = branch
-      ? await base44.asServiceRole.entities.Company.get(branch.company_id).catch(() => null)
+    const companyId = profile.company_id || (branch && branch.company_id) || me.company_id;
+    const company = companyId
+      ? await base44.asServiceRole.entities.Company.get(companyId).catch(() => null)
       : null;
 
     const body = req.method === 'POST' ? await req.json().catch(() => ({})) : {};
