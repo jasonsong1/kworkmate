@@ -105,9 +105,19 @@ async function handler(req) {
     // The position the employer set as the person's own — "매니저" — opens the manager screens even
     // when the role key behind it was never built for it, so the main position decides. A
     // secondary position is what they can also cover shifts in, not what their screens are.
+    // [보안 패치]: 로그인한 세션의 profile_id를 1순위로 조회하고, 없으면 현재 회사(company.id)와 이메일이 일치하는 프로필을 찾습니다.
     const person = isSuperAdmin
       ? null
-      : rowsOf(
+      : (me.profile_id
+          ? await base44.asServiceRole.entities.EmployeeProfile.get(me.profile_id).catch(() => null)
+          : null) ||
+        rowsOf(
+          await base44.asServiceRole.entities.EmployeeProfile.filter(
+            { user_email: me.email, company_id: company.id },
+            { limit: 1 }
+          ).catch(() => [])
+        )[0] ||
+        rowsOf(
           await base44.asServiceRole.entities.EmployeeProfile.filter(
             { user_email: me.email },
             { limit: 1 }

@@ -140,9 +140,25 @@ export function WorkspaceProvider({ children }) {
     }
 
     if (user && !superAdmin) {
-      const profilesRaw = await base44.entities.EmployeeProfile.filter({ user_email: user.email }).catch(() => []);
-      const profiles = toArray(profilesRaw);
-      setEmployeeProfile(profiles[0] || null);
+      // [보안 패치]: 로그인한 계정의 고유 프로필 ID(user.id)를 최우선으로 일치시키고,
+      // 없을 경우 현재 회사(effectiveCompanyId)와 이메일이 일치하는 프로필을 특정합니다.
+      let profile = null;
+      if (user.id) {
+        const byId = await base44.entities.EmployeeProfile.filter({ id: user.id }).catch(() => []);
+        const byIdList = toArray(byId);
+        if (byIdList.length > 0) profile = byIdList[0];
+      }
+      if (!profile && effectiveCompanyId) {
+        const byComp = await base44.entities.EmployeeProfile.filter({ user_email: user.email, company_id: effectiveCompanyId }).catch(() => []);
+        const byCompList = toArray(byComp);
+        if (byCompList.length > 0) profile = byCompList[0];
+      }
+      if (!profile) {
+        const profilesRaw = await base44.entities.EmployeeProfile.filter({ user_email: user.email }).catch(() => []);
+        const profiles = toArray(profilesRaw);
+        profile = profiles[0] || null;
+      }
+      setEmployeeProfile(profile);
     } else {
       setEmployeeProfile(null);
     }

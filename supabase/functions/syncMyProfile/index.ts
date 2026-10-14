@@ -97,7 +97,10 @@ async function handler(req) {
     const mine =
       current.app_role === 'company_admin' || caller.role === 'admin'
         ? null
-        : profiles
+        : (caller.profile_id
+            ? profiles.find((p) => p.id === caller.profile_id)
+            : null) ||
+          profiles
             .filter((profile) => profile.company_id === current.company_id)
             .sort((first, second) =>
               String(second.created_date || '').localeCompare(String(first.created_date || ''))
