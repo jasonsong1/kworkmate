@@ -38,7 +38,7 @@ function readRaw(key) {
 function writeRaw(key, value) {
   try {
     sessionStorage.setItem(key, value);
-    localStorage.removeItem(key);
+    localStorage.setItem(key, value);
   } catch (error) {
     /* 스토리지 에러 방어 */
   }

@@ -1,5 +1,5 @@
-import React from 'react';
-import { Link } from 'react-router-dom';
+import React, { useEffect } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { useI18n } from '@/lib/i18n';
 import { demoText } from '@/lib/demoText';
 import { Image } from '@/components/ui/image';
@@ -8,10 +8,23 @@ import { PlayCircle } from 'lucide-react';
 import WelcomeHero from '@/components/welcome/WelcomeHero';
 import WelcomeFeatures from '@/components/welcome/WelcomeFeatures';
 import WelcomeSteps from '@/components/welcome/WelcomeSteps';
+import { useAuth } from '@/lib/AuthContext';
+import { kwActive } from '@/lib/kwAuthClient';
 
+// 소개/랜딩 페이지 컴포넌트:
+// 이미 로그인된 사용자가 이 페이지에 접근한 경우, 로그인 밖의 페이지에 머무르지 않고 즉시 대시보드(/)로 자동 이동합니다.
 export default function Welcome() {
   const { lang, toggle } = useI18n();
   const c = demoText(lang);
+  const navigate = useNavigate();
+  const { isAuthenticated, isLoadingAuth } = useAuth();
+
+  useEffect(() => {
+    // 이미 로그인되어 있거나 세션 토큰이 있으면 대시보드로 자동 이동
+    if ((!isLoadingAuth && isAuthenticated) || kwActive()) {
+      navigate('/', { replace: true });
+    }
+  }, [isAuthenticated, isLoadingAuth, navigate]);
 
   return (
     <div className="min-h-screen bg-background font-body">

@@ -36,7 +36,7 @@ function GoogleIcon({ className }) {
 }
 
 export default function Login() {
-  const { t, lang } = useI18n();
+  const { lang } = useI18n();
   const [door, setDoor] = useState("employee");
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
@@ -47,6 +47,19 @@ export default function Login() {
   // 로그인 후 이동할 목적지 경로 (안전한 상대 경로만 허용)
   const returnTo = safeReturnTo();
   const employeeDoor = door === "employee";
+
+  // 로그인한 유저의 역할에 따라 적절한 첫 화면으로 안내하는 헬퍼 함수
+  const resolveTargetUrl = (user) => {
+    // returnTo가 비어있거나, 루트(/) 또는 마케팅 페이지(/welcome)인 경우
+    if (!returnTo || returnTo === '/' || returnTo.startsWith('/welcome')) {
+      // 일반 직원은 '내 공간(/my-space)', 관리자/슈퍼어드민은 '대시보드(/)'로 이동
+      if (user && user.app_role === 'staff' && !user.is_platform_admin && user.role !== 'admin') {
+        return '/my-space';
+      }
+      return '/';
+    }
+    return returnTo;
+  };
 
   // 구글 OAuth 로그인 완료 후 리디렉션 복귀 시 자동 세션 수립 처리
   useEffect(() => {
@@ -65,8 +78,8 @@ export default function Login() {
       try {
         const user = await kwHandleOAuthCallback();
         if (user) {
-          // 세션 수립 성공 시 원래 이동하려던 페이지로 즉시 이동
-          window.location.href = returnTo;
+          // 세션 수립 성공 시 적절한 화면으로 즉시 이동 (절대 /welcome으로 가지 않음)
+          window.location.href = resolveTargetUrl(user);
         }
       } catch (err) {
         console.error('Google OAuth Callback error:', err);
@@ -86,19 +99,20 @@ export default function Login() {
     setLoading(true);
     try {
       if (employeeDoor) {
-        await kwLogin(identifier.trim(), password);
-        window.location.href = returnTo;
+        const res = await kwLogin(identifier.trim(), password);
+        window.location.href = resolveTargetUrl(res?.user);
         return;
       }
       try {
-        await kwLogin(identifier.trim(), password);
-        window.location.href = returnTo;
+        const res = await kwLogin(identifier.trim(), password);
+        window.location.href = resolveTargetUrl(res?.user);
         return;
       } catch (staffError) {
         if (staffError.status !== 403) throw staffError;
       }
       await base44.auth.loginViaEmailPassword(identifier.trim(), password);
-      window.location.href = returnTo;
+      const me = await base44.auth.me().catch(() => null);
+      window.location.href = resolveTargetUrl(me);
     } catch (err) {
       setError(err.status === 401 || !err.message ? (lang === 'ko' ? '아이디 또는 비밀번호가 일치하지 않습니다.' : 'Invalid ID or password.') : err.message);
     } finally {
