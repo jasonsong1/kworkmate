@@ -1,4 +1,4 @@
-import { NAT3092_TEMPLATE_BASE64 } from '@/assets/templates/nat3092_template_base64';
+import { NAT3092_OFFICIAL_PDF_BASE64 } from '@/assets/templates/nat3092_pdf_base64';
 // ==============================================================================
 // KWorkMate ATO 공식 서류 자동 완성 엔진 (호주 국세청 공식 양식 규격 준수)
 // 1) NAT 3092: Tax File Number Declaration (TFN 신고서)
@@ -115,59 +115,47 @@ function drawCheckbox(page, { x, y, size = 12, checked = false, font }) {
  * 직원의 TFN, 영문 성명, 호주 주소, 체크박스(X), 전자서명을 정확한 좌표에 인쇄합니다.
  * ==============================================================================
  */
+/**
+ * ==============================================================================
+ * 1. NAT 3092: Tax File Number Declaration (ATO 공식 원본 벡터 서식 100% 매핑 엔진)
+ * 호주 국세청(ATO) 공식 NAT 3092-06.2019 [DE-6078] 무손실 벡터 원본 서식 위에
+ * 직원의 TFN, 영문 성명, 호주 주소, 체크박스(X), 자필 전자서명을 정확한 좌표에 인쇄합니다.
+ * ==============================================================================
+ */
 export async function generateAtoNat3092Pdf({ employee = {}, company = {}, form = {}, signatureDataUrl = '' }) {
-  const pdfDoc = await PDFDocument.create();
+  // 공식 무손실 벡터 템플릿 PDF 로드
+  const templateBytes = await fetch(NAT3092_OFFICIAL_PDF_BASE64).then((res) => res.arrayBuffer());
+  const pdfDoc = await PDFDocument.load(templateBytes);
+  const page = pdfDoc.getPage(0);
   
   // 국세청 공문서 특유의 타자기/활자체 (CourierBold) 및 볼드 고딕 (HelveticaBold)
   const fontCourier = await pdfDoc.embedFont(StandardFonts.CourierBold);
   const fontHelvetica = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-  const fontRegular = await pdfDoc.embedFont(StandardFonts.Helvetica);
 
-  // A4 표준 사이즈 (595.28 x 841.89 pt)
-  const page = pdfDoc.addPage([595.28, 841.89]);
-
-  // ---------- [1] 공식 NAT 3092 원본 템플릿 배경 임베딩 ----------
-  try {
-    const templateBytes = await fetch(NAT3092_TEMPLATE_BASE64).then((res) => res.arrayBuffer());
-    const templateImg = await pdfDoc.embedPng(templateBytes);
-    page.drawImage(templateImg, {
-      x: 0,
-      y: 0,
-      width: 595.28,
-      height: 841.89
-    });
-  } catch (err) {
-    console.error('[atoPdfEngine] 템플릿 이미지 임베딩 실패, 기본 배경으로 진행합니다:', err);
-  }
-
-  // 745 x 1024 픽셀 원본 좌표 -> A4 PDF 포인트 좌표 변환 헬퍼
-  const toX = (px) => px * (595.28 / 745);
-  const toY = (py) => 841.89 - (py * (841.89 / 1024));
-
-  // 네모 칸 글자 인쇄 헬퍼 (호주 관공서 서식 스타일)
-  const drawBoxesText = (text, startPxX, pxY, pitchPx, maxLen = 30, fontSize = 9.5) => {
+  // 네모 칸 글자 인쇄 헬퍼 (호주 관공서 서식 규격)
+  const drawBoxesText = (text, startX, y, pitch, maxLen = 30, fontSize = 9.5) => {
     const chars = String(text || '').toUpperCase().split('');
     for (let i = 0; i < Math.min(chars.length, maxLen); i++) {
       const char = chars[i];
       if (char === ' ') continue;
       page.drawText(char, {
-        x: toX(startPxX + i * pitchPx) + 1.2,
-        y: toY(pxY) - 1.5,
+        x: startX + i * pitch + 1,
+        y: y + 1,
         size: fontSize,
         font: fontCourier,
-        color: rgb(0.05, 0.05, 0.15) // 선명한 다크 블루/블랙
+        color: rgb(0.05, 0.05, 0.15) // 선명한 잉크 다크블루/블랙
       });
     }
   };
 
-  // 체크박스 'X' 마킹 헬퍼 (볼펜 수기 느낌)
-  const drawX = (pxX, pxY) => {
+  // 체크박스 'X' 마킹 헬퍼 (볼펜 수기 마킹)
+  const markX = (x, y) => {
     page.drawText('X', {
-      x: toX(pxX) + 1,
-      y: toY(pxY) - 1.5,
+      x,
+      y,
       size: 11,
       font: fontHelvetica,
-      color: rgb(0.1, 0.15, 0.45)
+      color: rgb(0.05, 0.1, 0.45)
     });
   };
 
@@ -175,160 +163,189 @@ export async function generateAtoNat3092Pdf({ employee = {}, company = {}, form 
 
   // 1. TFN 9자리 (Question 1)
   const tfnRaw = String(form.tfn_number || employee.tfn_number || '').replace(/\D/g, '');
-  if (form.tfn_pending || employee.tfn_pending || !tfnRaw) {
-    // TFN 별도 신청 중 체크박스 마킹
-    drawX(474, 140);
+  if (form.tfn_exemption === 'applied' || form.tfn_pending || employee.tfn_pending) {
+    // 예외 사유 1: TFN 신청 후 28일 이내 유예 (X: 378, Y: 727)
+    markX(378, 727);
+  } else if (form.tfn_exemption === 'under18') {
+    // 예외 사유 2: 18세 미만 비과세 (X: 378, Y: 704)
+    markX(378, 704);
+  } else if (form.tfn_exemption === 'pensioner') {
+    // 예외 사유 3: 연금/수당 수급자 (X: 378, Y: 681)
+    markX(378, 681);
+  } else if (tfnRaw && tfnRaw.length === 9) {
+    // 정규 9자리 네모 칸
+    drawBoxesText(tfnRaw, 144, 736, 14.6, 9, 10.5);
   } else {
-    // 9개 네모 박스에 1자리씩 배치
-    drawBoxesText(tfnRaw, 180.5, 126, 18.25, 9, 10.5);
+    // 미입력 시 신청 중으로 체크
+    markX(378, 727);
   }
 
   // 2. 성명 (Question 2: Name)
-  const fullName = String(form.full_name || employee.full_name || '').trim();
-  const nameParts = fullName.split(/\s+/);
-  const surname = nameParts.length > 1 ? nameParts[nameParts.length - 1] : fullName;
-  const givenNames = nameParts.length > 1 ? nameParts.slice(0, -1).join(' ') : '';
+  const title = String(form.title || employee.title || 'Mr').toLowerCase();
+  if (title === 'mrs') markX(198, 643);
+  else if (title === 'miss') markX(236, 643);
+  else if (title === 'ms') markX(273, 643);
+  else markX(161, 643); // Mr (기본)
 
-  // Title: 기본 Mr 체크 (추후 성별에 따라 변경 가능)
-  drawX(202, 242);
+  // 성(Surname) & 이름(First given name) & 중간이름(Other given names)
+  const surname = String(form.family_name || form.surname || employee.surname || '').trim() ||
+    String(form.full_name || employee.full_name || '').split(/\s+/).pop();
+  const givenNames = String(form.given_names || form.first_name || employee.first_name || '').trim() ||
+    String(form.full_name || employee.full_name || '').split(/\s+/).slice(0, -1).join(' ') ||
+    String(form.full_name || employee.full_name || '').trim();
+  const otherNames = String(form.other_names || employee.other_names || '').trim();
 
-  // Surname or family name (성)
-  drawBoxesText(surname, 34, 265, 14.25, 20);
-
-  // First given name (이름)
-  drawBoxesText(givenNames || surname, 34, 299, 14.25, 20);
+  // Surname 칸
+  drawBoxesText(surname, 27, 624, 11.4, 25, 9.5);
+  // First given name 칸
+  drawBoxesText(givenNames, 27, 596, 11.4, 25, 9.5);
+  // Other given names 칸
+  if (otherNames) {
+    drawBoxesText(otherNames, 27, 568, 11.4, 25, 9.5);
+  }
 
   // 3. 호주 거주 주소 (Question 3: Home address)
-  const address = String(form.address || employee.address || '123 GEORGE STREET').toUpperCase();
-  drawBoxesText(address.slice(0, 24), 34, 376, 14.25, 24);
+  const addressLine1 = String(form.address_line1 || form.address || employee.address || '123 GEORGE STREET').toUpperCase();
+  const addressLine2 = String(form.address_line2 || '').toUpperCase();
+  drawBoxesText(addressLine1.slice(0, 25), 27, 533, 11.4, 25, 9.5);
+  if (addressLine2) {
+    drawBoxesText(addressLine2.slice(0, 25), 27, 507, 11.4, 25, 9.5);
+  }
 
   const suburb = String(form.suburb || employee.suburb || 'SYDNEY').toUpperCase();
-  drawBoxesText(suburb, 34, 438, 14.25, 20);
+  drawBoxesText(suburb, 27, 482, 11.4, 25, 9.5);
 
   const state = String(form.state || employee.state || 'NSW').toUpperCase();
-  page.drawText(state, {
-    x: toX(46),
-    y: toY(469) - 1.5,
-    size: 9.5,
-    font: fontCourier,
-    color: rgb(0.05, 0.05, 0.15)
-  });
+  page.drawText(state, { x: 37, y: 457, size: 9.5, font: fontCourier, color: rgb(0.05, 0.05, 0.15) });
 
   const postcode = String(form.postcode || employee.postcode || '2000').replace(/\D/g, '');
-  drawBoxesText(postcode, 120.5, 469, 14.25, 4);
+  drawBoxesText(postcode, 96, 456, 11.4, 4, 9.5);
+
+  // 4. 이전 성 (Question 4: Previous family name)
+  const prevFamilyName = String(form.previous_family_name || '').toUpperCase();
+  if (prevFamilyName) {
+    drawBoxesText(prevFamilyName, 27, 410, 11.4, 25, 9.5);
+  }
 
   // 5. 이메일 주소 (Question 5: Primary e-mail address)
   const email = String(form.user_email || employee.user_email || '').toUpperCase();
-  drawBoxesText(email, 402, 117, 13.5, 24, 9);
+  drawBoxesText(email.slice(0, 25), 321, 745, 10.8, 25, 9);
+  if (email.length > 25) {
+    drawBoxesText(email.slice(25, 50), 321, 719, 10.8, 25, 9);
+  }
 
   // 6. 생년월일 (Question 6: Date of birth)
   const dob = formatAtoDate(form.date_of_birth || employee.date_of_birth || '1998-01-01');
-  drawBoxesText(dob.day || '01', 586, 181, 14.2, 2);
-  drawBoxesText(dob.month || '01', 628, 181, 14.2, 2);
-  drawBoxesText(dob.year || '1998', 670, 181, 14.2, 4);
+  drawBoxesText(dob.day || '01', 468, 693, 11.4, 2);
+  drawBoxesText(dob.month || '01', 502, 693, 11.4, 2);
+  drawBoxesText(dob.year || '1998', 536, 693, 11.4, 4);
 
   // 7. 고용 형태 (Question 7: On what basis are you paid?)
   const empType = String(form.employment_type || employee.employment_type || 'casual').toLowerCase();
   if (empType === 'full_time' || empType.includes('full')) {
-    drawX(445, 233);
+    markX(356, 650); // Full-time
   } else if (empType === 'part_time' || empType.includes('part')) {
-    drawX(510, 233);
+    markX(408, 650); // Part-time
+  } else if (empType === 'labour_hire') {
+    markX(460, 650); // Labour hire
+  } else if (empType === 'super_stream') {
+    markX(512, 650); // Superannuation income stream
   } else {
-    drawX(705, 233); // Casual employment
+    markX(564, 650); // Casual employment (기본)
   }
 
   // 8. 세법상 거주자 구분 (Question 8: Residency)
   const resStatus = String(form.residency_status || employee.residency_status || 'resident').toLowerCase();
   if (resStatus.includes('holiday') || resStatus.includes('working') || employee.visa_type === 'working_holiday') {
-    drawX(708, 277); // Working holiday maker
+    markX(566, 614); // Working holiday maker
   } else if (resStatus === 'foreign' || employee.visa_type === 'student') {
-    drawX(577, 277); // Foreign resident
+    markX(461, 614); // Foreign resident
   } else {
-    drawX(472, 277); // Australian resident
+    markX(377, 614); // Australian resident
   }
 
   // 9. 비과세 기준액 신청 (Question 9: Tax-free threshold)
   const claimTaxFree = Boolean(form.tax_free_threshold ?? employee.tax_free_threshold ?? true);
   if (claimTaxFree) {
-    drawX(550, 355); // Yes
+    markX(440, 550); // Yes
   } else {
-    drawX(603, 355); // No
+    markX(482, 550); // No
   }
 
-  // 10. 학자금 대출 여부 (Question 10: HELP/HECS debt)
+  // 10. 학자금 대출 여부 (Question 10: HELP/VSL/TSL debt)
   const hasHecs = Boolean(form.hecs_help ?? employee.hecs_help ?? false);
   if (hasHecs) {
-    drawX(550, 423); // Yes
+    markX(440, 495); // Yes
   } else {
-    drawX(703, 423); // No
+    markX(562, 495); // No
   }
 
   // 서명란 (DECLARATION by payee)
   const signDate = formatAtoDate(form.signed_at || employee.signed_at || new Date().toISOString());
-  drawBoxesText(signDate.day, 608, 494, 14.2, 2);
-  drawBoxesText(signDate.month, 645, 494, 14.2, 2);
-  drawBoxesText(signDate.year, 678, 494, 14.2, 4);
+  drawBoxesText(signDate.day, 486, 437, 11.4, 2);
+  drawBoxesText(signDate.month, 516, 437, 11.4, 2);
+  drawBoxesText(signDate.year, 542, 437, 11.4, 4);
 
-  // 전자서명 이미지 오버레이
+  // 자필 전자서명 이미지 오버레이 (Signature 사각형 칸: X: 310~450, Y: 420~460)
   if (signatureDataUrl && signatureDataUrl.startsWith('data:image/')) {
     try {
       const sigBytes = await fetch(signatureDataUrl).then((res) => res.arrayBuffer());
       const sigImg = await pdfDoc.embedPng(sigBytes);
       page.drawImage(sigImg, {
-        x: toX(390),
-        y: toY(510),
-        width: 140,
-        height: 40
+        x: 325,
+        y: 425,
+        width: 125,
+        height: 38
       });
     } catch {
-      page.drawText(fullName || 'Digitally Signed', {
-        x: toX(405),
-        y: toY(492),
+      page.drawText(surname + ' ' + givenNames, {
+        x: 330,
+        y: 438,
         size: 13,
         font: fontHelvetica,
-        color: rgb(0.1, 0.15, 0.45)
+        color: rgb(0.05, 0.1, 0.45)
       });
     }
   } else {
-    page.drawText(fullName || 'Digitally Signed', {
-      x: toX(405),
-      y: toY(492),
+    page.drawText(surname + ' ' + givenNames, {
+      x: 330,
+      y: 438,
       size: 13,
       font: fontHelvetica,
-      color: rgb(0.1, 0.15, 0.45)
+      color: rgb(0.05, 0.1, 0.45)
     });
   }
 
   // ==================== [SECTION B: 고용주란 (Payer)] ====================
   // 1. ABN (Question 1)
   const abnRaw = String((company && company.abn) || '51824753556').replace(/\D/g, '');
-  drawBoxesText(abnRaw, 160, 616, 17.5, 11, 10.5);
+  drawBoxesText(abnRaw, 128, 337, 14.0, 11, 10);
 
   // 3. Registered business name (Question 3)
   const compName = String((company && company.name) || 'KWORKMATE PTY LTD').toUpperCase();
-  drawBoxesText(compName, 34, 678, 14.25, 25);
+  drawBoxesText(compName, 27, 287, 11.4, 30, 9.5);
 
   // 4. Business address (Question 4)
   const compAddr = String((company && company.address) || '100 PITT STREET').toUpperCase();
-  drawBoxesText(compAddr, 34, 748, 14.25, 25);
-  drawBoxesText('SYDNEY', 34, 808, 14.25, 20);
-  page.drawText('NSW', { x: toX(46), y: toY(839) - 1.5, size: 9.5, font: fontCourier, color: rgb(0.05, 0.05, 0.15) });
-  drawBoxesText('2000', 120.5, 839, 14.25, 4);
+  drawBoxesText(compAddr, 27, 231, 11.4, 30, 9.5);
+  drawBoxesText('SYDNEY', 27, 183, 11.4, 25, 9.5);
+  page.drawText('NSW', { x: 37, y: 158, size: 9.5, font: fontCourier, color: rgb(0.05, 0.05, 0.15) });
+  drawBoxesText('2000', 96, 158, 11.4, 4, 9.5);
 
   // 5. Primary email (Question 5)
   const compEmail = String((company && company.contact_email) || 'PAYROLL@KWORKMATE.COM').toUpperCase();
-  drawBoxesText(compEmail, 402, 608, 13.5, 24, 9);
+  drawBoxesText(compEmail, 321, 343, 10.8, 25, 9);
 
   // 6. Contact person & Phone (Question 6)
   const contactPerson = String((company && company.contact_name) || 'PAYROLL MANAGER').toUpperCase();
-  drawBoxesText(contactPerson, 402, 675, 13.5, 24, 9);
+  drawBoxesText(contactPerson, 321, 289, 10.8, 25, 9);
   const contactPhone = String((company && company.contact_phone) || '0412345678').replace(/\D/g, '');
-  drawBoxesText(contactPhone, 545, 708, 13.5, 12, 9);
+  drawBoxesText(contactPhone, 436, 262, 10.8, 12, 9);
 
   // Payer Declaration Date
-  drawBoxesText(signDate.day, 608, 798, 14.2, 2);
-  drawBoxesText(signDate.month, 645, 798, 14.2, 2);
-  drawBoxesText(signDate.year, 678, 798, 14.2, 4);
+  drawBoxesText(signDate.day, 486, 191, 11.4, 2);
+  drawBoxesText(signDate.month, 516, 191, 11.4, 2);
+  drawBoxesText(signDate.year, 542, 191, 11.4, 4);
 
   return await pdfDoc.save();
 }

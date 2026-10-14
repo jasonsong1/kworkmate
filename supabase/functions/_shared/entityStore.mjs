@@ -17,6 +17,8 @@ export function tableFor(entity) {
   const name = String(entity || '');
   if (!/^[A-Za-z][A-Za-z0-9]*$/.test(name)) throw new Error('Invalid entity name');
   if (name === 'User') return 'employee_profile';
+  if (name === 'TfnDeclaration') return 'tfn_declarations';
+  if (name === 'TfnDocument') return 'tfn_documents';
   return name.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase();
 }
 

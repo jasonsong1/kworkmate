@@ -232,10 +232,11 @@ export function createCompatClient(supabase, options = {}) {
   };
 
   return {
-    asServiceRole: { entities, integrations, functions },
+    asServiceRole: { entities, integrations, functions, supabase },
     entities,
     integrations,
     auth: { me: async () => (options.me ? options.me() : null) },
-    functions
+    functions,
+    supabase
   };
 }

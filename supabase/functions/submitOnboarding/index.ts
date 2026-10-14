@@ -163,6 +163,57 @@ async function handler(req: Request) {
       docs: [...keep, ...incomingDocs]
     });
 
+    // ==============================================================================
+    // [요구사항 3, 9] tfn_declarations 및 tfn_documents 감사 테이블 기록 (멱등성 보장)
+    // ==============================================================================
+    try {
+      const tfnDoc = incomingDocs.find(
+        (d: any) => d && (d.type === 'tfn_declaration' || String(d.name || '').includes('NAT 3092') || String(d.name || '').includes('TFN'))
+      );
+      const storageUri = tfnDoc ? (tfnDoc.file_uri || tfnDoc.url || '') : '';
+
+      // 기존에 제출된 선언서가 있는지 확인 (중복 생성 방지 / 멱등성)
+      const existingDecls = await base44.asServiceRole.entities.TfnDeclaration.filter({
+        employee_id: employee.id,
+        form_version: 'NAT 3092-06.2019'
+      }).catch(() => []);
+
+      let declarationId = existingDecls[0]?.id;
+
+      if (!declarationId) {
+        const newDecl = await base44.asServiceRole.entities.TfnDeclaration.create({
+          company_id: employee.company_id,
+          employee_id: employee.id,
+          form_version: 'NAT 3092-06.2019',
+          status: 'submitted',
+          submitted_at: signedAt,
+          declaration_data: {
+            answers: tfn,
+            basis_of_payment: tfn.basis_of_payment || 'casual',
+            residency_status: tfn.residency_status || 'australian_resident',
+            tax_free_threshold: tfn.tax_free_threshold ?? true,
+            has_loan_debt: tfn.hecs_help ?? false,
+            exemption_type: tfn.exemption_type || null
+          }
+        });
+        declarationId = newDecl?.id;
+      }
+
+      if (declarationId && storageUri) {
+        await base44.asServiceRole.entities.TfnDocument.create({
+          declaration_id: declarationId,
+          storage_path: storageUri,
+          document_version: 1,
+          pdf_uploaded_at: signedAt
+        }).catch((docErr: any) => {
+          console.warn('[submitOnboarding] TfnDocument create warning:', docErr?.message);
+        });
+      }
+    } catch (auditErr: any) {
+      // 메인 온보딩 완료를 방해하지 않도록 안전하게 예외 격리
+      console.warn('[submitOnboarding] Tfn audit logging skipped:', auditErr?.message);
+    }
+
     const emailSent = await sendEmail(base44, {
       to: employee.user_email,
       subject: 'Your onboarding documents are complete',
