@@ -6,7 +6,7 @@ export const secrets = new Proxy({}, {
 });
 
 const RESEND_ENDPOINT = 'https://api.resend.com/emails';
-const RESEND_FROM = 'kworkmate <noreply@kworkmate.com>';
+const RESEND_FROM = (typeof Deno !== 'undefined' ? Deno.env.get('RESEND_FROM') : '') || 'K-Workmate <onboarding@resend.dev>';
 
 function plainText(value) {
   return String(value || '')
@@ -133,13 +133,13 @@ async function resendAttachment(attachment) {
   return { filename: attachment.filename, content: base64FromBytes(new Uint8Array(await res.arrayBuffer())) };
 }
 
-async function sendViaResend(key, { to, subject, html, attachments }) {
+async function sendViaResend(key, { to, subject, html, attachments, from }) {
   const files = [];
   for (const attachment of attachments || []) {
     const file = await resendAttachment(attachment);
     if (file) files.push(file);
   }
-  const body = { from: RESEND_FROM, to: [to], subject, html };
+  const body = { from: from || RESEND_FROM, to: [to], subject, html };
   if (files.length > 0) body.attachments = files;
   const res = await fetch(RESEND_ENDPOINT, {
     method: 'POST',
@@ -153,19 +153,19 @@ async function sendViaResend(key, { to, subject, html, attachments }) {
     // A 4xx is a configuration refusal (unverified domain, revoked key): report it, so the
     // message goes out through the platform mail service instead of being lost.
     if (res.status >= 400 && res.status < 500) return false;
-    throw new Error(`Resend refused the message (${res.status})`);
+    throw new Error(`Resend refused the message (${res.status}): ${detail}`);
   }
   return true;
 }
 
 // Returns the outcome instead of only a true/false, so the caller can record why a
 // message did not arrive.
-export async function sendEmailDetailed(base44, { to, subject, html, attachments }) {
+export async function sendEmailDetailed(base44, { to, subject, html, attachments, from, apiKey }) {
   try {
-    const key = (typeof Deno !== 'undefined' ? Deno.env.get('RESEND_API_KEY') : '') || '';
+    const key = apiKey || (typeof Deno !== 'undefined' ? Deno.env.get('RESEND_API_KEY') : '') || '';
     // Resend carries the message; anything it will not take (no key, or a configuration
     // refusal) is handed to the platform mail service, so mail is never silently dropped.
-    if (!key || !(await sendViaResend(key, { to, subject, html, attachments }))) {
+    if (!key || !(await sendViaResend(key, { to, subject, html, attachments, from }))) {
       const payload = { to, subject, html };
       if (Array.isArray(attachments) && attachments.length > 0) payload.attachments = attachments;
       try {
@@ -180,6 +180,7 @@ export async function sendEmailDetailed(base44, { to, subject, html, attachments
     return { ok: false, error: (error && error.message) || 'The email service refused the message.' };
   }
 }
+
 
 export async function sendEmail(base44, mail) {
   const result = await sendEmailDetailed(base44, mail);
