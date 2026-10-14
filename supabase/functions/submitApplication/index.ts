@@ -1,14 +1,22 @@
-// 자동 생성 파일입니다. 직접 수정하지 마세요.
-// 원본: base44/functions/submitApplication/entry.ts (변환 도구: supabase/tools/port_function.mjs)
+// ============================================================
+// submitApplication/index.ts (Supabase Edge Function)
+// 목적: 공고 지원자가 온라인 링크를 통해 이력서 및 지원서 제출
+// ============================================================
 
 import { createBase44Like } from '../_shared/server.ts';
 import { withCors } from '../_shared/http.mjs';
-const waitUntil = (p: Promise<any>) => { if (typeof (globalThis as any).EdgeRuntime !== 'undefined' && (globalThis as any).EdgeRuntime?.waitUntil) { (globalThis as any).EdgeRuntime.waitUntil(p); } else { p.catch?.((e: any) => console.error(e)); } };
+const waitUntil = (p: Promise<any>) => {
+  if (typeof (globalThis as any).EdgeRuntime !== 'undefined' && (globalThis as any).EdgeRuntime?.waitUntil) {
+    (globalThis as any).EdgeRuntime.waitUntil(p);
+  } else {
+    p.catch?.((e: any) => console.error(e));
+  }
+};
 import { normalizePhone } from '../_shared/util.ts';
 import { sendApplicantEmail } from '../_shared/email.ts';
 import { renderStageEmail } from '../_shared/emailStages.ts';
 
-async function handler(req) {
+async function handler(req: Request) {
   try {
     const base44 = createBase44Like();
     const body = await req.json();
@@ -25,11 +33,11 @@ async function handler(req) {
     const job = await base44.asServiceRole.entities.Job.get(jobId).catch(() => null);
     if (!job) return Response.json({ error: 'Job not found' }, { status: 404 });
 
-    // Questions the employer switched off are not required, so a missing answer never blocks the applicant.
+    // 고용주가 비활성화한 질문은 필수가 아니므로 체크를 건너뜁니다.
     const askedKeys = (Array.isArray(job.required_questions) ? job.required_questions : [])
-      .filter((q) => q && q.enabled !== false)
-      .map((q) => q.key);
-    const isAsked = (key) => askedKeys.length === 0 || askedKeys.includes(key);
+      .filter((q: any) => q && q.enabled !== false)
+      .map((q: any) => q.key);
+    const isAsked = (key: string) => askedKeys.length === 0 || askedKeys.includes(key);
 
     if (!body.resume_file_uri && isAsked('resume')) {
       return Response.json({ error: 'A resume file is required' }, { status: 400 });
@@ -46,6 +54,7 @@ async function handler(req) {
       ? await base44.asServiceRole.entities.Company.get(job.company_id).catch(() => null)
       : null;
 
+    // 중복 지원 확인
     const byEmail = await base44.asServiceRole.entities.Applicant.filter({ job_id: jobId, email });
     const byPhone = phone
       ? await base44.asServiceRole.entities.Applicant.filter({ job_id: jobId, phone })
@@ -54,6 +63,7 @@ async function handler(req) {
       return Response.json({ ok: false, duplicate: true });
     }
 
+    // 지원자 정보 및 이력서 저장
     const applicant = await base44.asServiceRole.entities.Applicant.create({
       company_id: job.company_id,
       branch_id: job.branch_id,
@@ -76,28 +86,38 @@ async function handler(req) {
       status: 'submitted'
     });
 
-    const place = branch ? `${branch.name}${branch.suburb ? ` (${branch.suburb})` : ''}` : 'our store';
-    const mail = renderStageEmail(
-      company,
-      'applied',
-      { name: fullName, job_title: job.title, store: place },
-      { brandColor: job.brand_color || (branch && branch.brand_color) }
-    );
-    const emailResult = await sendApplicantEmail(base44, applicant, {
-      type: 'applied',
-      subject: mail.subject,
-      html: mail.html
-    });
+    // 지원 완료 이메일 발송 시도
+    let emailOk = false;
+    try {
+      const place = branch ? `${branch.name}${branch.suburb ? ` (${branch.suburb})` : ''}` : 'our store';
+      const mail = renderStageEmail(
+        company,
+        'applied',
+        { name: fullName, job_title: job.title, store: place },
+        { brandColor: job.brand_color || (branch && branch.brand_color) }
+      );
+      const emailResult = await sendApplicantEmail(base44, applicant, {
+        type: 'applied',
+        subject: mail.subject,
+        html: mail.html
+      });
+      emailOk = Boolean(emailResult && emailResult.ok);
+    } catch (e: any) {
+      console.warn('[sendApplicantEmail] warning:', e?.message);
+    }
 
-    waitUntil(
-      base44.functions.invoke('analyzeApplicants', {
-        job_id: jobId,
-        applicant_id: applicant.id
-      })
-    );
+    // AI 지원자 분석 비동기 호출 (실패하더라도 지원서 접수는 정상 완료)
+    try {
+      waitUntil(
+        base44.functions.invoke('analyzeApplicants', {
+          job_id: jobId,
+          applicant_id: applicant.id
+        }).catch((e: any) => console.warn('[analyzeApplicants] async error:', e?.message))
+      );
+    } catch (_) {}
 
-    return Response.json({ ok: true, applicant_id: applicant.id, email_sent: emailResult.ok });
-  } catch (error) {
+    return Response.json({ ok: true, applicant_id: applicant.id, email_sent: emailOk });
+  } catch (error: any) {
     return Response.json({ error: error.message }, { status: 500 });
   }
 }

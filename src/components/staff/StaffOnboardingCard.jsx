@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Check, ChevronDown, ChevronUp, Clock, FileText, Loader2, Trash2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -15,13 +15,18 @@ import { checklistFor } from '@/lib/onboardingDocs';
 import { kwSessionAction } from '@/lib/kwAuthClient';
 import { base44 } from '@/api/base44Client';
 
-// The employee's own side of onboarding: the details their employer asks for, and one file per
-// document on the employer's list. They choose which document an upload is, so nothing has to be
-// guessed from a file name.
+/**
+ * StaffOnboardingCard 컴포넌트
+ * 직원의 온보딩 세부 정보 입력 및 서류(신분증, 세금 신고서 등) 파일 업로드/열기/삭제 카드입니다.
+ * - 온보딩 서류 및 폼 접기/펼치기(숨김 토글) 기능 제공
+ * - 파일 열기 시 서명 URL(Signed URL)을 통해 비공개 파일 안전 열람
+ * - 다른 페이지 이동 후 복귀 시에도 최신 파일 목록이 유지되도록 자동 동기화 지원
+ */
 export default function StaffOnboardingCard() {
   const { t, lang } = useI18n();
-  const { company, employeeProfile } = useWorkspace();
+  const { company, employeeProfile, reload } = useWorkspace();
   const { toast } = useToast();
+
   // 온보딩 서류 및 폼 접기/펼치기 숨김 토글 상태 (기본값: false 접힘)
   const [isOpen, setIsOpen] = useState(false);
   const [record, setRecord] = useState(null);
@@ -32,12 +37,12 @@ export default function StaffOnboardingCard() {
   const fileRef = useRef(null);
   const pickKey = useRef('');
 
+  // 현재 활성 프로필: 서버에서 갓 불러온 record 우선, 없을 경우 컨텍스트의 employeeProfile 사용
   const profile = record || employeeProfile;
 
-  useEffect(() => {
-    const row = employeeProfile;
+  // 프로필 데이터로 폼 상태를 초기화/동기화하는 함수
+  const syncFormFromProfile = useCallback((row) => {
     if (!row) return;
-    setRecord(null);
     setForm({
       address: row.address || '',
       date_of_birth: row.date_of_birth || '',
@@ -53,12 +58,34 @@ export default function StaffOnboardingCard() {
       bank_account_number: row.bank_account_number || '',
       bank_account_name: row.bank_account_name || ''
     });
-  }, [employeeProfile]);
+  }, []);
+
+  // 서버에서 최신 온보딩 서류 및 프로필 데이터를 직접 가져오는 함수
+  // (다른 페이지를 갔다 와도 방금 올린 파일이 사라지지 않고 유지되도록 보장합니다)
+  const fetchFreshProfile = useCallback(async () => {
+    try {
+      const res = await kwSessionAction({ action: 'me' });
+      if (res && res.profile) {
+        setRecord(res.profile);
+        syncFormFromProfile(res.profile);
+      }
+    } catch (_) {}
+  }, [syncFormFromProfile]);
+
+  // 컴포넌트 마운트 시 최신 프로필 1회 로드
+  useEffect(() => {
+    fetchFreshProfile();
+  }, [fetchFreshProfile]);
+
+  // 컨텍스트의 employeeProfile이 변경되었을 때 폼 동기화
+  useEffect(() => {
+    if (employeeProfile && !record) {
+      syncFormFromProfile(employeeProfile);
+    }
+  }, [employeeProfile, record, syncFormFromProfile]);
 
   if (!profile || !form) return null;
 
-  // Every detail stays on the card: what the employer collects is what their onboarding questions
-  // ask for, and an item they never ask about is simply left blank.
   const visible = { address: true, date_of_birth: true, emergency_contact: true, tax: true, super: true, bank: true };
   const checklist = checklistFor(profile, company, lang);
   const percent = checklist.requiredTotal === 0 ? 100 : (checklist.requiredDone / checklist.requiredTotal) * 100;
@@ -94,7 +121,11 @@ export default function StaffOnboardingCard() {
     setSaving(true);
     try {
       const saved = await kwSessionAction({ action: 'save_onboarding', data: detailsForSave() });
-      if (saved && saved.profile) setRecord(saved.profile);
+      if (saved && saved.profile) {
+        setRecord(saved.profile);
+        syncFormFromProfile(saved.profile);
+      }
+      if (reload) reload();
       toast({ title: t('ob.saved') });
     } catch (error) {
       toast({ variant: 'destructive', title: error.message || t('ob.saveFailed') });
@@ -118,14 +149,20 @@ export default function StaffOnboardingCard() {
     const key = pickKey.current;
     setUploadingKey(key);
     try {
+      // 1. Storage private 버킷에 업로드
       const { file_uri } = await base44.integrations.Core.UploadPrivateFile({ file });
+      // 2. 사원 레코드 docs 목록에 파일 등록
       const saved = await kwSessionAction({
         action: 'add_document',
         file_uri,
         name: file.name,
         doc_type: key
       });
-      if (saved && saved.profile) setRecord(saved.profile);
+      if (saved && saved.profile) {
+        setRecord(saved.profile);
+        syncFormFromProfile(saved.profile);
+      }
+      if (reload) reload();
       toast({ title: t('ob.uploaded') });
     } catch (error) {
       toast({ variant: 'destructive', title: error.message || t('ob.uploadFailed') });
@@ -134,12 +171,30 @@ export default function StaffOnboardingCard() {
     }
   };
 
+  // 비공개 파일 안전 열기 (서버 kwSession sign_document 및 클라이언트 CreateFileSignedUrl 이중 지원)
   const openDoc = async (file) => {
     if (!file || !file.file_uri) return;
     setBusyUri(file.file_uri);
     try {
-      const signed = await kwSessionAction({ action: 'sign_document', file_uri: file.file_uri });
-      if (signed && signed.signed_url) window.open(signed.signed_url, '_blank', 'noopener');
+      let signedUrl = '';
+
+      // 1차 시도: 서버 함수 kwSession sign_document
+      try {
+        const res = await kwSessionAction({ action: 'sign_document', file_uri: file.file_uri });
+        if (res && res.signed_url) signedUrl = res.signed_url;
+      } catch (_) {}
+
+      // 2차 시도: 클라이언트 base44.integrations.Core.CreateFileSignedUrl
+      if (!signedUrl) {
+        const clientRes = await base44.integrations.Core.CreateFileSignedUrl({ file_uri: file.file_uri }).catch(() => null);
+        if (clientRes && clientRes.signed_url) signedUrl = clientRes.signed_url;
+      }
+
+      if (signedUrl) {
+        window.open(signedUrl, '_blank', 'noopener');
+      } else {
+        throw new Error('파일 열람 링크를 생성할 수 없습니다.');
+      }
     } catch (error) {
       toast({ variant: 'destructive', title: error.message || t('ob.uploadFailed') });
     } finally {
@@ -152,7 +207,11 @@ export default function StaffOnboardingCard() {
     setBusyUri(file.file_uri);
     try {
       const saved = await kwSessionAction({ action: 'delete_document', file_uri: file.file_uri });
-      if (saved && saved.profile) setRecord(saved.profile);
+      if (saved && saved.profile) {
+        setRecord(saved.profile);
+        syncFormFromProfile(saved.profile);
+      }
+      if (reload) reload();
       toast({ title: t('ob.removed') });
     } catch (error) {
       toast({ variant: 'destructive', title: error.message || t('ob.uploadFailed') });
@@ -187,200 +246,222 @@ export default function StaffOnboardingCard() {
 
       {isOpen && (
         <CardContent className="space-y-5 animate-in fade-in-50 duration-200">
-        <div>
-          <div className="flex items-center justify-between gap-3 text-sm">
-            <span className="text-muted-foreground">
-              {t('ob.progress')
-                .replace('{done}', String(checklist.requiredDone))
-                .replace('{total}', String(checklist.requiredTotal))}
-            </span>
-            {checklist.complete && (
-              <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100">{t('ob.completed')}</Badge>
-            )}
-          </div>
-          <Progress value={percent} className="mt-2 h-1.5" />
-        </div>
-
-        <div className="divide-y rounded-xl border">
-          {checklist.items.map((item) => (
-            <div key={item.key} className="flex flex-wrap items-center gap-2 px-3 py-2.5">
-              {item.done ? (
-                <Check className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
-              ) : (
-                <Clock className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-              )}
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium">{item.label}</p>
-                <p className="truncate text-xs text-muted-foreground">
-                  {item.required ? t('ob.required') : t('ob.optional')}
-                  {item.file && item.file.name ? ` · ${item.file.name}` : ''}
-                </p>
-              </div>
-              {item.kind === 'info' ? (
-                <span className="text-xs text-muted-foreground">{t('ob.infoNote')}</span>
-              ) : uploadingKey === item.key ? (
-                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" aria-hidden="true" />
-              ) : (
-                <div className="flex items-center gap-1.5">
-                  {item.file && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={busyUri === item.file.file_uri}
-                      onClick={() => openDoc(item.file)}
-                    >
-                      {t('ob.open')}
-                    </Button>
-                  )}
-                  <Button size="sm" variant="outline" onClick={() => chooseFile(item.key)}>
-                    {item.file ? t('ob.replace') : t('ob.upload')}
-                  </Button>
-                  {item.file && item.file.uploaded_by === 'self' && (
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      title={t('common.delete')}
-                      disabled={busyUri === item.file.file_uri}
-                      onClick={() => removeDoc(item.file)}
-                    >
-                      <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                    </Button>
-                  )}
-                </div>
+          <div>
+            <div className="flex items-center justify-between gap-3 text-sm">
+              <span className="text-muted-foreground">
+                {t('ob.progress')
+                  .replace('{done}', String(checklist.requiredDone))
+                  .replace('{total}', String(checklist.requiredTotal))}
+              </span>
+              {checklist.complete && (
+                <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100">{t('ob.completed')}</Badge>
               )}
             </div>
-          ))}
-        </div>
-
-        <input
-          ref={fileRef}
-          type="file"
-          className="hidden"
-          accept=".pdf,.png,.jpg,.jpeg,.webp,.doc,.docx"
-          onChange={upload}
-        />
-
-        <div className="space-y-3 rounded-xl border p-4">
-          <div>
-            <p className="text-sm font-semibold">{t('ob.details')}</p>
-            <p className="mt-0.5 text-xs text-muted-foreground">{t('ob.detailsHint')}</p>
+            <Progress value={percent} className="mt-2 h-1.5" />
           </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            {visible.address && (
-              <div className="sm:col-span-2">
-                <Label>{t('ob.field.address')}</Label>
-                <Input value={form.address} onChange={(event) => set('address', event.target.value)} />
-              </div>
-            )}
-            {visible.date_of_birth && (
-              <div>
-                <Label>{t('ob.field.date_of_birth')}</Label>
-                <Input
-                  type="date"
-                  value={form.date_of_birth}
-                  onChange={(event) => set('date_of_birth', event.target.value)}
-                />
-              </div>
-            )}
-            {visible.emergency_contact && (
-              <>
-                <div>
-                  <Label>{t('ob.emergencyName')}</Label>
-                  <Input
-                    value={form.emergency_contact_name}
-                    onChange={(event) => set('emergency_contact_name', event.target.value)}
-                  />
+
+          <div className="divide-y rounded-xl border">
+            {checklist.items.map((item) => (
+              <div key={item.key} className="flex flex-wrap items-center gap-2 px-3 py-2.5">
+                {item.done ? (
+                  <Check className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+                ) : (
+                  <Clock className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                )}
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium">{item.title}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {item.required ? t('ob.required') : t('ob.optional')}
+                    {item.file && ` · ${item.file.name}`}
+                  </p>
                 </div>
-                <div>
-                  <Label>{t('ob.emergencyPhone')}</Label>
-                  <Input
-                    value={form.emergency_contact_phone}
-                    onChange={(event) => set('emergency_contact_phone', event.target.value)}
-                  />
-                </div>
-              </>
-            )}
-            {visible.tax && (
-              <>
-                <div>
-                  <Label>{t('ob.tfn')}</Label>
-                  <Input
-                    value={form.tfn_number}
-                    disabled={form.tfn_pending}
-                    onChange={(event) => set('tfn_number', event.target.value)}
-                  />
-                </div>
-                <div className="flex items-center justify-between gap-3 self-end rounded-xl border px-4 py-2.5">
-                  <span className="text-sm">{t('ob.tfnPending')}</span>
-                  <Switch checked={form.tfn_pending} onCheckedChange={(value) => set('tfn_pending', value)} />
-                </div>
-              </>
-            )}
-            {visible.super && (
-              <div className="sm:col-span-2">
-                <Label>{t('ob.superChoice')}</Label>
-                <Select value={form.super_choice} onValueChange={(value) => set('super_choice', value)}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="default_fund">
-                      {t('ob.superDefault')}
-                      {company && company.default_super_fund_name ? ` · ${company.default_super_fund_name}` : ''}
-                    </SelectItem>
-                    <SelectItem value="custom_fund">{t('ob.superCustom')}</SelectItem>
-                  </SelectContent>
-                </Select>
-                {form.super_choice === 'custom_fund' && (
-                  <div className="mt-3 grid gap-3 sm:grid-cols-3">
-                    <div>
-                      <Label>{t('ob.superFund')}</Label>
-                      <Input value={form.super_fund_name} onChange={(event) => set('super_fund_name', event.target.value)} />
-                    </div>
-                    <div>
-                      <Label>{t('ob.superUsi')}</Label>
-                      <Input value={form.super_usi} onChange={(event) => set('super_usi', event.target.value)} />
-                    </div>
-                    <div>
-                      <Label>{t('ob.superMember')}</Label>
-                      <Input
-                        value={form.super_member_number}
-                        onChange={(event) => set('super_member_number', event.target.value)}
-                      />
-                    </div>
+                {item.isDocument ? (
+                  <div className="flex items-center gap-1">
+                    {item.file ? (
+                      <>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          disabled={busyUri === item.file.file_uri}
+                          onClick={() => openDoc(item.file)}
+                        >
+                          {busyUri === item.file.file_uri ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            t('ob.open')
+                          )}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          disabled={Boolean(uploadingKey)}
+                          onClick={() => chooseFile(item.key)}
+                        >
+                          {uploadingKey === item.key ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            t('ob.replace')
+                          )}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          disabled={busyUri === item.file.file_uri}
+                          onClick={() => removeDoc(item.file)}
+                        >
+                          <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                        </Button>
+                      </>
+                    ) : (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={Boolean(uploadingKey)}
+                        onClick={() => chooseFile(item.key)}
+                      >
+                        {uploadingKey === item.key ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          t('ob.chooseFile')
+                        )}
+                      </Button>
+                    )}
                   </div>
+                ) : (
+                  <span className="text-xs text-muted-foreground">{t('ob.detailsHint')}</span>
                 )}
               </div>
-            )}
-            {visible.bank && (
-              <>
-                <div>
-                  <Label>{t('ob.bankBsb')}</Label>
-                  <Input value={form.bank_bsb} onChange={(event) => set('bank_bsb', event.target.value)} />
-                </div>
-                <div>
-                  <Label>{t('ob.bankAccount')}</Label>
-                  <Input
-                    value={form.bank_account_number}
-                    onChange={(event) => set('bank_account_number', event.target.value)}
-                  />
-                </div>
-                <div>
-                  <Label>{t('ob.bankHolder')}</Label>
-                  <Input
-                    value={form.bank_account_name}
-                    onChange={(event) => set('bank_account_name', event.target.value)}
-                  />
-                </div>
-              </>
-            )}
+            ))}
           </div>
-          <Button onClick={save} disabled={saving}>
-            {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {t('common.save')}
-          </Button>
-        </div>
-      </CardContent>
+
+          <input ref={fileRef} type="file" className="hidden" onChange={upload} />
+
+          <div className="space-y-4 rounded-xl border p-4">
+            <h3 className="text-sm font-semibold">{t('ob.personalDetails')}</h3>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {visible.address && (
+                <div className="sm:col-span-2">
+                  <Label>{t('ob.address')}</Label>
+                  <Input value={form.address} onChange={(event) => set('address', event.target.value)} />
+                </div>
+              )}
+              {visible.date_of_birth && (
+                <div>
+                  <Label>{t('ob.dob')}</Label>
+                  <Input
+                    type="date"
+                    value={form.date_of_birth}
+                    onChange={(event) => set('date_of_birth', event.target.value)}
+                  />
+                </div>
+              )}
+              {visible.emergency_contact && (
+                <>
+                  <div>
+                    <Label>{t('ob.emergencyName')}</Label>
+                    <Input
+                      value={form.emergency_contact_name}
+                      onChange={(event) => set('emergency_contact_name', event.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <Label>{t('ob.emergencyPhone')}</Label>
+                    <Input
+                      value={form.emergency_contact_phone}
+                      onChange={(event) => set('emergency_contact_phone', event.target.value)}
+                    />
+                  </div>
+                </>
+              )}
+              {visible.tax && (
+                <>
+                  <div>
+                    <Label>{t('ob.tfn')}</Label>
+                    <Input
+                      value={form.tfn_number}
+                      disabled={form.tfn_pending}
+                      onChange={(event) => set('tfn_number', event.target.value)}
+                    />
+                  </div>
+                  <div className="flex items-center gap-2 pt-6">
+                    <Switch
+                      checked={form.tfn_pending}
+                      onCheckedChange={(checked) => set('tfn_pending', checked)}
+                    />
+                    <Label className="text-xs">{t('ob.tfnPending')}</Label>
+                  </div>
+                </>
+              )}
+              {visible.super && (
+                <>
+                  <div className="sm:col-span-2">
+                    <Label>{t('ob.superChoice')}</Label>
+                    <Select value={form.super_choice} onValueChange={(value) => set('super_choice', value)}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="default_fund">{t('ob.superDefault')}</SelectItem>
+                        <SelectItem value="custom_fund">{t('ob.superCustom')}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {form.super_choice === 'custom_fund' && (
+                    <>
+                      <div>
+                        <Label>{t('ob.superFund')}</Label>
+                        <Input
+                          value={form.super_fund_name}
+                          onChange={(event) => set('super_fund_name', event.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <Label>{t('ob.superUsi')}</Label>
+                        <Input
+                          value={form.super_usi}
+                          onChange={(event) => set('super_usi', event.target.value)}
+                        />
+                      </div>
+                    </>
+                  )}
+                  <div>
+                    <Label>{t('ob.superMember')}</Label>
+                    <Input
+                      value={form.super_member_number}
+                      onChange={(event) => set('super_member_number', event.target.value)}
+                    />
+                  </div>
+                </>
+              )}
+              {visible.bank && (
+                <>
+                  <div>
+                    <Label>{t('ob.bankBsb')}</Label>
+                    <Input value={form.bank_bsb} onChange={(event) => set('bank_bsb', event.target.value)} />
+                  </div>
+                  <div>
+                    <Label>{t('ob.bankAccount')}</Label>
+                    <Input
+                      value={form.bank_account_number}
+                      onChange={(event) => set('bank_account_number', event.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <Label>{t('ob.bankHolder')}</Label>
+                    <Input
+                      value={form.bank_account_name}
+                      onChange={(event) => set('bank_account_name', event.target.value)}
+                    />
+                  </div>
+                </>
+              )}
+            </div>
+            <Button onClick={save} disabled={saving}>
+              {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {t('common.save')}
+            </Button>
+          </div>
+        </CardContent>
       )}
     </Card>
   );

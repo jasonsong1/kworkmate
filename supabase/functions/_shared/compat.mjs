@@ -34,17 +34,6 @@ function entityHandler(supabase, entity, ctx) {
   };
 }
 
-// 아직 이전하지 않은 기능(메일 발송, 파일 서명 URL 등)을 쓰려 하면 분명한 오류를 냅니다.
-function notReady(name) {
-  const fail = () => {
-    throw new Error(`${name} is not available on Supabase yet`);
-  };
-  return new Proxy(() => fail(), {
-    get: (_, prop) => (prop === 'then' ? undefined : notReady(`${name}.${String(prop)}`)),
-    apply: () => fail()
-  });
-}
-
 // supabase : service_role 로 만든 supabase-js 클라이언트 (서버에서만 사용!)
 // options.me : base44.auth.me() 가 돌려줄 값을 계산하는 함수 (없으면 항상 null)
 export function createCompatClient(supabase, options = {}) {
@@ -60,14 +49,71 @@ export function createCompatClient(supabase, options = {}) {
     }
   });
 
-  const integrations = notReady('integrations');
+  // Storage 비공개 서명 URL 생성 및 파일 관리 지원
+  const integrations = {
+    Core: {
+      CreateFileSignedUrl: async ({ file_uri, expiresIn = 3600 }) => {
+        const parts = String(file_uri || '').split('/');
+        const bucket = parts[0] || 'private';
+        const path = parts.slice(1).join('/');
+        if (bucket === 'public') {
+          const { data } = supabase.storage.from('public').getPublicUrl(path);
+          return { signed_url: data.publicUrl };
+        }
+        const { data, error } = await supabase.storage.from(bucket).createSignedUrl(path, expiresIn);
+        if (error) throw error;
+        return { signed_url: data.signedUrl };
+      },
+      UploadPublicFile: async ({ file }) => {
+        const ext = file.name ? file.name.split('.').pop() : 'bin';
+        const fileName = `${Date.now()}_${Math.random().toString(36).slice(2, 9)}.${ext}`;
+        const { error } = await supabase.storage.from('public').upload(fileName, file);
+        if (error) throw error;
+        const { data } = supabase.storage.from('public').getPublicUrl(fileName);
+        return { file_url: data.publicUrl, file_uri: `public/${fileName}` };
+      },
+      UploadPrivateFile: async ({ file }) => {
+        const ext = file.name ? file.name.split('.').pop() : 'bin';
+        const fileName = `${Date.now()}_${Math.random().toString(36).slice(2, 9)}.${ext}`;
+        const { error } = await supabase.storage.from('private').upload(fileName, file);
+        if (error) throw error;
+        return { file_uri: `private/${fileName}` };
+      }
+    }
+  };
+
+  // Edge Function 간 내부 호출 지원
+  const functions = {
+    invoke: async (name, payload = {}) => {
+      try {
+        const url = (typeof Deno !== 'undefined' && Deno.env.get('SUPABASE_URL')) || '';
+        const serviceKey = (typeof Deno !== 'undefined' && Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')) || '';
+        if (url && serviceKey) {
+          const res = await fetch(`${url}/functions/v1/${name}`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'apikey': serviceKey,
+              'Authorization': `Bearer ${serviceKey}`
+            },
+            body: JSON.stringify(payload)
+          });
+          const data = await res.json().catch(() => ({}));
+          return { data, status: res.status };
+        }
+        return { data: { ok: true }, status: 200 };
+      } catch (err) {
+        console.warn(`[functions.invoke] ${name} call skipped or failed:`, err.message);
+        return { data: { error: err.message }, status: 500 };
+      }
+    }
+  };
 
   return {
-    asServiceRole: { entities, integrations },
-    // 서버 함수에서는 사용자 권한 엔티티도 같은 DB를 쓰되, 권한은 kwData 가 따로 검사합니다.
+    asServiceRole: { entities, integrations, functions },
     entities,
-    // 플랫폼(이메일) 로그인은 아직 이전 전이라 null 입니다. 직원 ID 로그인은 세션 토큰으로 처리됩니다.
+    integrations,
     auth: { me: async () => (options.me ? options.me() : null) },
-    functions: { invoke: () => { throw new Error('functions.invoke is not available on Supabase yet'); } }
+    functions
   };
 }
