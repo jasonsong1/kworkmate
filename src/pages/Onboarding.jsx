@@ -10,8 +10,10 @@ import {
   HelpCircle,
   Info,
   Loader2,
+  Paperclip,
   PenTool,
   ShieldCheck,
+  UploadCloud,
   UserCheck
 } from 'lucide-react';
 import SignaturePad from '@/components/onboarding/SignaturePad';
@@ -23,34 +25,46 @@ import { Progress } from '@/components/ui/progress';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { buildContractPdf, buildTfnPdf, buildSuperPdf } from '@/lib/onboardingPdf';
+import { dateFormatOf, maskDate, validDate } from '@/lib/onboardingDates';
 import { base44 } from '@/api/base44Client';
 
-const STEPS = [
-  { id: 'personal', title: '1. 인적사항', subtitle: 'Personal Details & Name' },
-  { id: 'address', title: '2. 거주 주소', subtitle: 'Home Address in Australia' },
-  { id: 'tax', title: '3. 세무 신고', subtitle: 'ATO TFN Declaration (NAT 3092)' },
-  { id: 'docs', title: '4. 서류 제출', subtitle: 'Photo ID & Right to Work' },
-  { id: 'super_bank', title: '5. 연금 및 계좌', subtitle: 'Superannuation & Bank' },
-  { id: 'sign', title: '6. 서명 및 제출', subtitle: 'Declaration & Signature' }
-];
+// 상단 미세 프로그레스 바 (마이크로 피드백용)
+function SlimTopBar({ active }) {
+  if (!active) return null;
+  return (
+    <div className="fixed top-0 left-0 right-0 z-50 h-1 bg-slate-100 overflow-hidden">
+      <div className="h-full bg-primary animate-pulse w-full origin-left" style={{ animationDuration: '1.2s' }} />
+    </div>
+  );
+}
 
 export default function Onboarding() {
   const { token } = useParams();
   const padRef = useRef(null);
-  const [state, setState] = useState('loading');
+  const [state, setState] = useState('loading'); // 'loading' | 'form' | 'completed' | 'invalid'
   const [data, setData] = useState(null);
-  const [currentStep, setCurrentStep] = useState(0);
+  const [step, setStep] = useState(0);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const [signature, setSignature] = useState('');
   const [declaration, setDeclaration] = useState(false);
-  const [uploadedDocs, setUploadedDocs] = useState({}); // { [doc_key]: { name, file_uri } }
-  const [uploadingDocKey, setUploadingDocKey] = useState('');
-  const docFileInputRef = useRef(null);
-  const currentPickingDocKey = useRef('');
 
-  // 1. 인적사항 상태 (Section A Q2, Q4, Q5, Q6)
-  const [personal, setPersonal] = useState({
+  // 고용주가 설정한 질문 답변 상태
+  const [answers, setAnswers] = useState({});
+  // 고용주 질문 중 파일 업로드 상태
+  const [uploads, setUploads] = useState({});
+  const [uploadingId, setUploadingId] = useState('');
+
+  // 회사 설정 증빙 서류 (신분증, 비자 증빙 등)
+  const [companyDocUploads, setCompanyDocUploads] = useState({});
+  const [uploadingDocKey, setUploadingDocKey] = useState('');
+  const companyDocFileRef = useRef(null);
+  const pickingDocKey = useRef('');
+
+  // ==============================================================================
+  // 국세청 공식 세무 폼 (ATO NAT 3092) 상태 - 앞 단계 답변에서 자동 연동(Prefill)
+  // ==============================================================================
+  const [taxForm, setTaxForm] = useState({
     title: 'Mr',
     familyName: '',
     givenNames: '',
@@ -59,20 +73,11 @@ export default function Onboarding() {
     previousFamilyName: '',
     dob: '',
     email: '',
-    phone: ''
-  });
-
-  // 2. 호주 거주 주소 상태 (Section A Q3)
-  const [address, setAddress] = useState({
-    line1: '',
-    line2: '',
+    phone: '',
+    addressLine: '',
     suburb: '',
     state: 'NSW',
-    postcode: ''
-  });
-
-  // 3. ATO 세무 신고 상태 (Section A Q1, Q7, Q8, Q9, Q10)
-  const [tax, setTax] = useState({
+    postcode: '',
     tfnMode: 'number', // 'number' | 'applied' | 'under18' | 'pensioner'
     tfnNumber: '',
     employmentBasis: 'casual', // 'full_time' | 'part_time' | 'labour_hire' | 'super_stream' | 'casual'
@@ -81,118 +86,314 @@ export default function Onboarding() {
     studentDebt: 'no' // 'yes' | 'no'
   });
 
-  // 4. 연금 및 급여 계좌 상태
-  const [superBank, setSuperBank] = useState({
-    useDefaultSuper: 'yes',
-    superFundName: '',
-    superUsi: '',
-    superAbn: '',
-    superMemberNumber: '',
-    bsb: '',
-    accountNumber: '',
-    accountName: ''
-  });
-
+  // 데이터 로드
   useEffect(() => {
     const load = async () => {
-      const response = await base44.functions.invoke('getOnboardingData', { token });
-      const payload = response.data || {};
-      if (!payload.ok) {
-        setState(payload.completed ? 'completed' : 'invalid');
-        return;
-      }
-      setData(payload);
+      try {
+        const response = await base44.functions.invoke('getOnboardingData', { token });
+        const payload = response.data || {};
+        if (!payload.ok) {
+          setState(payload.completed ? 'completed' : 'invalid');
+          return;
+        }
+        setData(payload);
+        setState('form');
 
-      // 직원 기본 정보가 있으면 폼에 프리필
-      const emp = payload.employee || {};
-      const nameParts = String(emp.full_name || '').trim().split(/\s+/);
-      const surname = nameParts.length > 1 ? nameParts[nameParts.length - 1] : nameParts[0] || '';
-      const given = nameParts.length > 1 ? nameParts.slice(0, -1).join(' ') : nameParts[0] || '';
+        // 기본 사원 정보가 있으면 Tax 폼에 초기 매핑
+        const emp = payload.employee || {};
+        const nameParts = (emp.full_name || '').trim().split(' ');
+        const given = nameParts.slice(0, -1).join(' ') || nameParts[0] || '';
+        const family = nameParts.length > 1 ? nameParts[nameParts.length - 1] : '';
 
-      setPersonal((prev) => ({
-        ...prev,
-        familyName: surname,
-        givenNames: given,
-        email: emp.user_email || '',
-        phone: emp.phone || '',
-        dob: emp.date_of_birth || ''
-      }));
-
-      if (emp.address) {
-        setAddress((prev) => ({
+        setTaxForm((prev) => ({
           ...prev,
-          line1: emp.address
+          givenNames: given,
+          familyName: family,
+          email: emp.user_email || '',
+          phone: emp.phone || '',
+          dob: emp.date_of_birth || '',
+          addressLine: emp.address || '',
+          tfnNumber: emp.tfn_number || '',
+          employmentBasis: emp.employment_type || 'casual',
+          residency: emp.residency_status || 'resident'
         }));
+      } catch (err) {
+        setState('invalid');
       }
-
-      if (emp.employment_type) {
-        setTax((prev) => ({
-          ...prev,
-          employmentBasis: emp.employment_type.includes('part') ? 'part_time' : emp.employment_type.includes('full') ? 'full_time' : 'casual'
-        }));
-      }
-
-      setState('form');
     };
     load();
   }, [token]);
 
-  // 스텝 유효성 검사
-  const validateStep = (idx) => {
-    setError('');
-    if (idx === 0) {
-      if (!personal.familyName.trim()) return '성을 입력해 주세요 (Family name).';
-      if (!personal.givenNames.trim()) return '이름을 입력해 주세요 (First given name).';
-      if (!personal.dob) return '생년월일을 입력해 주세요 (Date of birth).';
-      if (!personal.email.trim() || !personal.email.includes('@')) return '유효한 이메일 주소를 입력해 주세요.';
-      if (personal.hasChangedName && !personal.previousFamilyName.trim()) {
-        return '이전 성(Previous family name)을 입력해 주세요.';
-      }
-    } else if (idx === 1) {
-      if (!address.line1.trim()) return '도로명 주소를 입력해 주세요 (Street address).';
-      if (!address.suburb.trim()) return '교외/도시명(Suburb)을 입력해 주세요.';
-      if (!address.postcode.trim() || address.postcode.length !== 4) return '우편번호(Postcode) 4자리를 정확히 입력해 주세요.';
-    } else if (idx === 2) {
-      if (tax.tfnMode === 'number') {
-        const clean = tax.tfnNumber.replace(/\D/g, '');
-        if (clean.length !== 9) return '호주 TFN 번호 9자리를 정확히 입력해 주세요. (발급 전인 경우 아래 예외 사유를 선택하세요)';
-      }
-    } else if (idx === 3) {
-      if (superBank.useDefaultSuper === 'no') {
-        if (!superBank.superFundName.trim()) return '연금 펀드 이름(Fund name)을 입력해 주세요.';
-        if (!superBank.superUsi.trim()) return '연금 USI 번호를 입력해 주세요.';
-        if (!superBank.superMemberNumber.trim()) return '연금 회원 번호(Member number)를 입력해 주세요.';
-      }
-      if (superBank.bsb && superBank.bsb.replace(/\D/g, '').length !== 6) {
-        return '은행 BSB 번호는 6자리여야 합니다.';
-      }
-    } else if (idx === 4) {
-      if (!signature) return '서명란에 직접 자필 전자서명을 완료해 주세요.';
-      if (!declaration) return 'ATO 공식 선언문에 동의 체크해 주세요.';
+  // 고용주 질문 목록
+  const questions = (data && data.onboarding_questions) || [];
+
+  // 고용주가 요구하는 필수 서류 목록 (신분증, 비자 증빙 등)
+  const getCompanyDocTypes = () => {
+    const rawList = data?.company?.onboarding_doc_types || [
+      { key: 'id', label: '신분증 (ID)', label_en: 'Photo ID (Passport or Driver Licence)', required: true },
+      { key: 'right_to_work', label: 'Right to Work 증빙 (비자/시민권)', label_en: 'Right to Work Evidence (VEVO / Passport)', required: true }
+    ];
+    return rawList.filter((item) => item && item.kind !== 'info' && item.key !== 'tfn' && item.key !== 'super' && item.key !== 'contract');
+  };
+
+  // 고용주가 설정한 page 번호에 따라 질문들을 페이지별로 그룹화
+  const questionPages = [];
+  const explicitPages = questions
+    .map((q) => Number(q.page))
+    .filter((n) => Number.isFinite(n) && n > 0);
+  let nextAuto = explicitPages.length > 0 ? Math.max(...explicitPages) + 1 : 1;
+  questions.forEach((q) => {
+    const n = Number(q.page);
+    const pageNumber = Number.isFinite(n) && n > 0 ? n : nextAuto++;
+    const found = questionPages.find((p) => p.number === pageNumber);
+    if (found) found.questions.push(q);
+    else questionPages.push({ number: pageNumber, questions: [q] });
+  });
+  questionPages.sort((a, b) => a.number - b.number);
+  questionPages.forEach((page) => {
+    const titled = page.questions.find((q) => String(q.page_title || '').trim());
+    page.title = titled ? String(titled.page_title).trim() : (page.questions[0]?.label || '질문');
+  });
+
+  // 전체 온보딩 페이지 리스트: [고용주 질문 페이지들...] -> [필수 첨부서류 페이지(서류가 있을 때)] -> [국세청 세무 신고서 페이지] -> [최종 서명 페이지]
+  const hasCompanyDocs = getCompanyDocTypes().length > 0;
+  const pages = [
+    ...questionPages.map((p, idx) => ({ type: 'questions', page: p, title: p.title || `Step ${idx + 1}` })),
+    ...(hasCompanyDocs ? [{ type: 'docs', title: '필수 서류 제출 (ID & Right to Work)' }] : []),
+    { type: 'tax', title: '호주 국세청(ATO) 세무 신고 (NAT 3092)' },
+    { type: 'sign', title: '서약 및 전자서명' }
+  ];
+
+  const totalSteps = pages.length;
+  const currentPage = step < totalSteps ? pages[step] : null;
+
+  // 답변 핸들러
+  const setAnswer = (id, value) => {
+    setAnswers((prev) => ({ ...prev, [id]: { ...(prev[id] || {}), answer: value } }));
+    syncAnswerToTaxForm(id, value);
+  };
+
+  const setFollowUp = (id, field, value) => {
+    setAnswers((prev) => ({
+      ...prev,
+      [id]: { ...(prev[id] || {}), follow_up: { ...((prev[id] || {}).follow_up || {}), [field]: value } }
+    }));
+    if (id === 'default_tfn_held' && field === 'Tax File Number') {
+      setTaxForm((t) => ({ ...t, tfnNumber: value }));
     }
+  };
+
+  // ==============================================================================
+  // [중복 질문 제거] 앞 단계 답변이 들어오면 Tax 폼에 실시간 자동 매핑
+  // ==============================================================================
+  const syncAnswerToTaxForm = (id, val) => {
+    const str = String(val || '').trim();
+    if (!str) return;
+
+    setTaxForm((prev) => {
+      const next = { ...prev };
+      // 1. 주소
+      if (id === 'default_address' || id.includes('address')) {
+        next.addressLine = str;
+        // 간단한 주소 분리 (예: 123 George St, Sydney NSW 2000)
+        const parts = str.split(',').map((s) => s.trim());
+        if (parts.length >= 2) {
+          next.addressLine = parts[0];
+          const lastPart = parts[parts.length - 1];
+          const match = lastPart.match(/([A-Za-z]+)\s+(\d{4})/);
+          if (match) {
+            next.state = match[1].toUpperCase();
+            next.postcode = match[2];
+          }
+        }
+      }
+      // 2. 생년월일
+      if (id === 'default_dob' || id.includes('dob') || id.includes('birth')) {
+        next.dob = str;
+      }
+      // 3. 성명
+      if (id === 'default_name' || id === 'full_name') {
+        const parts = str.split(' ');
+        next.givenNames = parts.slice(0, -1).join(' ') || parts[0] || '';
+        next.familyName = parts.length > 1 ? parts[parts.length - 1] : '';
+      }
+      // 4. 전화번호 & 이메일
+      if (id === 'default_phone' || id.includes('phone')) next.phone = str;
+      if (id === 'default_email' || id.includes('email')) next.email = str;
+      // 5. TFN
+      if (id === 'default_tfn') {
+        next.tfnNumber = str;
+        next.tfnMode = 'number';
+      }
+      if (id === 'default_tfn_held') {
+        if (str === 'no') next.tfnMode = 'applied';
+        if (str === 'yes') next.tfnMode = 'number';
+      }
+      // 6. 면세 한도
+      if (id === 'default_tax_free') {
+        next.taxFreeThreshold = str === 'yes' ? 'yes' : 'no';
+      }
+      // 7. 학자금 대출
+      if (id === 'default_hecs') {
+        next.studentDebt = str === 'yes' ? 'yes' : 'no';
+      }
+      return next;
+    });
+  };
+
+  const validationOf = (q) => q.validation || {};
+  const allowedFileTypes = (q) =>
+    (validationOf(q).file_types || [])
+      .map((t) => String(t || '').replace(/^\./, '').trim().toLowerCase())
+      .filter(Boolean);
+
+  const digitsOnly = (value, limit) => {
+    const digits = String(value || '').replace(/\D/g, '');
+    return limit > 0 ? digits.slice(0, limit) : digits;
+  };
+
+  // 고용주 질문 중 파일 업로드
+  const chooseQuestionFile = async (question, file) => {
+    if (!file) return;
+    const types = allowedFileTypes(question);
+    const extension = String(file.name || '').split('.').pop().toLowerCase();
+    if (types.length > 0 && !types.includes(extension)) {
+      setError(`다음 형식의 파일만 업로드할 수 있습니다: ${types.join(', ')}.`);
+      return;
+    }
+    setUploadingId(question.id);
+    setError('');
+    try {
+      const { file_uri } = await base44.integrations.Core.UploadPrivateFile({ file });
+      setUploads((prev) => ({ ...prev, [question.id]: { file_uri, name: file.name } }));
+      setAnswer(question.id, file.name);
+    } catch (err) {
+      setError('파일 업로드에 실패했습니다. 다시 시도해 주세요.');
+    } finally {
+      setUploadingId('');
+    }
+  };
+
+  // 회사 설정 필수 서류 (신분증, 비자 등) 업로드
+  const chooseCompanyDoc = (docKey) => {
+    pickingDocKey.current = docKey;
+    if (companyDocFileRef.current) {
+      companyDocFileRef.current.value = '';
+      companyDocFileRef.current.click();
+    }
+  };
+
+  const handleCompanyDocChange = async (event) => {
+    const file = event.target.files && event.target.files[0];
+    event.target.value = '';
+    const key = pickingDocKey.current;
+    if (!file || !key) return;
+
+    setUploadingDocKey(key);
+    setError('');
+    try {
+      const res = await base44.integrations.Core.UploadPrivateFile({ file });
+      if (!res || !res.file_uri) throw new Error('파일 업로드 경로를 생성하지 못했습니다.');
+      setCompanyDocUploads((prev) => ({
+        ...prev,
+        [key]: {
+          name: file.name,
+          file_uri: res.file_uri,
+          url: res.file_uri,
+          uploaded_at: new Date().toISOString()
+        }
+      }));
+    } catch (err) {
+      setError(err.message || '서류 업로드 실패');
+    } finally {
+      setUploadingDocKey('');
+    }
+  };
+
+  // 질문 유효성 검사
+  const questionValid = (question) => {
+    const val = answers[question.id] || {};
+    const answer = String(val.answer || '').trim();
+    if (question.required !== false && !answer) return false;
+    if (answer && question.type === 'number') {
+      const limit = Number(validationOf(question).digits) || 0;
+      if (!/^\d+$/.test(answer)) return false;
+      if (limit > 0 && answer.length > limit) return false;
+    }
+    if (answer && question.type === 'date' && !validDate(answer, dateFormatOf(question))) return false;
+    if (question.type === 'yes_no' && question.follow_up && question.follow_up.when === val.answer) {
+      const fields = question.follow_up.fields || [];
+      if (fields.some((field) => !String((val.follow_up || {})[field] || '').trim())) return false;
+    }
+    return true;
+  };
+
+  // 현재 스텝 유효성 검사
+  const validateCurrentStep = () => {
+    if (!currentPage) return '';
+
+    // 1. 고용주 질문 페이지
+    if (currentPage.type === 'questions') {
+      const questionsOnPage = currentPage.page?.questions || [];
+      for (const q of questionsOnPage) {
+        if (!questionValid(q)) {
+          return `[${q.label}] 항목에 올바르게 답변해 주세요.`;
+        }
+      }
+    }
+
+    // 2. 필수 서류 페이지
+    if (currentPage.type === 'docs') {
+      const requiredDocs = getCompanyDocTypes().filter((d) => d.required !== false);
+      for (const doc of requiredDocs) {
+        if (!companyDocUploads[doc.key]) {
+          return `필수 서류인 [${doc.label || doc.label_en || doc.key}] 파일을 업로드해 주세요.`;
+        }
+      }
+    }
+
+    // 3. Tax 폼 페이지
+    if (currentPage.type === 'tax') {
+      if (!taxForm.familyName.trim()) return '국세청 신고서에 기재할 성(Family Name)을 입력해 주세요.';
+      if (!taxForm.givenNames.trim()) return '국세청 신고서에 기재할 이름(First Given Name)을 입력해 주세요.';
+      if (!taxForm.dob.trim()) return '생년월일을 입력해 주세요.';
+      if (!taxForm.addressLine.trim()) return '호주 거주지 주소를 입력해 주세요.';
+      if (taxForm.tfnMode === 'number') {
+        const cleanTfn = taxForm.tfnNumber.replace(/\D/g, '');
+        if (cleanTfn.length < 8 || cleanTfn.length > 9) {
+          return '올바른 8~9자리 TFN(납세자번호)를 입력하시거나, 면제/신청 중 옵션을 선택해 주세요.';
+        }
+      }
+    }
+
+    // 4. 서명 페이지
+    if (currentPage.type === 'sign') {
+      if (!signature) return '선언서 서명을 완료해 주세요.';
+      if (!declaration) return '선언 및 동의 체크박스에 체크해 주세요.';
+    }
+
     return '';
   };
 
-  const handleNext = () => {
-    const err = validateStep(currentStep);
+  const next = () => {
+    const err = validateCurrentStep();
     if (err) {
       setError(err);
       return;
     }
     setError('');
-    setCurrentStep((prev) => Math.min(prev + 1, STEPS.length - 1));
-  };
-
-  const handlePrev = () => {
-    setError('');
-    setCurrentStep((prev) => Math.max(prev - 1, 0));
+    setStep((s) => s + 1);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const toFile = async (blob, name) => new File([blob], name, { type: 'application/pdf' });
 
-  // 최종 제출 처리
-  const handleSubmit = async () => {
-    const err = validateStep(5);
+  // ==============================================================================
+  // [최종 제출]: Tax 폼 작성 완료 후 Submit 버튼 클릭 시 실행
+  // 100% 무손실 정부 벡터 양식(Page 5)으로 완성된 PDF 생성 후 플랫폼 보관함에 등록
+  // ==============================================================================
+  const submit = async () => {
+    const err = validateCurrentStep();
     if (err) {
       setError(err);
       return;
@@ -208,57 +409,59 @@ export default function Onboarding() {
       const signatureFile = new File([signatureBlob], 'signature.png', { type: 'image/png' });
       const signatureUpload = await base44.integrations.Core.UploadPrivateFile({ file: signatureFile });
 
-      // 2. TFN 및 세무 폼 데이터 조합
-      const tfnClean = tax.tfnMode === 'number' ? tax.tfnNumber.replace(/\D/g, '') : '';
-      const formData = {
-        title: personal.title,
-        family_name: personal.familyName.trim(),
-        given_names: personal.givenNames.trim(),
-        other_names: personal.otherNames.trim(),
-        previous_family_name: personal.hasChangedName ? personal.previousFamilyName.trim() : '',
-        date_of_birth: personal.dob,
-        user_email: personal.email.trim(),
-        phone: personal.phone.trim(),
-        address_line1: address.line1.trim(),
-        address_line2: address.line2.trim(),
-        suburb: address.suburb.trim(),
-        state: address.state,
-        postcode: address.postcode.trim(),
-        address: [address.line1, address.line2, address.suburb, address.state, address.postcode].filter(Boolean).join(', '),
+      // 2. 답변 내용 및 Tax 폼 데이터 병합
+      const answerVal = (id) => (answers[id] || {}).answer || '';
+      const followVal = (id, field) => ((answers[id] || {}).follow_up || {})[field] || '';
+
+      const tfnClean = taxForm.tfnMode === 'number' ? taxForm.tfnNumber.replace(/\D/g, '') : '';
+      const finalFormData = {
+        title: taxForm.title,
+        family_name: taxForm.familyName.trim(),
+        given_names: taxForm.givenNames.trim(),
+        other_names: taxForm.otherNames.trim(),
+        previous_family_name: taxForm.hasChangedName ? taxForm.previousFamilyName.trim() : '',
+        date_of_birth: taxForm.dob.trim(),
+        user_email: taxForm.email.trim() || data.employee?.user_email || '',
+        phone: taxForm.phone.trim() || data.employee?.phone || '',
+        address_line1: taxForm.addressLine.trim(),
+        suburb: taxForm.suburb.trim(),
+        state: taxForm.state,
+        postcode: taxForm.postcode.trim(),
+        address: [taxForm.addressLine, taxForm.suburb, taxForm.state, taxForm.postcode].filter(Boolean).join(', '),
         tfn_number: tfnClean,
-        tfn_pending: tax.tfnMode !== 'number',
-        tfn_exemption: tax.tfnMode,
-        employment_type: tax.employmentBasis,
-        residency_status: tax.residency,
-        tax_free_threshold: tax.taxFreeThreshold === 'yes',
-        hecs_help: tax.studentDebt === 'yes',
-        super_choice: superBank.useDefaultSuper === 'yes' ? 'default_fund' : 'custom_fund',
-        super_fund_name: superBank.useDefaultSuper === 'yes' ? (data.company?.default_super_fund_name || '') : superBank.superFundName.trim(),
-        super_usi: superBank.useDefaultSuper === 'yes' ? (data.company?.default_super_fund_usi || '') : superBank.superUsi.trim(),
-        super_fund_abn: superBank.useDefaultSuper === 'yes' ? (data.company?.default_super_fund_abn || '') : superBank.superAbn.trim(),
-        super_member_number: superBank.useDefaultSuper === 'yes' ? '' : superBank.superMemberNumber.trim(),
-        bank_bsb: superBank.bsb.replace(/\D/g, ''),
-        bank_account_number: superBank.accountNumber.trim(),
-        bank_account_name: superBank.accountName.trim(),
+        tfn_pending: taxForm.tfnMode !== 'number',
+        tfn_exemption: taxForm.tfnMode,
+        employment_type: taxForm.employmentBasis,
+        residency_status: taxForm.residency,
+        tax_free_threshold: taxForm.taxFreeThreshold === 'yes',
+        hecs_help: taxForm.studentDebt === 'yes',
+        super_choice: answerVal('default_super_default') === 'no' ? 'custom_fund' : 'default_fund',
+        super_fund_name: answerVal('default_super_default') === 'no' ? followVal('default_super_default', 'Fund name') : (data.company?.default_super_fund_name || ''),
+        super_usi: answerVal('default_super_default') === 'no' ? followVal('default_super_default', 'USI') : (data.company?.default_super_fund_usi || ''),
+        super_member_number: answerVal('default_super_default') === 'no' ? followVal('default_super_default', 'Member number') : '',
+        super_fund_abn: answerVal('default_super_default') === 'no' ? followVal('default_super_default', 'Fund ABN') : (data.company?.default_super_fund_abn || ''),
+        bank_bsb: (answerVal('default_bank_bsb') || '').replace(/\D/g, ''),
+        bank_account_number: answerVal('default_bank_account'),
+        bank_account_name: answerVal('default_bank_holder'),
         signed_at: now
       };
 
       const pdfContext = {
-        employee: { ...data.employee, ...formData },
+        employee: { ...data.employee, ...finalFormData },
         branch: data.branch,
         company: data.company,
-        form: formData,
+        form: finalFormData,
         signatureDataUrl: signature
       };
 
-      // 3. ATO 공식 NAT 3092 (100% 원본 벡터 오버레이), NAT 13080, 고용계약서 자동 생성
+      // 3. ATO 공식 NAT 3092 (100% 무손실 벡터 오버레이), NAT 13080, 고용계약서 자동 생성
       const [tfnPdfBlob, superPdfBlob, contractPdfBlob] = await Promise.all([
         buildTfnPdf(pdfContext),
         buildSuperPdf(pdfContext),
         buildContractPdf(pdfContext)
       ]);
 
-      // 4. 비공개 Private 스토리지에 병렬 업로드
+      // 4. 생성된 공식 서류들을 Private 스토리지에 병렬 업로드
       const [tfnUpload, superUpload, contractUpload] = await Promise.all([
         base44.integrations.Core.UploadPrivateFile({
           file: await toFile(tfnPdfBlob, `TFN_Declaration_NAT3092_${data.employee.employee_number || 'staff'}.pdf`)
@@ -271,7 +474,33 @@ export default function Onboarding() {
         })
       ]);
 
+      // 5. 지원자가 질문 및 서류 단계에서 직접 업로드한 첨부파일들 통합
+      const questionUploadsList = questions
+        .filter((q) => q.type === 'upload' && uploads[q.id])
+        .map((q) => ({
+          name: `${q.label} (${uploads[q.id].name})`,
+          type: 'onboarding',
+          doc_type: q.id,
+          file_uri: uploads[q.id].file_uri,
+          url: uploads[q.id].file_uri,
+          created_at: now,
+          uploaded_by: 'applicant'
+        }));
+
+      const companyDocsList = Object.entries(companyDocUploads).map(([docKey, item]) => ({
+        name: item.name,
+        type: docKey,
+        doc_type: docKey,
+        file_uri: item.file_uri,
+        url: item.file_uri,
+        created_at: now,
+        uploaded_by: 'applicant'
+      }));
+
+      // 서류함에 최종 보관될 docs 목록 (공식 3종 + 사용자 증빙 서류)
       const docs = [
+        ...companyDocsList,
+        ...questionUploadsList,
         {
           name: 'ATO Tax File Number Declaration (NAT 3092)',
           type: 'ato_tfn',
@@ -287,7 +516,7 @@ export default function Onboarding() {
           created_at: now
         },
         {
-          name: 'Employment contract',
+          name: 'Employment Contract',
           type: 'contract',
           doc_type: 'contract',
           file_uri: contractUpload.file_uri,
@@ -295,747 +524,820 @@ export default function Onboarding() {
         }
       ];
 
-      // 5. 서버 Edge Function 호출 (TFN 암호화 및 tfn_declarations 테이블 영구 저장)
-      const response = await base44.functions.invoke('submitOnboarding', {
+      // 6. 엣지 함수 호출하여 사원 프로필 및 tfn_declarations 감사 테이블에 등록
+      const extraAnswers = questions.map((q) => ({
+        id: q.id,
+        label: q.label,
+        answer: (answers[q.id] || {}).answer || '',
+        follow_up: (answers[q.id] || {}).follow_up || {}
+      }));
+
+      const res = await base44.functions.invoke('submitOnboarding', {
         token,
+        extra_answers: extraAnswers,
         signature_file_uri: signatureUpload.file_uri,
+        declaration_accepted: true,
         tfn: {
-          number: formData.tfn_number,
-          pending: formData.tfn_pending,
-          exemption: formData.tfn_exemption,
-          residency_status: formData.residency_status,
-          tax_free_threshold: formData.tax_free_threshold,
-          hecs_help: formData.hecs_help
-        },
-        personal: {
-          title: formData.title,
-          family_name: formData.family_name,
-          given_names: formData.given_names,
-          other_names: formData.other_names,
-          previous_family_name: formData.previous_family_name,
-          dob: formData.date_of_birth,
-          address: formData.address,
-          address_line1: formData.address_line1,
-          address_line2: formData.address_line2,
-          suburb: formData.suburb,
-          state: formData.state,
-          postcode: formData.postcode,
-          phone: formData.phone
-        },
-        super: {
-          choice: formData.super_choice,
-          fund_name: formData.super_fund_name,
-          usi: formData.super_usi,
-          fund_abn: formData.super_fund_abn,
-          member_number: formData.super_member_number
+          number: tfnClean,
+          pending: taxForm.tfnMode !== 'number',
+          exemption_type: taxForm.tfnMode !== 'number' ? taxForm.tfnMode : null,
+          residency_status: taxForm.residency,
+          tax_free_threshold: taxForm.taxFreeThreshold === 'yes',
+          hecs_help: taxForm.studentDebt === 'yes',
+          basis_of_payment: taxForm.employmentBasis
         },
         bank: {
-          bsb: formData.bank_bsb,
-          account_number: formData.bank_account_number,
-          account_name: formData.bank_account_name
+          bsb: finalFormData.bank_bsb,
+          account_number: finalFormData.bank_account_number,
+          account_name: finalFormData.bank_account_name
         },
-        docs,
-        declaration_accepted: true,
-        tfn_file_uri: tfnUpload.file_uri,
-        tfn_file_size: tfnPdfBlob.size
+        super: {
+          choice: finalFormData.super_choice,
+          fund_name: finalFormData.super_fund_name,
+          usi: finalFormData.super_usi,
+          fund_abn: finalFormData.super_fund_abn,
+          member_number: finalFormData.super_member_number
+        },
+        docs
       });
 
-      if (response.data?.error) {
-        setError(response.data.error);
-        setSaving(false);
-        return;
+      if (res.data?.ok) {
+        setState('completed');
+      } else {
+        throw new Error(res.data?.error || '온보딩 정보 제출에 실패했습니다.');
       }
-
-      setState('done');
-    } catch (err) {
-      setError(err.message || '온보딩 서류 제출 중 오류가 발생했습니다.');
+    } catch (submitErr) {
+      setError(submitErr.message || '온보딩 서류 처리 중 오류가 발생했습니다. 다시 시도해 주세요.');
     } finally {
       setSaving(false);
     }
   };
 
+  // ==============================================================================
+  // 상태별 뷰 (로딩, 만료, 완료)
+  // ==============================================================================
   if (state === 'loading') {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-900 text-white">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
-      </div>
-    );
-  }
-
-  if (state === 'invalid' || state === 'completed' || state === 'done') {
-    const isDone = state === 'done' || state === 'completed';
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-950 p-4">
-        <div className="w-full max-w-md rounded-2xl border border-slate-800 bg-slate-900/90 p-8 text-center shadow-xl">
-          {isDone ? (
-            <>
-              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                <CheckCircle2 className="h-8 w-8" />
-              </div>
-              <h2 className="text-xl font-bold text-white mb-2">온보딩 서류 제출 완료</h2>
-              <p className="text-sm text-slate-400 mb-6 leading-relaxed">
-                호주 국세청(ATO) 공식 NAT 3092 TFN 신고서 및 연금 서류가 안전하게 암호화되어 제출되었습니다.
-              </p>
-              <div className="rounded-lg bg-slate-800/60 border border-slate-700/60 p-4 text-xs text-slate-300 space-y-1 text-left mb-6">
-                <div className="flex items-center gap-1.5 text-emerald-400 font-semibold mb-1">
-                  <ShieldCheck className="h-4 w-4" /> 공식 서류 발급 완료
-                </div>
-                <div>• ATO Tax File Number Declaration (NAT 3092)</div>
-                <div>• ATO Superannuation Standard Choice (NAT 13080)</div>
-                <div>• Standard Employment Contract</div>
-              </div>
-              <p className="text-xs text-slate-500">본 창을 닫으셔도 좋습니다.</p>
-            </>
-          ) : (
-            <>
-              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-rose-500/10 text-rose-400 border border-rose-500/20">
-                <AlertCircle className="h-8 w-8" />
-              </div>
-              <h2 className="text-xl font-bold text-white mb-2">유효하지 않은 링크</h2>
-              <p className="text-sm text-slate-400">
-                링크가 만료되었거나 이미 사용된 링크입니다. 고용주에게 새로운 온보딩 링크를 요청해 주세요.
-              </p>
-            </>
-          )}
+      <div className="flex min-h-screen items-center justify-center p-4 bg-slate-50">
+        <SlimTopBar active={true} />
+        <div className="flex items-center gap-3 text-sm text-slate-500 font-medium">
+          <Loader2 className="h-5 w-5 animate-spin text-primary" />
+          <span>온보딩 양식을 불러오는 중입니다...</span>
         </div>
       </div>
     );
   }
 
-  const branchName = data.branch?.name || data.company?.name || 'K-Workmate';
+  if (state === 'invalid') {
+    return (
+      <div className="flex min-h-screen items-center justify-center p-4 bg-slate-50">
+        <div className="max-w-md rounded-2xl border bg-white p-6 text-center shadow-sm">
+          <AlertCircle className="mx-auto h-10 w-10 text-amber-500" />
+          <h1 className="mt-3 text-lg font-semibold text-slate-900">유효하지 않은 링크입니다</h1>
+          <p className="mt-2 text-sm text-slate-600">
+            링크가 만료되었거나 올바르지 않습니다. 관리자에게 새로운 온보딩 링크 발송을 요청해 주세요.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (state === 'completed') {
+    return (
+      <div className="flex min-h-screen items-center justify-center p-4 bg-slate-50">
+        <div className="max-w-md rounded-2xl border bg-white p-6 text-center shadow-sm">
+          <CheckCircle2 className="mx-auto h-12 w-12 text-emerald-500" />
+          <h1 className="mt-3 text-xl font-bold text-slate-900">온보딩 서류 제출 완료</h1>
+          <p className="mt-2 text-sm text-slate-600 leading-relaxed">
+            호주 국세청(ATO) 공식 <b>NAT 3092 (TFN 신고서)</b> 및 <b>NAT 13080 (연금 선택서)</b>, 고용계약서 서명이 성공적으로 접수되었습니다.
+          </p>
+          <div className="mt-4 rounded-xl bg-slate-50 p-3 text-xs text-slate-500 border">
+            제출된 서류는 회사의 비공개 서류 보관함에 안전하게 암호화되어 보관됩니다. 창을 닫으셔도 좋습니다.
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const brandColor = data.branch?.brand_color || '#2563eb';
+  const progressPercent = Math.round(((step + 1) / totalSteps) * 100);
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-between">
-      {/* 상단 헤더 */}
-      <header className="border-b border-slate-800/80 bg-slate-900/60 backdrop-blur sticky top-0 z-20">
-        <div className="max-w-2xl mx-auto px-4 py-3.5 flex items-center justify-between">
+    <div className="min-h-screen bg-slate-50/70 pb-16">
+      {/* 인터랙션을 막지 않는 마이크로 피드백 상단 바 */}
+      <SlimTopBar active={saving} />
+
+      {/* 헤더 */}
+      <header className="border-b bg-white sticky top-0 z-30 shadow-xs">
+        <div className="mx-auto max-w-2xl px-4 py-3.5 flex items-center justify-between">
           <div>
             <div className="flex items-center gap-2">
-              <span className="font-bold text-base text-white tracking-tight">{branchName}</span>
-              <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20">
-                직원 온보딩
+              <span
+                className="h-2.5 w-2.5 rounded-full"
+                style={{ backgroundColor: brandColor }}
+              />
+              <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                {data.company?.name || 'KWorkMate'}
               </span>
             </div>
-            <p className="text-xs text-slate-400 mt-0.5">호주 국세청(ATO) 공식 TFN Declaration & 서약서</p>
+            <h1 className="text-sm font-bold text-slate-900 mt-0.5">
+              {data.branch?.name ? `${data.branch.name} — 온보딩` : '직원 온보딩'}
+            </h1>
           </div>
           <div className="text-right">
-            <span className="text-xs text-slate-400 font-medium">
-              단계 {currentStep + 1} / {STEPS.length}
+            <span className="text-xs font-medium text-slate-500">
+              {step + 1} / {totalSteps} 단계
             </span>
-            <div className="w-24 mt-1">
-              <Progress value={((currentStep + 1) / STEPS.length) * 100} className="h-1.5 bg-slate-800" />
-            </div>
           </div>
         </div>
+        <Progress value={progressPercent} className="h-1 rounded-none bg-slate-100" />
       </header>
 
-      {/* 메인 폼 컨텐츠 */}
-      <main className="flex-1 max-w-2xl w-full mx-auto p-4 sm:p-6 my-2">
-        <div className="rounded-2xl border border-slate-800 bg-slate-900/90 p-5 sm:p-7 shadow-2xl">
-          {/* 스텝 제목 */}
-          <div className="mb-6 border-b border-slate-800 pb-4">
-            <h1 className="text-lg sm:text-xl font-bold text-white flex items-center gap-2">
-              {STEPS[currentStep].title}
-            </h1>
-            <p className="text-xs sm:text-sm text-slate-400 mt-1">
-              {STEPS[currentStep].subtitle}
-            </p>
-          </div>
+      <main className="mx-auto max-w-2xl px-4 pt-6 space-y-6">
+        {/* 스텝 제목 */}
+        <div>
+          <h2 className="text-lg font-bold text-slate-900">{currentPage?.title}</h2>
+          <p className="text-xs text-slate-500 mt-0.5">
+            {currentPage?.type === 'questions' && '고용주가 요청한 온보딩 항목을 입력해 주세요.'}
+            {currentPage?.type === 'docs' && '호주 노동법 및 근무 자격 확인에 필요한 증빙서류를 첨부해 주세요.'}
+            {currentPage?.type === 'tax' && '앞서 입력하신 정보가 자동 연동되었습니다. 호주 국세청(ATO) 공식 NAT 3092 양식 내용을 확인해 주세요.'}
+            {currentPage?.type === 'sign' && '제출 전 선언문을 확인하고 자필 서명을 완료해 주세요.'}
+          </p>
+        </div>
 
-          {/* Step 1: 인적사항 (Personal Details & Name) */}
-          {currentStep === 0 && (
-            <div className="space-y-4">
-              <div>
-                <Label className="text-xs text-slate-300">호칭 (Title) *</Label>
-                <div className="grid grid-cols-4 gap-2 mt-1.5">
-                  {['Mr', 'Mrs', 'Miss', 'Ms'].map((t) => (
-                    <Button
-                      key={t}
-                      type="button"
-                      variant={personal.title === t ? 'default' : 'outline'}
-                      className={personal.title === t ? 'bg-blue-600 text-white font-semibold' : 'border-slate-700 text-slate-300 hover:bg-slate-800'}
-                      onClick={() => setPersonal((p) => ({ ...p, title: t }))}>
-                      {t}
-                    </Button>
+        {/* ============================================================================== */}
+        {/* [페이지 타입 1]: 고용주 설정 질문 페이지 */}
+        {/* ============================================================================== */}
+        {currentPage?.type === 'questions' && (
+          <section className="space-y-5 rounded-2xl border bg-white p-5 shadow-sm">
+            {(currentPage.page?.questions || []).map((question) => {
+              const value = answers[question.id] || {};
+              const fields =
+                question.type === 'yes_no' && question.follow_up && question.follow_up.when === value.answer
+                  ? question.follow_up.fields || []
+                  : [];
+
+              return (
+                <div key={question.id} className="space-y-2 pb-2">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-sm font-semibold text-slate-800">
+                      {question.label} {question.required !== false && <span className="text-red-500">*</span>}
+                    </Label>
+                    {question.required === false && (
+                      <span className="text-[11px] text-slate-400">선택</span>
+                    )}
+                  </div>
+                  {question.description && (
+                    <p className="text-xs text-slate-500 leading-relaxed">{question.description}</p>
+                  )}
+
+                  {question.type === 'yes_no' && (
+                    <RadioGroup
+                      value={value.answer || ''}
+                      onValueChange={(ans) => setAnswer(question.id, ans)}
+                      className="flex gap-4 pt-1"
+                    >
+                      <div className="flex items-center gap-2">
+                        <RadioGroupItem value="yes" id={`${question.id}-yes`} />
+                        <label htmlFor={`${question.id}-yes`} className="text-sm cursor-pointer">
+                          예 (Yes)
+                        </label>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <RadioGroupItem value="no" id={`${question.id}-no`} />
+                        <label htmlFor={`${question.id}-no`} className="text-sm cursor-pointer">
+                          아니오 (No)
+                        </label>
+                      </div>
+                    </RadioGroup>
+                  )}
+
+                  {question.type === 'select' && (
+                    <Select value={value.answer || ''} onValueChange={(ans) => setAnswer(question.id, ans)}>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="선택해 주세요" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {(question.options || []).map((opt) => (
+                          <SelectItem key={opt} value={opt}>
+                            {opt}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+
+                  {question.type === 'upload' && (
+                    <label className="flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-dashed border-slate-300 p-3 text-sm hover:border-slate-400 transition-colors">
+                      <span className="flex min-w-0 items-center gap-2 text-slate-600">
+                        {uploadingId === question.id ? (
+                          <Loader2 className="h-4 w-4 shrink-0 animate-spin text-primary" />
+                        ) : (
+                          <Paperclip className="h-4 w-4 shrink-0" />
+                        )}
+                        <span className="truncate">
+                          {uploadingId === question.id
+                            ? '업로드 중...'
+                            : uploads[question.id]
+                            ? uploads[question.id].name
+                            : '파일 선택 (PDF, JPG, PNG)'}
+                        </span>
+                      </span>
+                      <span className="shrink-0 text-xs font-semibold text-primary">
+                        {uploads[question.id] ? '변경' : '찾아보기'}
+                      </span>
+                      <input
+                        type="file"
+                        className="hidden"
+                        accept={allowedFileTypes(question).map((t) => `.${t}`).join(',') || '.pdf,.jpg,.jpeg,.png'}
+                        onChange={(e) => chooseQuestionFile(question, e.target.files && e.target.files[0])}
+                      />
+                    </label>
+                  )}
+
+                  {question.type === 'number' && (
+                    <Input
+                      inputMode="numeric"
+                      value={value.answer || ''}
+                      onChange={(e) =>
+                        setAnswer(question.id, digitsOnly(e.target.value, Number(validationOf(question).digits) || 0))
+                      }
+                      placeholder={
+                        Number(validationOf(question).digits) > 0
+                          ? `최대 ${validationOf(question).digits}자리 숫자`
+                          : '숫자만 입력'
+                      }
+                    />
+                  )}
+
+                  {question.type === 'date' && (
+                    <Input
+                      type="date"
+                      value={value.answer || ''}
+                      onChange={(e) => setAnswer(question.id, e.target.value)}
+                    />
+                  )}
+
+                  {question.type !== 'yes_no' &&
+                    question.type !== 'select' &&
+                    question.type !== 'upload' &&
+                    question.type !== 'number' &&
+                    question.type !== 'date' && (
+                      <Input
+                        value={value.answer || ''}
+                        onChange={(e) => setAnswer(question.id, e.target.value)}
+                        placeholder="답변을 입력해 주세요"
+                      />
+                    )}
+
+                  {/* 후속 질문 필드 */}
+                  {fields.map((field) => (
+                    <div key={field} className="pt-2 pl-3 border-l-2 border-slate-200 space-y-1">
+                      <Label className="text-xs font-medium text-slate-700">{field}</Label>
+                      <Input
+                        value={(value.follow_up || {})[field] || ''}
+                        onChange={(e) => setFollowUp(question.id, field, e.target.value)}
+                        placeholder={`${field} 입력`}
+                      />
+                    </div>
                   ))}
                 </div>
-              </div>
+              );
+            })}
+          </section>
+        )}
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <Label className="text-xs text-slate-300">영문 성 (Family name / Surname) *</Label>
-                  <Input
-                    className="mt-1.5 bg-slate-950 border-slate-700 text-white font-medium"
-                    placeholder="예: HONG"
-                    value={personal.familyName}
-                    onChange={(e) => setPersonal((p) => ({ ...p, familyName: e.target.value.toUpperCase() }))}
-                  />
-                  <p className="text-[11px] text-slate-500 mt-1">여권이나 비자에 등록된 영문 성</p>
-                </div>
-                <div>
-                  <Label className="text-xs text-slate-300">영문 이름 (First given name) *</Label>
-                  <Input
-                    className="mt-1.5 bg-slate-950 border-slate-700 text-white font-medium"
-                    placeholder="예: GILDONG"
-                    value={personal.givenNames}
-                    onChange={(e) => setPersonal((p) => ({ ...p, givenNames: e.target.value.toUpperCase() }))}
-                  />
-                  <p className="text-[11px] text-slate-500 mt-1">영문 이름 (First Name)</p>
-                </div>
-              </div>
-
+        {/* ============================================================================== */}
+        {/* [페이지 타입 2]: 회사 설정 필수 서류 제출 페이지 (신분증 & 비자 증빙) */}
+        {/* ============================================================================== */}
+        {currentPage?.type === 'docs' && (
+          <section className="space-y-4 rounded-2xl border bg-white p-5 shadow-sm">
+            <div className="rounded-xl border border-blue-100 bg-blue-50/60 p-3.5 text-xs text-blue-900 leading-relaxed flex items-start gap-2.5">
+              <FileCheck className="h-4 w-4 shrink-0 text-blue-600 mt-0.5" />
               <div>
-                <Label className="text-xs text-slate-300">중간 이름 (Other given names) - 선택</Label>
-                <Input
-                  className="mt-1.5 bg-slate-950 border-slate-700 text-white"
-                  placeholder="중간 이름이 있는 경우만 입력"
-                  value={personal.otherNames}
-                  onChange={(e) => setPersonal((p) => ({ ...p, otherNames: e.target.value.toUpperCase() }))}
-                />
-              </div>
-
-              {/* 이전 성 변경 이력 (Section A Q4) */}
-              <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3.5 space-y-2">
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="hasChangedName"
-                    checked={personal.hasChangedName}
-                    onCheckedChange={(v) => setPersonal((p) => ({ ...p, hasChangedName: Boolean(v) }))}
-                  />
-                  <Label htmlFor="hasChangedName" className="text-xs text-slate-300 cursor-pointer">
-                    호주 국세청(ATO)에 과거 다른 성으로 등록된 이력이 있습니까? (Question 4)
-                  </Label>
-                </div>
-                {personal.hasChangedName && (
-                  <div className="pt-2">
-                    <Label className="text-xs text-slate-300">이전 성 (Previous family name) *</Label>
-                    <Input
-                      className="mt-1.5 bg-slate-900 border-slate-700 text-white"
-                      placeholder="과거에 사용하던 영문 성 입력"
-                      value={personal.previousFamilyName}
-                      onChange={(e) => setPersonal((p) => ({ ...p, previousFamilyName: e.target.value.toUpperCase() }))}
-                    />
-                  </div>
-                )}
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <Label className="text-xs text-slate-300">생년월일 (Date of birth) *</Label>
-                  <Input
-                    type="date"
-                    className="mt-1.5 bg-slate-950 border-slate-700 text-white"
-                    value={personal.dob}
-                    onChange={(e) => setPersonal((p) => ({ ...p, dob: e.target.value }))}
-                  />
-                </div>
-                <div>
-                  <Label className="text-xs text-slate-300">전화번호 (Mobile phone) *</Label>
-                  <Input
-                    className="mt-1.5 bg-slate-950 border-slate-700 text-white"
-                    placeholder="0412 345 678"
-                    value={personal.phone}
-                    onChange={(e) => setPersonal((p) => ({ ...p, phone: e.target.value }))}
-                  />
-                </div>
-              </div>
-
-              <div>
-                <Label className="text-xs text-slate-300">기본 이메일 주소 (Primary e-mail address) *</Label>
-                <Input
-                  type="email"
-                  className="mt-1.5 bg-slate-950 border-slate-700 text-white"
-                  placeholder="your.email@example.com"
-                  value={personal.email}
-                  onChange={(e) => setPersonal((p) => ({ ...p, email: e.target.value }))}
-                />
-                <p className="text-[11px] text-slate-500 mt-1">
-                  호주 국세청 서식 및 급여명세서(Payslip)가 발송되는 공식 이메일입니다.
-                </p>
+                <p className="font-semibold text-blue-950">회사 요구 증빙서류 첨부</p>
+                호주 노동법 및 본인 확인 규격에 맞추어 아래 증빙 서류를 업로드해 주세요.
               </div>
             </div>
-          )}
 
-          {/* Step 2: 호주 거주 주소 (Home Address in Australia) */}
-          {currentStep === 1 && (
-            <div className="space-y-4">
-              <div>
-                <Label className="text-xs text-slate-300">호주 내 도로명 주소 (Street Address Line 1) *</Label>
-                <Input
-                  className="mt-1.5 bg-slate-950 border-slate-700 text-white"
-                  placeholder="예: 123 GEORGE STREET"
-                  value={address.line1}
-                  onChange={(e) => setAddress((a) => ({ ...a, line1: e.target.value.toUpperCase() }))}
-                />
+            <div className="grid gap-3 pt-2">
+              {getCompanyDocTypes().map((docType) => {
+                const currentDoc = companyDocUploads[docType.key];
+                const isUploading = uploadingDocKey === docType.key;
+
+                return (
+                  <div
+                    key={docType.key}
+                    className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl border bg-slate-50/50 hover:bg-slate-50 transition-colors"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-sm text-slate-800 break-words">
+                          {docType.label || docType.label_en || docType.key}
+                        </span>
+                        {docType.required !== false ? (
+                          <span className="text-[10px] font-bold text-red-600 bg-red-50 border border-red-200 px-1.5 py-0.5 rounded">
+                            필수
+                          </span>
+                        ) : (
+                          <span className="text-[10px] text-slate-500 bg-slate-200 px-1.5 py-0.5 rounded">
+                            선택
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-slate-500 mt-1 break-words">
+                        {docType.key === 'id'
+                          ? '여권(Passport) 사진 또는 호주 운전면허증 스캔본 (PDF, JPG, PNG)'
+                          : docType.key === 'right_to_work'
+                          ? '호주 비자 승인 레터(VEVO) 또는 영주권/시민권 증빙 서류'
+                          : docType.label_en || '서류 파일을 첨부해 주세요.'}
+                      </p>
+                      {currentDoc && (
+                        <div className="mt-2.5 flex items-center gap-2 text-xs font-medium text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded border border-emerald-200">
+                          <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                          <span className="break-all flex-1">{currentDoc.name}</span>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setCompanyDocUploads((prev) => {
+                                const next = { ...prev };
+                                delete next[docType.key];
+                                return next;
+                              })
+                            }
+                            className="text-slate-400 hover:text-red-500 text-xs ml-1"
+                          >
+                            삭제
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="shrink-0">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={currentDoc ? 'outline' : 'default'}
+                        disabled={isUploading}
+                        onClick={() => chooseCompanyDoc(docType.key)}
+                        className="text-xs h-9 min-w-[85px]"
+                      >
+                        {isUploading ? (
+                          <>
+                            <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+                            업로드...
+                          </>
+                        ) : currentDoc ? (
+                          '파일 변경'
+                        ) : (
+                          '파일 선택'
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <input
+              ref={companyDocFileRef}
+              type="file"
+              className="hidden"
+              accept=".pdf,.png,.jpg,.jpeg,.webp"
+              onChange={handleCompanyDocChange}
+            />
+          </section>
+        )}
+
+        {/* ============================================================================== */}
+        {/* [페이지 타입 3]: 호주 국세청(ATO) 세무 신고서 NAT 3092 (맨 마지막 직전) */}
+        {/* 앞 단계 답변이 이미 자동 채워져 있어서 중복 질문 없이 바로 검토 가능! */}
+        {/* ============================================================================== */}
+        {currentPage?.type === 'tax' && (
+          <section className="space-y-6 rounded-2xl border bg-white p-5 shadow-sm">
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-4 text-xs text-emerald-900 leading-relaxed">
+              <div className="flex items-center gap-2 font-bold text-sm text-emerald-950 mb-1">
+                <FileCheck className="h-4.5 w-4.5 text-emerald-600" />
+                호주 국세청(ATO) 공식 NAT 3092 세무 신고서
               </div>
+              앞서 입력하신 정보가 정부 공식 양식에 <b>자동 반영</b>되었습니다.
+              내용을 확인하시고, 국세청 고유 질문(호주 세법상 거주자 분류 등)만 최종 체크해 주세요.
+            </div>
 
-              <div>
-                <Label className="text-xs text-slate-300">상세 주소 (Unit / Apartment / Line 2) - 선택</Label>
-                <Input
-                  className="mt-1.5 bg-slate-950 border-slate-700 text-white"
-                  placeholder="예: UNIT 45"
-                  value={address.line2}
-                  onChange={(e) => setAddress((a) => ({ ...a, line2: e.target.value.toUpperCase() }))}
-                />
-              </div>
+            {/* Q1: Tax File Number */}
+            <div className="space-y-3 p-4 rounded-xl border bg-slate-50/60">
+              <Label className="text-sm font-bold text-slate-800 flex items-center justify-between">
+                <span>1. What is your tax file number (TFN)?</span>
+                <span className="text-xs font-normal text-slate-500">ATO NAT 3092 Q1</span>
+              </Label>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div className="sm:col-span-1">
-                  <Label className="text-xs text-slate-300">교외/지역 (Suburb / Town) *</Label>
-                  <Input
-                    className="mt-1.5 bg-slate-950 border-slate-700 text-white"
-                    placeholder="예: SYDNEY"
-                    value={address.suburb}
-                    onChange={(e) => setAddress((a) => ({ ...a, suburb: e.target.value.toUpperCase() }))}
-                  />
+              <RadioGroup
+                value={taxForm.tfnMode}
+                onValueChange={(v) => setTaxForm((t) => ({ ...t, tfnMode: v }))}
+                className="space-y-2 pt-1"
+              >
+                <div className="flex items-center gap-2">
+                  <RadioGroupItem value="number" id="tfn-has-number" />
+                  <label htmlFor="tfn-has-number" className="text-xs font-medium cursor-pointer">
+                    TFN 번호 보유 (I have a TFN)
+                  </label>
                 </div>
+                {taxForm.tfnMode === 'number' && (
+                  <div className="pl-6 pt-1">
+                    <Input
+                      inputMode="numeric"
+                      value={taxForm.tfnNumber}
+                      onChange={(e) => setTaxForm((t) => ({ ...t, tfnNumber: digitsOnly(e.target.value, 9) }))}
+                      placeholder="8자리 또는 9자리 숫자 (예: 123 456 789)"
+                      className="max-w-xs font-mono text-sm tracking-wider"
+                    />
+                    <p className="text-[11px] text-slate-500 mt-1">숫자만 입력하시면 공식 9칸 박스에 자동 정렬됩니다.</p>
+                  </div>
+                )}
+
+                <div className="flex items-center gap-2 pt-1">
+                  <RadioGroupItem value="applied" id="tfn-applied" />
+                  <label htmlFor="tfn-applied" className="text-xs font-medium cursor-pointer">
+                    TFN 신청 중 / 발급 대기 중 (I have made a separate application/enquiry to the ATO - 28일 유예)
+                  </label>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <RadioGroupItem value="under18" id="tfn-under18" />
+                  <label htmlFor="tfn-under18" className="text-xs font-medium cursor-pointer">
+                    만 18세 미만 비과세 면제 (Exemption: Under 18 years of age)
+                  </label>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <RadioGroupItem value="pensioner" id="tfn-pensioner" />
+                  <label htmlFor="tfn-pensioner" className="text-xs font-medium cursor-pointer">
+                    정부 연금 / 수당 수급자 면제 (Exemption: In receipt of a pension, benefit or allowance)
+                  </label>
+                </div>
+              </RadioGroup>
+            </div>
+
+            {/* Q2 & Q4: Name */}
+            <div className="space-y-3 p-4 rounded-xl border bg-slate-50/60">
+              <Label className="text-sm font-bold text-slate-800">2. What is your name?</Label>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <div>
-                  <Label className="text-xs text-slate-300">주 (State / Territory) *</Label>
-                  <Select value={address.state} onValueChange={(v) => setAddress((a) => ({ ...a, state: v }))}>
-                    <SelectTrigger className="mt-1.5 bg-slate-950 border-slate-700 text-white">
+                  <Label className="text-xs text-slate-600">Title</Label>
+                  <Select value={taxForm.title} onValueChange={(v) => setTaxForm((t) => ({ ...t, title: v }))}>
+                    <SelectTrigger className="h-9 text-xs">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent className="bg-slate-900 border-slate-800 text-white">
-                      {['NSW', 'VIC', 'QLD', 'WA', 'SA', 'TAS', 'ACT', 'NT'].map((st) => (
-                        <SelectItem key={st} value={st}>{st}</SelectItem>
-                      ))}
+                    <SelectContent>
+                      <SelectItem value="Mr">Mr</SelectItem>
+                      <SelectItem value="Mrs">Mrs</SelectItem>
+                      <SelectItem value="Miss">Miss</SelectItem>
+                      <SelectItem value="Ms">Ms</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
-                <div>
-                  <Label className="text-xs text-slate-300">우편번호 (Postcode) *</Label>
+                <div className="sm:col-span-3">
+                  <Label className="text-xs text-slate-600">성 (Surname / Family name) *</Label>
                   <Input
-                    maxLength={4}
-                    className="mt-1.5 bg-slate-950 border-slate-700 text-white font-mono"
-                    placeholder="2000"
-                    value={address.postcode}
-                    onChange={(e) => setAddress((a) => ({ ...a, postcode: e.target.value.replace(/\D/g, '').slice(0, 4) }))}
+                    value={taxForm.familyName}
+                    onChange={(e) => setTaxForm((t) => ({ ...t, familyName: e.target.value.toUpperCase() }))}
+                    placeholder="HONG"
+                    className="h-9 text-xs uppercase"
+                  />
+                </div>
+                <div className="col-span-2">
+                  <Label className="text-xs text-slate-600">이름 (First given name) *</Label>
+                  <Input
+                    value={taxForm.givenNames}
+                    onChange={(e) => setTaxForm((t) => ({ ...t, givenNames: e.target.value.toUpperCase() }))}
+                    placeholder="GILDONG"
+                    className="h-9 text-xs uppercase"
+                  />
+                </div>
+                <div className="col-span-2">
+                  <Label className="text-xs text-slate-600">중간 이름 (Other given names)</Label>
+                  <Input
+                    value={taxForm.otherNames}
+                    onChange={(e) => setTaxForm((t) => ({ ...t, otherNames: e.target.value.toUpperCase() }))}
+                    className="h-9 text-xs uppercase"
+                  />
+                </div>
+              </div>
+
+              {/* 이전 성명 */}
+              <div className="pt-2">
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="changed-name"
+                    checked={taxForm.hasChangedName}
+                    onCheckedChange={(v) => setTaxForm((t) => ({ ...t, hasChangedName: Boolean(v) }))}
+                  />
+                  <label htmlFor="changed-name" className="text-xs text-slate-700 cursor-pointer">
+                    과거 국세청(ATO) 거래 이후 성(Family name)을 변경한 적이 있습니다 (Q4)
+                  </label>
+                </div>
+                {taxForm.hasChangedName && (
+                  <div className="pt-2 pl-6">
+                    <Input
+                      value={taxForm.previousFamilyName}
+                      onChange={(e) => setTaxForm((t) => ({ ...t, previousFamilyName: e.target.value.toUpperCase() }))}
+                      placeholder="이전 성 (Previous family name)"
+                      className="h-9 text-xs uppercase max-w-sm"
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Q3: Address */}
+            <div className="space-y-3 p-4 rounded-xl border bg-slate-50/60">
+              <Label className="text-sm font-bold text-slate-800">3. What is your home address in Australia?</Label>
+              <div className="grid gap-2.5">
+                <Input
+                  value={taxForm.addressLine}
+                  onChange={(e) => setTaxForm((t) => ({ ...t, addressLine: e.target.value.toUpperCase() }))}
+                  placeholder="Street Address (예: 123 GEORGE ST)"
+                  className="h-9 text-xs uppercase"
+                />
+                <div className="grid grid-cols-3 gap-2">
+                  <Input
+                    value={taxForm.suburb}
+                    onChange={(e) => setTaxForm((t) => ({ ...t, suburb: e.target.value.toUpperCase() }))}
+                    placeholder="Suburb / Town (예: SYDNEY)"
+                    className="h-9 text-xs uppercase"
+                  />
+                  <Select value={taxForm.state} onValueChange={(v) => setTaxForm((t) => ({ ...t, state: v }))}>
+                    <SelectTrigger className="h-9 text-xs">
+                      <SelectValue placeholder="State" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {['NSW', 'VIC', 'QLD', 'WA', 'SA', 'TAS', 'ACT', 'NT'].map((st) => (
+                        <SelectItem key={st} value={st}>
+                          {st}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Input
+                    value={taxForm.postcode}
+                    onChange={(e) => setTaxForm((t) => ({ ...t, postcode: digitsOnly(e.target.value, 4) }))}
+                    placeholder="Postcode (4자리)"
+                    className="h-9 text-xs"
                   />
                 </div>
               </div>
             </div>
-          )}
 
-          {/* Step 3: 세무 신고 (ATO NAT 3092 Tax Declaration) */}
-          {currentStep === 2 && (
-            <div className="space-y-6">
-              {/* Question 1: TFN 입력 및 예외 사유 */}
-              <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4 space-y-3">
-                <div className="flex items-start gap-2">
-                  <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-500/20 text-blue-400 text-xs font-bold mt-0.5">
-                    1
-                  </div>
-                  <div>
-                    <Label className="text-sm font-semibold text-white">납세자번호 (Tax File Number) 입력 *</Label>
-                    <p className="text-xs text-slate-400 mt-0.5">
-                      9자리 TFN 번호를 입력하거나 해당되는 예외 사유를 선택하세요.
-                    </p>
-                  </div>
-                </div>
-
-                <RadioGroup value={tax.tfnMode} onValueChange={(v) => setTax((t) => ({ ...t, tfnMode: v }))} className="space-y-2 mt-2">
-                  <div className="flex items-center space-x-2 rounded-lg border border-slate-800 p-3 bg-slate-900/60">
-                    <RadioGroupItem value="number" id="tfn_num" />
-                    <Label htmlFor="tfn_num" className="text-xs sm:text-sm text-slate-200 cursor-pointer flex-1">
-                      본인의 9자리 TFN 번호를 직접 입력합니다.
-                    </Label>
-                  </div>
-
-                  {tax.tfnMode === 'number' && (
-                    <div className="pl-6 pt-1">
-                      <Input
-                        maxLength={9}
-                        className="bg-slate-950 border-blue-500/60 text-white font-mono text-base tracking-widest max-w-xs"
-                        placeholder="123456789"
-                        value={tax.tfnNumber}
-                        onChange={(e) => setTax((t) => ({ ...t, tfnNumber: e.target.value.replace(/\D/g, '').slice(0, 9) }))}
-                      />
-                      <p className="text-[11px] text-slate-400 mt-1">
-                        🔒 TFN 번호는 정부 보안 규정에 따라 AES-256 군사등급 암호화되어 안전하게 처리됩니다.
-                      </p>
-                    </div>
-                  )}
-
-                  <div className="flex items-center space-x-2 rounded-lg border border-slate-800 p-3 bg-slate-900/60">
-                    <RadioGroupItem value="applied" id="tfn_app" />
-                    <Label htmlFor="tfn_app" className="text-xs sm:text-sm text-slate-200 cursor-pointer flex-1">
-                      ATO에 TFN 발급을 이미 신청/문의 중입니다 (28일 이내 제출 유예)
-                    </Label>
-                  </div>
-
-                  <div className="flex items-center space-x-2 rounded-lg border border-slate-800 p-3 bg-slate-900/60">
-                    <RadioGroupItem value="under18" id="tfn_u18" />
-                    <Label htmlFor="tfn_u18" className="text-xs sm:text-sm text-slate-200 cursor-pointer flex-1">
-                      만 18세 미만이며 세금 부과 기준액 이하로 소득을 받습니다.
-                    </Label>
-                  </div>
-
-                  <div className="flex items-center space-x-2 rounded-lg border border-slate-800 p-3 bg-slate-900/60">
-                    <RadioGroupItem value="pensioner" id="tfn_pen" />
-                    <Label htmlFor="tfn_pen" className="text-xs sm:text-sm text-slate-200 cursor-pointer flex-1">
-                      정부 연금, 수당 또는 지원금 수급자로서 면제를 신청합니다.
-                    </Label>
-                  </div>
-                </RadioGroup>
-              </div>
-
-              {/* Question 7: 고용 형태 (Payment Basis) */}
-              <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4 space-y-3">
-                <div className="flex items-start gap-2">
-                  <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-500/20 text-blue-400 text-xs font-bold mt-0.5">
-                    7
-                  </div>
-                  <div>
-                    <Label className="text-sm font-semibold text-white">고용 형태 (On what basis are you paid?) *</Label>
-                    <p className="text-xs text-slate-400 mt-0.5">해당하는 고용 유형 1가지를 선택하세요.</p>
-                  </div>
-                </div>
-
-                <RadioGroup value={tax.employmentBasis} onValueChange={(v) => setTax((t) => ({ ...t, employmentBasis: v }))} className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
-                  {[
-                    { val: 'casual', label: 'Casual employment (캐주얼)' },
-                    { val: 'part_time', label: 'Part-time employment (파트타임)' },
-                    { val: 'full_time', label: 'Full-time employment (풀타임)' },
-                    { val: 'labour_hire', label: 'Labour hire (인력 파견)' },
-                    { val: 'super_stream', label: 'Superannuation / Annuity stream' }
-                  ].map((item) => (
-                    <div key={item.val} className="flex items-center space-x-2 rounded-lg border border-slate-800 p-2.5 bg-slate-900/60">
-                      <RadioGroupItem value={item.val} id={item.val} />
-                      <Label htmlFor={item.val} className="text-xs text-slate-200 cursor-pointer flex-1">
-                        {item.label}
-                      </Label>
-                    </div>
-                  ))}
-                </RadioGroup>
-              </div>
-
-              {/* Question 8: 세법상 거주자 구분 (Residency Status) */}
-              <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4 space-y-3">
-                <div className="flex items-start gap-2">
-                  <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-500/20 text-blue-400 text-xs font-bold mt-0.5">
-                    8
-                  </div>
-                  <div>
-                    <Label className="text-sm font-semibold text-white">세법상 거주자 구분 (Residency Status) *</Label>
-                    <p className="text-xs text-slate-400 mt-0.5">본인의 호주 세법상 신분을 1가지 선택하세요.</p>
-                  </div>
-                </div>
-
-                <RadioGroup value={tax.residency} onValueChange={(v) => setTax((t) => ({ ...t, residency: v }))} className="space-y-2 mt-2">
-                  <div className="flex items-center space-x-2 rounded-lg border border-slate-800 p-3 bg-slate-900/60">
-                    <RadioGroupItem value="resident" id="res_aus" />
-                    <Label htmlFor="res_aus" className="text-xs sm:text-sm text-slate-200 cursor-pointer flex-1">
-                      <span className="font-semibold text-white">An Australian resident for tax purposes</span>
-                      <p className="text-xs text-slate-400 mt-0.5">호주 영주권자/시민권자 또는 6개월 이상 학업을 지속하는 유학생 등</p>
-                    </Label>
-                  </div>
-
-                  <div className="flex items-center space-x-2 rounded-lg border border-slate-800 p-3 bg-slate-900/60">
-                    <RadioGroupItem value="working_holiday" id="res_whm" />
-                    <Label htmlFor="res_whm" className="text-xs sm:text-sm text-slate-200 cursor-pointer flex-1">
-                      <span className="font-semibold text-white">A working holiday maker</span>
-                      <p className="text-xs text-slate-400 mt-0.5">워킹홀리데이 비자(Subclass 417 또는 462) 소지자</p>
-                    </Label>
-                  </div>
-
-                  <div className="flex items-center space-x-2 rounded-lg border border-slate-800 p-3 bg-slate-900/60">
-                    <RadioGroupItem value="foreign" id="res_for" />
-                    <Label htmlFor="res_for" className="text-xs sm:text-sm text-slate-200 cursor-pointer flex-1">
-                      <span className="font-semibold text-white">A foreign resident for tax purposes</span>
-                      <p className="text-xs text-slate-400 mt-0.5">상기 항목에 해당하지 않는 비거주 외국인</p>
-                    </Label>
-                  </div>
-                </RadioGroup>
-              </div>
-
-              {/* Question 9: Tax-free threshold 신청 여부 */}
-              <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4 space-y-3">
-                <div className="flex items-start gap-2">
-                  <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-500/20 text-blue-400 text-xs font-bold mt-0.5">
-                    9
-                  </div>
-                  <div>
-                    <Label className="text-sm font-semibold text-white">면세 한도($18,200) 신청 (Tax-free threshold) *</Label>
-                    <p className="text-xs text-slate-400 mt-0.5">
-                      이 고용주로부터 비과세 기준액을 적용받으시겠습니까?
-                    </p>
-                  </div>
-                </div>
-
-                <div className="rounded bg-blue-950/30 border border-blue-900/40 p-3 text-xs text-blue-300 leading-relaxed">
-                  💡 <b>안내</b>: 호주 세법상 면세 혜택($18,200)은 동시에 1곳의 주 고용주에게만 신청할 수 있습니다. 이미 다른 곳에서 혜택을 받고 계시거나 워킹홀리데이 비자 소지자인 경우 보통 <b>No</b>를 선택합니다.
-                </div>
-
-                <RadioGroup value={tax.taxFreeThreshold} onValueChange={(v) => setTax((t) => ({ ...t, taxFreeThreshold: v }))} className="grid grid-cols-2 gap-3 mt-2">
-                  <div className="flex items-center space-x-2 rounded-lg border border-slate-800 p-3 bg-slate-900/60">
-                    <RadioGroupItem value="yes" id="tft_yes" />
-                    <Label htmlFor="tft_yes" className="text-sm font-semibold text-white cursor-pointer flex-1">
-                      Yes (신청함)
-                    </Label>
-                  </div>
-                  <div className="flex items-center space-x-2 rounded-lg border border-slate-800 p-3 bg-slate-900/60">
-                    <RadioGroupItem value="no" id="tft_no" />
-                    <Label htmlFor="tft_no" className="text-sm font-semibold text-white cursor-pointer flex-1">
-                      No (신청 안 함)
-                    </Label>
-                  </div>
-                </RadioGroup>
-              </div>
-
-              {/* Question 10: 학자금 대출(HELP / VSL 등) 여부 */}
-              <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4 space-y-3">
-                <div className="flex items-start gap-2">
-                  <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-500/20 text-blue-400 text-xs font-bold mt-0.5">
-                    10
-                  </div>
-                  <div>
-                    <Label className="text-sm font-semibold text-white">호주 정부 학자금 대출(HELP/VSL/TSL 등) 부채가 있습니까? *</Label>
-                    <p className="text-xs text-slate-400 mt-0.5">
-                      Higher Education Loan Program(HELP), VET Student Loan(VSL) 등 학자금 대출 잔액 여부
-                    </p>
-                  </div>
-                </div>
-
-                <RadioGroup value={tax.studentDebt} onValueChange={(v) => setTax((t) => ({ ...t, studentDebt: v }))} className="grid grid-cols-2 gap-3 mt-2">
-                  <div className="flex items-center space-x-2 rounded-lg border border-slate-800 p-3 bg-slate-900/60">
-                    <RadioGroupItem value="yes" id="debt_yes" />
-                    <Label htmlFor="debt_yes" className="text-sm font-semibold text-white cursor-pointer flex-1">
-                      Yes (대출 있음)
-                    </Label>
-                  </div>
-                  <div className="flex items-center space-x-2 rounded-lg border border-slate-800 p-3 bg-slate-900/60">
-                    <RadioGroupItem value="no" id="debt_no" />
-                    <Label htmlFor="debt_no" className="text-sm font-semibold text-white cursor-pointer flex-1">
-                      No (대출 없음)
-                    </Label>
-                  </div>
-                </RadioGroup>
-              </div>
-            </div>
-          )}
-
-          {/* Step 4: 연금 및 급여 계좌 (Super & Bank) */}
-          {currentStep === 5 && (
-            <div className="space-y-6">
-              {/* 연금 선택 */}
-              <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4 space-y-3">
-                <Label className="text-sm font-semibold text-white flex items-center gap-1.5">
-                  <ShieldCheck className="h-4 w-4 text-blue-400" />
-                  연금 펀드 선택 (Superannuation Choice) *
-                </Label>
-                <p className="text-xs text-slate-400">
-                  회사 기본 지정 펀드를 사용하거나 본인의 개인 연금 펀드를 지정할 수 있습니다.
-                </p>
-
-                <RadioGroup value={superBank.useDefaultSuper} onValueChange={(v) => setSuperBank((s) => ({ ...s, useDefaultSuper: v }))} className="space-y-2 mt-2">
-                  <div className="flex items-center space-x-2 rounded-lg border border-slate-800 p-3 bg-slate-900/60">
-                    <RadioGroupItem value="yes" id="sup_def" />
-                    <Label htmlFor="sup_def" className="text-xs sm:text-sm text-slate-200 cursor-pointer flex-1">
-                      <span className="font-semibold text-white">회사의 기본 지정 연금 펀드 사용</span>
-                      <p className="text-xs text-slate-400 mt-0.5">
-                        {data.company?.default_super_fund_name ? `(${data.company.default_super_fund_name})` : '(고용주 지정 기본 펀드로 개설 및 입금)'}
-                      </p>
-                    </Label>
-                  </div>
-
-                  <div className="flex items-center space-x-2 rounded-lg border border-slate-800 p-3 bg-slate-900/60">
-                    <RadioGroupItem value="no" id="sup_cust" />
-                    <Label htmlFor="sup_cust" className="text-xs sm:text-sm text-slate-200 cursor-pointer flex-1">
-                      <span className="font-semibold text-white">본인이 보유한 기존 연금 펀드 계좌로 입금</span>
-                    </Label>
-                  </div>
-                </RadioGroup>
-
-                {superBank.useDefaultSuper === 'no' && (
-                  <div className="space-y-3 pt-3 border-t border-slate-800">
-                    <div>
-                      <Label className="text-xs text-slate-300">연금 펀드 이름 (Fund Name) *</Label>
-                      <Input
-                        className="mt-1 bg-slate-950 border-slate-700 text-white"
-                        placeholder="예: AustralianSuper"
-                        value={superBank.superFundName}
-                        onChange={(e) => setSuperBank((s) => ({ ...s, superFundName: e.target.value }))}
-                      />
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div>
-                        <Label className="text-xs text-slate-300">USI 번호 *</Label>
-                        <Input
-                          className="mt-1 bg-slate-950 border-slate-700 text-white font-mono"
-                          placeholder="Unique Super Identifier"
-                          value={superBank.superUsi}
-                          onChange={(e) => setSuperBank((s) => ({ ...s, superUsi: e.target.value }))}
-                        />
-                      </div>
-                      <div>
-                        <Label className="text-xs text-slate-300">연금 회원 번호 (Member Number) *</Label>
-                        <Input
-                          className="mt-1 bg-slate-950 border-slate-700 text-white font-mono"
-                          placeholder="Member Number"
-                          value={superBank.superMemberNumber}
-                          onChange={(e) => setSuperBank((s) => ({ ...s, superMemberNumber: e.target.value }))}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* 급여 수령 계좌 */}
-              <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4 space-y-3">
-                <Label className="text-sm font-semibold text-white flex items-center gap-1.5">
-                  <FileText className="h-4 w-4 text-emerald-400" />
-                  급여 수령 계좌 (Bank Account Details)
-                </Label>
-                <p className="text-xs text-slate-400">급여가 입금될 호주 은행 계좌 정보를 입력해 주세요.</p>
-
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div>
-                    <Label className="text-xs text-slate-300">BSB (6자리 숫자)</Label>
-                    <Input
-                      maxLength={6}
-                      className="mt-1 bg-slate-950 border-slate-700 text-white font-mono"
-                      placeholder="123456"
-                      value={superBank.bsb}
-                      onChange={(e) => setSuperBank((s) => ({ ...s, bsb: e.target.value.replace(/\D/g, '').slice(0, 6) }))}
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-xs text-slate-300">계좌번호 (Account Number)</Label>
-                    <Input
-                      className="mt-1 bg-slate-950 border-slate-700 text-white font-mono"
-                      placeholder="8자리 내외 숫자"
-                      value={superBank.accountNumber}
-                      onChange={(e) => setSuperBank((s) => ({ ...s, accountNumber: e.target.value }))}
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-xs text-slate-300">예금주명 (Account Name)</Label>
-                    <Input
-                      className="mt-1 bg-slate-950 border-slate-700 text-white"
-                      placeholder="예: GILDONG HONG"
-                      value={superBank.accountName}
-                      onChange={(e) => setSuperBank((s) => ({ ...s, accountName: e.target.value.toUpperCase() }))}
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Step 5: 서명 및 최종 제출 (Review & Signature) */}
-          {currentStep === 5 && (
-            <div className="space-y-5">
-              {/* 공식 선언문 확인 */}
-              <div className="rounded-xl border border-blue-900/40 bg-blue-950/20 p-4 space-y-2">
-                <div className="flex items-center gap-2 text-blue-400 font-bold text-sm">
-                  <ShieldCheck className="h-5 w-5" />
-                  호주 국세청(ATO) 공식 선언문 (DECLARATION by payee)
-                </div>
-                <p className="text-xs text-slate-300 leading-relaxed italic">
-                  "I declare that the information that I have given is true and correct."
-                </p>
-                <div className="text-[11px] text-amber-400/90 font-medium pt-1">
-                  ⚠️ <b>법적 책임 고지</b>: 호주 법률에 따라 고의로 허위 사실을 진술하거나 허위 문서를 제출하는 경우 형사 처벌 및 과태료가 부과될 수 있습니다 (There are penalties for deliberately making a false or misleading statement).
-                </div>
-              </div>
-
-              {/* 자필 전자서명 패드 */}
+            {/* Q5 & Q6: Email & DOB */}
+            <div className="grid sm:grid-cols-2 gap-4 p-4 rounded-xl border bg-slate-50/60">
               <div>
-                <Label className="text-xs text-slate-300 flex items-center justify-between mb-2">
-                  <span className="flex items-center gap-1 font-semibold text-white">
-                    <PenTool className="h-3.5 w-3.5 text-blue-400" />
-                    직원 자필 서명 (Signature) *
-                  </span>
-                  <span className="text-[11px] text-slate-500">마우스나 터치스크린으로 직접 서명하세요</span>
-                </Label>
-                <div className="rounded-xl border border-slate-700 bg-white p-1 overflow-hidden shadow-inner">
-                  <SignaturePad ref={padRef} onEnd={() => setSignature(padRef.current?.toDataURL() || '')} />
-                </div>
-                <div className="flex justify-end mt-1.5">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="text-xs text-slate-400 hover:text-white"
-                    onClick={() => {
-                      padRef.current?.clear();
-                      setSignature('');
-                    }}>
-                    서명 지우기
-                  </Button>
-                </div>
-              </div>
-
-              {/* 선언 동의 체크 */}
-              <div className="rounded-xl border border-slate-800 bg-slate-950 p-4 flex items-start space-x-3">
-                <Checkbox
-                  id="final_dec"
-                  checked={declaration}
-                  onCheckedChange={(v) => setDeclaration(Boolean(v))}
-                  className="mt-0.5"
+                <Label className="text-sm font-bold text-slate-800">5. Primary email address</Label>
+                <Input
+                  type="email"
+                  value={taxForm.email}
+                  onChange={(e) => setTaxForm((t) => ({ ...t, email: e.target.value }))}
+                  placeholder="name@email.com"
+                  className="h-9 text-xs mt-1"
                 />
-                <Label htmlFor="final_dec" className="text-xs sm:text-sm text-slate-200 cursor-pointer leading-relaxed">
-                  본인은 본 서식에 기재한 모든 인적 사항 및 세무 정보가 사실임을 확인하며, 상기 자필 서명으로 호주 국세청(ATO) 공식 NAT 3092 선언서에 정식 서명합니다.
-                </Label>
+              </div>
+              <div>
+                <Label className="text-sm font-bold text-slate-800">6. Date of birth (생년월일)</Label>
+                <Input
+                  type="date"
+                  value={taxForm.dob}
+                  onChange={(e) => setTaxForm((t) => ({ ...t, dob: e.target.value }))}
+                  className="h-9 text-xs mt-1"
+                />
               </div>
             </div>
-          )}
 
-          {error && (
-            <div className="mt-5 rounded-xl border border-rose-500/30 bg-rose-950/30 p-3 text-xs text-rose-300 flex items-center gap-2">
-              <AlertCircle className="h-4 w-4 shrink-0 text-rose-400" />
-              <span>{error}</span>
+            {/* Q7: Employment basis */}
+            <div className="space-y-2 p-4 rounded-xl border bg-slate-50/60">
+              <Label className="text-sm font-bold text-slate-800">7. On what basis are you paid? (고용 형태)</Label>
+              <RadioGroup
+                value={taxForm.employmentBasis}
+                onValueChange={(v) => setTaxForm((t) => ({ ...t, employmentBasis: v }))}
+                className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 pt-1"
+              >
+                {[
+                  { id: 'casual', label: 'Casual (캐주얼)' },
+                  { id: 'part_time', label: 'Part-time (파트타임)' },
+                  { id: 'full_time', label: 'Full-time (풀타임)' },
+                  { id: 'labour_hire', label: 'Labour hire (파견)' },
+                  { id: 'super_stream', label: 'Super / Annuity' }
+                ].map((item) => (
+                  <div key={item.id} className="flex items-center gap-2">
+                    <RadioGroupItem value={item.id} id={`basis-${item.id}`} />
+                    <label htmlFor={`basis-${item.id}`} className="text-xs cursor-pointer">
+                      {item.label}
+                    </label>
+                  </div>
+                ))}
+              </RadioGroup>
             </div>
+
+            {/* Q8: Residency */}
+            <div className="space-y-2 p-4 rounded-xl border bg-slate-50/60">
+              <Label className="text-sm font-bold text-slate-800">8. Are you: (호주 세법상 거주자 구분)</Label>
+              <RadioGroup
+                value={taxForm.residency}
+                onValueChange={(v) => setTaxForm((t) => ({ ...t, residency: v }))}
+                className="space-y-2 pt-1"
+              >
+                <div className="flex items-center gap-2">
+                  <RadioGroupItem value="resident" id="res-aus" />
+                  <label htmlFor="res-aus" className="text-xs font-medium cursor-pointer">
+                    호주 세법상 거주자 (An Australian resident for tax purposes)
+                  </label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <RadioGroupItem value="foreign" id="res-foreign" />
+                  <label htmlFor="res-foreign" className="text-xs font-medium cursor-pointer">
+                    세법상 비거주자 (A foreign resident for tax purposes)
+                  </label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <RadioGroupItem value="working_holiday" id="res-whm" />
+                  <label htmlFor="res-whm" className="text-xs font-medium cursor-pointer">
+                    워킹홀리데이 비자 소지자 (A working holiday maker - Subclass 417 / 462)
+                  </label>
+                </div>
+              </RadioGroup>
+            </div>
+
+            {/* Q9: Tax-free threshold */}
+            <div className="space-y-2 p-4 rounded-xl border bg-slate-50/60">
+              <Label className="text-sm font-bold text-slate-800">
+                9. Do you want to claim the tax-free threshold from this payer? (면세 한도 적용)
+              </Label>
+              <p className="text-[11px] text-slate-500">주 수입원인 1개 직장에서만 $18,200 기본 면세 한도를 신청할 수 있습니다.</p>
+              <RadioGroup
+                value={taxForm.taxFreeThreshold}
+                onValueChange={(v) => setTaxForm((t) => ({ ...t, taxFreeThreshold: v }))}
+                className="flex gap-6 pt-1"
+              >
+                <div className="flex items-center gap-2">
+                  <RadioGroupItem value="yes" id="tft-yes" />
+                  <label htmlFor="tft-yes" className="text-xs font-medium cursor-pointer">예 (Yes)</label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <RadioGroupItem value="no" id="tft-no" />
+                  <label htmlFor="tft-no" className="text-xs font-medium cursor-pointer">아니오 (No)</label>
+                </div>
+              </RadioGroup>
+            </div>
+
+            {/* Q10: Student Debt */}
+            <div className="space-y-2 p-4 rounded-xl border bg-slate-50/60">
+              <Label className="text-sm font-bold text-slate-800">
+                10. Do you have a HELP, VSL, FS, SSL or TSL debt? (학자금 대출 등 부채)
+              </Label>
+              <RadioGroup
+                value={taxForm.studentDebt}
+                onValueChange={(v) => setTaxForm((t) => ({ ...t, studentDebt: v }))}
+                className="flex gap-6 pt-1"
+              >
+                <div className="flex items-center gap-2">
+                  <RadioGroupItem value="yes" id="loan-yes" />
+                  <label htmlFor="loan-yes" className="text-xs font-medium cursor-pointer">예 (Yes)</label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <RadioGroupItem value="no" id="loan-no" />
+                  <label htmlFor="loan-no" className="text-xs font-medium cursor-pointer">아니오 (No)</label>
+                </div>
+              </RadioGroup>
+            </div>
+          </section>
+        )}
+
+        {/* ============================================================================== */}
+        {/* [페이지 타입 4]: 최종 서약 및 전자서명 (맨 마지막 단계) */}
+        {/* ============================================================================== */}
+        {currentPage?.type === 'sign' && (
+          <section className="space-y-5 rounded-2xl border bg-white p-5 shadow-sm">
+            <div className="rounded-xl bg-slate-50 p-4 text-xs text-slate-700 leading-relaxed border space-y-2">
+              <p className="font-semibold text-slate-900 text-sm">
+                DECLARATION by payee (Section A 납세자 최종 선언)
+              </p>
+              <p>
+                I declare that the information I have given is true and correct.
+                (본인이 제출한 모든 정보는 진실하고 정확함을 선언합니다.)
+              </p>
+              <p className="text-[11px] text-red-600 font-medium">
+                * There are penalties for deliberately making a false or misleading statement. (고의적인 허위 진술에는 법적 처벌이 따를 수 있습니다.)
+              </p>
+            </div>
+
+            {/* 자필 서명 패드 */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label className="text-sm font-semibold flex items-center gap-1.5">
+                  <PenTool className="h-4 w-4 text-primary" />
+                  자필 전자서명 (You MUST SIGN here) *
+                </Label>
+                {signature && (
+                  <span className="text-xs font-medium text-emerald-600 flex items-center gap-1">
+                    <CheckCircle2 className="h-3.5 w-3.5" /> 서명 완료
+                  </span>
+                )}
+              </div>
+              <SignaturePad
+                ref={padRef}
+                onChange={(dataUrl) => {
+                  setSignature(dataUrl);
+                  setError('');
+                }}
+              />
+            </div>
+
+            {/* 선언문 동의 체크박스 */}
+            <div className="flex items-start gap-3 rounded-xl border p-3.5 bg-slate-50/50">
+              <Checkbox
+                id="declaration-cb"
+                checked={declaration}
+                onCheckedChange={(v) => {
+                  setDeclaration(Boolean(v));
+                  setError('');
+                }}
+              />
+              <label htmlFor="declaration-cb" className="text-xs leading-relaxed text-slate-800 cursor-pointer">
+                위 선언문과 입력한 세무 및 고용 정보가 정확함을 확인하였으며, 호주 국세청(ATO) 규격의 공식 NAT 3092 및 NAT 13080 서류 생성을 위해 사용하는 것에 동의합니다.
+              </label>
+            </div>
+
+            <div className="space-y-1.5 rounded-xl border border-emerald-100 bg-emerald-50/60 p-3.5 text-xs text-emerald-900">
+              <p className="flex items-center gap-1.5 font-bold">
+                <FileCheck className="h-4 w-4 text-emerald-600" />
+                호주 국세청(ATO) 공식 원본 벡터 양식 생성
+              </p>
+              <p className="text-[11px] text-emerald-800 leading-relaxed">
+                제출 버튼을 누르면 업로드해주신 <b>정부 원본 서식(NAT 3092-06.2019)</b>의 해당 박스에 답변이 정확히 인쇄된 초고화질 공식 PDF가 생성되어 플랫폼 서류보관함에 보관됩니다.
+              </p>
+            </div>
+
+            <p className="flex items-center gap-1.5 text-xs text-slate-500">
+              <ShieldCheck className="h-4 w-4 text-slate-400" />
+              TFN 및 개인정보는 AES-256 군사등급 암호화로 보호됩니다.
+            </p>
+          </section>
+        )}
+
+        {/* 에러 메시지 알림 */}
+        {error && (
+          <p className="flex items-start gap-2 rounded-xl bg-destructive/10 px-4 py-3 text-xs font-medium text-destructive">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+            <span className="break-all">{error}</span>
+          </p>
+        )}
+
+        {/* 하단 이동 및 최종 제출 버튼 바 */}
+        <div className="flex gap-3 pt-2">
+          {step > 0 && (
+            <Button
+              type="button"
+              variant="outline"
+              disabled={saving}
+              onClick={() => {
+                setError('');
+                setStep((s) => s - 1);
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+              className="h-11 px-5"
+            >
+              <ArrowLeft className="mr-1.5 h-4 w-4" /> 이전
+            </Button>
           )}
 
-          {/* 하단 탐색 버튼 */}
-          <div className="mt-8 flex items-center justify-between pt-4 border-t border-slate-800">
-            {currentStep > 0 ? (
-              <Button
-                type="button"
-                variant="outline"
-                className="border-slate-700 text-slate-300 hover:bg-slate-800"
-                onClick={handlePrev}
-                disabled={saving}>
-                <ArrowLeft className="mr-1.5 h-4 w-4" /> 이전
-              </Button>
-            ) : <div />}
-
-            {currentStep < STEPS.length - 1 ? (
-              <Button
-                type="button"
-                className="bg-blue-600 hover:bg-blue-500 text-white font-semibold px-5"
-                onClick={handleNext}>
-                다음 <ArrowRight className="ml-1.5 h-4 w-4" />
-              </Button>
-            ) : (
-              <Button
-                type="button"
-                className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-6 shadow-lg shadow-emerald-900/30"
-                onClick={handleSubmit}
-                disabled={saving || !signature || !declaration}>
-                {saving ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    공식 서류 생성 및 암호화 제출 중...
-                  </>
-                ) : (
-                  <>
-                    <FileCheck className="mr-2 h-4 w-4" />
-                    온보딩 공식 서류 최종 제출
-                  </>
-                )}
-              </Button>
-            )}
-          </div>
+          {step < totalSteps - 1 ? (
+            <Button
+              type="button"
+              className="flex-1 h-11 text-sm font-semibold"
+              onClick={next}
+            >
+              다음 단계 <ArrowRight className="ml-1.5 h-4 w-4" />
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              className="flex-1 h-11 text-sm font-semibold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
+              disabled={saving}
+              onClick={submit}
+            >
+              {saving ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  공식 PDF 생성 및 저장 중...
+                </>
+              ) : (
+                <>
+                  <FileCheck className="mr-2 h-4 w-4" />
+                  서약 완료 및 온보딩 서류 제출
+                </>
+              )}
+            </Button>
+          )}
         </div>
       </main>
-
-      {/* 하단 푸터 */}
-      <footer className="border-t border-slate-900 py-4 text-center text-xs text-slate-500">
-        K-Workmate Onboarding System · 호주 국세청(ATO) 공식 서식 준수
-      </footer>
     </div>
   );
 }
