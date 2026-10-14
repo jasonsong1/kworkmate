@@ -5,18 +5,16 @@ import {
   ChevronRight,
   Eye,
   EyeOff,
-  FolderOpen,
   KeyRound,
   Loader2,
   QrCode,
   UserCircle2,
-  Users } from
-'lucide-react';
+  Users
+} from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
 import AvailabilityMatrix from '@/components/AvailabilityMatrix';
 import CalendarSubscribeCard from '@/components/CalendarSubscribeCard';
 import ClockScanButton from '@/components/attendance/ClockScanButton';
-import EmployeeDocumentsDialog from '@/components/EmployeeDocumentsDialog';
 import StaffOnboardingCard from '@/components/staff/StaffOnboardingCard';
 import OnboardingDetails from '@/components/employee/OnboardingDetails';
 import SelfPasswordDialog from '@/components/staff/SelfPasswordDialog';
@@ -36,8 +34,8 @@ import {
   shiftHours,
   startOfWeekIso,
   todayIso,
-  weeksBetweenCount } from
-'@/lib/bh';
+  weeksBetweenCount
+} from '@/lib/bh';
 import { kioskUrl, todayFor } from '@/lib/kioskLink';
 import { base44 } from '@/api/base44Client';
 
@@ -53,7 +51,6 @@ export default function StaffHome() {
   const [availability, setAvailability] = useState(emptyAvailability());
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [docsOpen, setDocsOpen] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
   const [allShiftsOpen, setAllShiftsOpen] = useState(false);
   // The pay rate is hidden until the person asks to see it.
@@ -78,17 +75,16 @@ export default function StaffHome() {
       return;
     }
     setLoading(true);
-    const rows = await base44.entities.Shift.
-    filter(
+    const rows = await base44.entities.Shift.filter(
       {
         employee_email: me.email,
         status: 'published',
         date: { $gte: shiftWeek, $lte: addDaysIso(shiftWeek, 6) }
       },
       { sort: 'date', limit: 100 }
-    ).
-    then((page) => page.items || []).
-    catch(() => []);
+    )
+      .then((page) => page.items || [])
+      .catch(() => []);
     setShifts(rows);
     setLoading(false);
   }, [me, roster, shiftWeek]);
@@ -97,10 +93,12 @@ export default function StaffHome() {
   // and from their latest one when this week has not been filled in yet.
   const loadAvailability = useCallback(async () => {
     if (!me) return;
-    const rows = await base44.entities.AvailabilitySubmission.
-    filter({ employee_email: me.email }, { sort: '-created_date', limit: 30 }).
-    then((page) => page.items || []).
-    catch(() => []);
+    const rows = await base44.entities.AvailabilitySubmission.filter(
+      { employee_email: me.email },
+      { sort: '-created_date', limit: 30 }
+    )
+      .then((page) => page.items || [])
+      .catch(() => []);
     const forWeek = rows.find(
       (row) => startOfWeekIso(String(row.week_start || row.created_date || '').slice(0, 10)) === availWeek
     );
@@ -146,31 +144,25 @@ export default function StaffHome() {
         title={t('staff.title')}
         subtitle={activeBranch ? activeBranch.name : me ? me.email : ''}
         actions={
-        <>
+          <>
             {/* The store's own code is shown on the store's device, so a floor position does not
                 carry that button. A package without attendance carries neither it nor the scan. */}
-            {attendance && !isFloorStaff &&
-          <Button variant="outline" onClick={openQr} disabled={!activeBranch}>
+            {attendance && !isFloorStaff && (
+              <Button variant="outline" onClick={openQr} disabled={!activeBranch}>
                 <QrCode className="mr-2 h-4 w-4" /> {t('staff.qrButton')}
               </Button>
-          }
+            )}
             {attendance && <ClockScanButton onRecorded={loadShifts} />}
             {/* Attendance and leave sit in the left navigation, so no button repeats them here.
                 Their own sign-in password, though, has nowhere else to be reset. */}
-            {employeeProfile &&
-          <Button variant="outline" onClick={() => setResetOpen(true)}>
+            {employeeProfile && (
+              <Button variant="outline" onClick={() => setResetOpen(true)}>
                 <KeyRound className="mr-2 h-4 w-4" /> {t('staff.resetPassword')}
               </Button>
-          }
-            {/* The documents their employer keeps on their own staff record. */}
-            {employeeProfile &&
-          <Button variant="outline" onClick={() => setDocsOpen(true)}>
-                <FolderOpen className="mr-2 h-4 w-4" /> {t('employees.vault')}
-              </Button>
-          }
+            )}
           </>
-        } />
-
+        }
+      />
 
       <div className="grid gap-6 lg:grid-cols-2">
         {/* 1. 좌측 카드: 내 프로필 */}
@@ -228,72 +220,67 @@ export default function StaffHome() {
               </>
             ) : me ? (
               /* 슈퍼어드민이나 관리자 등 별도 직원 레코드가 없는 계정을 위한 프로필 정보 */
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div>
-                  <p className="text-xs text-muted-foreground">{t('common.name')}</p>
-                  <p className="text-sm font-medium">{me.full_name || me.email}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">{t('common.email') || '이메일'}</p>
-                  <p className="font-mono text-sm">{me.email}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">{t('common.position')}</p>
-                  <p className="text-sm">
-                    {me.role === 'admin'
-                      ? t('platform.superAdmin') || '슈퍼어드민'
-                      : me.app_role === 'company_admin'
-                      ? '회사 관리자'
-                      : me.app_role || '관리자'}
-                  </p>
+              <div className="space-y-3">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <p className="text-xs text-muted-foreground">{t('common.name')}</p>
+                    <p className="text-sm font-medium">{me.full_name || me.email}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">{t('common.email')}</p>
+                    <p className="font-mono text-sm">{me.email}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">{t('common.role')}</p>
+                    <p className="text-sm capitalize">{me.app_role || me.role || 'Super Admin'}</p>
+                  </div>
                 </div>
               </div>
             ) : (
-              <p className="py-4 text-sm text-muted-foreground">{t('common.none')}</p>
+              <p className="text-sm text-muted-foreground">{t('staff.noProfile')}</p>
             )}
           </CardContent>
         </Card>
 
-        {/* 2. 우측 카드: 내 시프트 (내 프로필 바로 옆에 나란히 배치) */}
+        {/* 2. 우측 카드: 내 시프트 */}
         {roster && (
           <Card>
             <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0">
-              <CardTitle className="flex items-center gap-2 text-base">
-                <CalendarDays className="h-4 w-4" /> {t('staff.shifts')}
-              </CardTitle>
-              {/* 매장 전체 시프트 확인 버튼 */}
-              <Button variant="outline" size="sm" onClick={() => setAllShiftsOpen(true)} disabled={!activeBranch}>
-                <Users className="mr-2 h-4 w-4" /> {t('staff.allShifts')}
-              </Button>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              <div className="flex items-center gap-1 rounded-lg border px-2 py-1">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  title={t('staff.weekPrev')}
-                  disabled={!canGoBack(shiftWeek)}
-                  onClick={() => setShiftWeek(addDaysIso(shiftWeek, -7))}
-                >
-                  <ChevronLeft className="h-4 w-4" />
+              <CardTitle className="text-base">{t('staff.shifts')}</CardTitle>
+              <div className="flex items-center gap-2">
+                <Button variant="outline" size="sm" onClick={() => setAllShiftsOpen(true)} disabled={!activeBranch}>
+                  <Users className="mr-1.5 h-3.5 w-3.5" /> {t('staff.allShifts')}
                 </Button>
-                <span className="px-2 text-sm font-medium">
-                  {shiftWeek} → {addDaysIso(shiftWeek, 6)}
-                </span>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  title={t('staff.weekNext')}
-                  disabled={!canGoForward(shiftWeek)}
-                  onClick={() => setShiftWeek(addDaysIso(shiftWeek, 7))}
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
+                <div className="flex items-center gap-1 rounded-lg border px-2 py-1">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    title={t('staff.weekPrev')}
+                    disabled={!canGoBack(shiftWeek)}
+                    onClick={() => setShiftWeek(addDaysIso(shiftWeek, -7))}
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <span className="px-2 text-sm font-medium">
+                    {shiftWeek} → {addDaysIso(shiftWeek, 6)}
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    title={t('staff.weekNext')}
+                    disabled={!canGoForward(shiftWeek)}
+                    onClick={() => setShiftWeek(addDaysIso(shiftWeek, 7))}
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
-
+            </CardHeader>
+            <CardContent className="space-y-3">
               {loading ? (
                 <p className="py-6 text-center text-sm text-muted-foreground">
-                  <Loader2 className="mx-auto h-5 w-5 animate-spin" />
+                  <Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin" />
+                  {t('common.loading')}
                 </p>
               ) : shifts.length === 0 ? (
                 <p className="py-6 text-center text-sm text-muted-foreground">{t('staff.noShifts')}</p>
@@ -329,30 +316,30 @@ export default function StaffHome() {
 
         {/* Availability is what a roster is built from, so a package without a roster keeps
             none of it. */}
-        {roster &&
-        <Card className="lg:col-span-2">
+        {roster && (
+          <Card className="lg:col-span-2">
             <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0">
               <CardTitle className="text-base">{t('staff.availability')}</CardTitle>
               <div className="flex items-center gap-1 rounded-lg border px-2 py-1">
                 <Button
-                variant="ghost"
-                size="icon"
-                title={t('staff.weekPrev')}
-                disabled={!canGoBack(availWeek)}
-                onClick={() => setAvailWeek(addDaysIso(availWeek, -7))}>
-
+                  variant="ghost"
+                  size="icon"
+                  title={t('staff.weekPrev')}
+                  disabled={!canGoBack(availWeek)}
+                  onClick={() => setAvailWeek(addDaysIso(availWeek, -7))}
+                >
                   <ChevronLeft className="h-4 w-4" />
                 </Button>
                 <span className="px-2 text-sm font-medium">
                   {availWeek} → {addDaysIso(availWeek, 6)}
                 </span>
                 <Button
-                variant="ghost"
-                size="icon"
-                title={t('staff.weekNext')}
-                disabled={!canGoForward(availWeek)}
-                onClick={() => setAvailWeek(addDaysIso(availWeek, 7))}>
-
+                  variant="ghost"
+                  size="icon"
+                  title={t('staff.weekNext')}
+                  disabled={!canGoForward(availWeek)}
+                  onClick={() => setAvailWeek(addDaysIso(availWeek, 7))}
+                >
                   <ChevronRight className="h-4 w-4" />
                 </Button>
               </div>
@@ -365,17 +352,18 @@ export default function StaffHome() {
                 {t('staff.submitAvailability')}
               </Button>
             </CardContent>
-          </Card>}
+          </Card>
+        )}
 
-        {roster &&
-        <div className="lg:col-span-2">
+        {roster && (
+          <div className="lg:col-span-2">
             <CalendarSubscribeCard />
-          </div>}
+          </div>
+        )}
       </div>
 
       <AllShiftsDialog open={allShiftsOpen} onOpenChange={setAllShiftsOpen} branch={activeBranch} />
-      <EmployeeDocumentsDialog open={docsOpen} onOpenChange={setDocsOpen} employee={employeeProfile} />
       <SelfPasswordDialog open={resetOpen} onOpenChange={setResetOpen} profile={employeeProfile} />
-    </div>);
-
+    </div>
+  );
 }

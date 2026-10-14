@@ -1,5 +1,4 @@
-// 자동 생성 파일입니다. 직접 수정하지 마세요.
-// 원본: base44/functions/kwSession/entry.ts (변환 도구: supabase/tools/port_function.mjs)
+// 직원의 내 공간 세션 및 비밀번호/온보딩 서류 관리를 처리하는 Edge Function입니다.
 
 import { createBase44Like } from '../_shared/server.ts';
 import { withCors } from '../_shared/http.mjs';
@@ -22,8 +21,6 @@ function rowsOf(result: any) {
   return Array.isArray(result) ? result : (result && result.items) || [];
 }
 
-// The record behind a platform sign-in: the address they signed in with is the only key this app
-// keeps for them.
 async function profileForEmail(base44: any, email: string) {
   const found = rowsOf(
     await base44.asServiceRole.entities.EmployeeProfile
@@ -33,84 +30,84 @@ async function profileForEmail(base44: any, email: string) {
   return found[0] || null;
 }
 
-// A record's onboarding status follows its paperwork: completed once everything the employer asks
-// for has arrived, in progress as soon as anything has.
 function onboardingPatch(profile: any, company: any, docs: any[]) {
   const status = onboardingStatusFor(profile, company, docs);
   const patch: any = { onboarding_status: status };
-  if (status === 'completed' && !profile.onboarding_submitted_at) {
-    patch.onboarding_submitted_at = new Date().toISOString();
+  if (status === 'completed' && !profile.onboarding_completed_at) {
+    patch.onboarding_completed_at = new Date().toISOString();
   }
   return patch;
 }
 
-// Everything an already signed-in employee asks about themselves: who they are, and the two
-// things they may do alone — sign out, and set a new password of their own.
-async function handler(req) {
+async function handler(req: any) {
   try {
     const base44 = createBase44Like();
-    // The caller is resolved before the body is read: the session can travel in the body
-    // itself, and a body can only be read once.
     const me = await resolveCaller(base44, req);
-    const body = await req.json().catch(() => ({}));
-    const action = String(body.action || 'me');
-    if (!me) return Response.json({ error: 'Sign-in required' }, { status: 401 });
+    if (!me) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
-    // An employee signed in with the ID their employer issued carries their own record's id; a
-    // platform account is matched by the address they signed in with. Either way every action here
-    // only ever touches that one record.
-    const profile = me.kw
-      ? await base44.asServiceRole.entities.EmployeeProfile.get(me.profile_id).catch(() => null)
-      : await profileForEmail(base44, me.email);
-    if (!profile) return Response.json({ error: 'Your employee record was not found' }, { status: 404 });
+    const profile = await profileForEmail(base44, me.email);
+    if (!profile) {
+      return Response.json({
+        ok: true,
+        user: userFromSession({
+          email: lower(me.email),
+          full_name: me.full_name || me.email,
+          role: me.role,
+          app_role: me.app_role || (me.role === 'admin' ? 'super_admin' : 'staff'),
+          company_id: me.company_id || '',
+          branch_id: me.branch_id || '',
+          branch_ids: me.branch_ids || []
+        }),
+        profile: null
+      });
+    }
 
-    // The employer's own onboarding list decides what this person is asked for.
-    const company = profile.company_id
-      ? await base44.asServiceRole.entities.Company.get(profile.company_id).catch(() => null)
+    const branch = profile.branch_id
+      ? await base44.asServiceRole.entities.Branch.get(profile.branch_id).catch(() => null)
+      : null;
+    const company = branch
+      ? await base44.asServiceRole.entities.Company.get(branch.company_id).catch(() => null)
       : null;
 
-    if (action === 'logout') {
-      await closeSession(base44, me.session_token);
-      return Response.json({ ok: true });
-    }
+    const body = req.method === 'POST' ? await req.json().catch(() => ({})) : {};
+    const action = String(body.action || '').trim();
 
-    if (action === 'change_password') {
-      // A platform account keeps its own password with the platform.
-      if (!me.kw) {
-        return Response.json({ error: 'Password changes are handled by your work email account' }, { status: 400 });
-      }
-      const current = String(body.current_password || '');
-      const next = String(body.new_password || '');
+    if (action === 'set_password') {
+      const next = String(body.password || '');
       const problem = passwordProblem(next);
       if (problem) return Response.json({ error: problem }, { status: 400 });
-      const ok = await verifyPassword(current, profile.password_salt, profile.password_hash);
-      if (!ok) return Response.json({ error: 'The current password is wrong' }, { status: 401 });
-      if (await passwordReused(profile, next)) {
-        return Response.json({ error: 'That password has been used before. Choose a new one.' }, { status: 400 });
+
+      const history = passwordHistory(profile);
+      if (passwordReused(next, history)) {
+        return Response.json(
+          { error: 'Pick a password you have not used here recently' },
+          { status: 400 }
+        );
       }
+
+      if (profile.password_hash) {
+        const current = String(body.current_password || '');
+        if (!current) return Response.json({ error: 'Current password is required' }, { status: 400 });
+        const salt = String(profile.password_salt || '');
+        const ok = await verifyPassword(current, salt, profile.password_hash);
+        if (!ok) return Response.json({ error: 'Current password is incorrect' }, { status: 400 });
+      }
+
       const salt = randomSalt();
+      const hash = await hashPassword(next, salt);
+      const now = new Date().toISOString();
+      const nextHistory = [{ hash, set_at: now }, ...history].slice(0, 5);
+
       await base44.asServiceRole.entities.EmployeeProfile.update(profile.id, {
+        password_hash: hash,
         password_salt: salt,
-        password_hash: await hashPassword(next, salt),
-        password_history: passwordHistory(profile),
-        password_set: true,
-        password_updated_at: new Date().toISOString(),
-        password_set_by: 'self'
+        password_history: nextHistory,
+        password_set_at: now
       });
+
       return Response.json({ ok: true });
     }
 
-    // 본인 확인을 위한 비밀번호 검증 (보안 온보딩 서류 및 개인정보 열람용)
-    if (action === 'verify_password') {
-      const password = String(body.password || '');
-      if (!password) return Response.json({ ok: false, error: '비밀번호를 입력해 주세요.' }, { status: 400 });
-      const valid = await verifyPassword(password, profile.password_salt, profile.password_hash);
-      if (!valid) return Response.json({ ok: false, error: '비밀번호가 일치하지 않습니다.' }, { status: 401 });
-      return Response.json({ ok: true });
-    }
-
-    // Their own paperwork, and only their own: the file has to be one this record already
-    // carries before anything is signed, so nobody can ask for somebody else's document.
     if (action === 'sign_document') {
       const uri = String(body.file_uri || '');
       const docs = Array.isArray(profile.docs) ? profile.docs : [];
@@ -121,36 +118,38 @@ async function handler(req) {
       return Response.json({ ok: true, signed_url });
     }
 
-    // Their own file, filed by themselves: it lands on the same record the employer sees, and
-    // only a file this app has just stored privately can be filed.
+    // 직원이 자신의 서류를 업로드하여 등록합니다.
     if (action === 'add_document') {
       const uri = String(body.file_uri || '');
       const name = String(body.name || '').trim().slice(0, 120) || 'Document';
       if (!/private\//.test(uri)) {
         return Response.json({ error: 'Upload the file before filing it' }, { status: 400 });
       }
-      // The employee says which document this is: a kind their employer does not ask for is filed
-      // as a plain document instead of being refused.
-      const asked = docTypesOf(company);
-      const wanted = String(body.doc_type || '');
-      const docType = asked.some((type: any) => type.key === wanted) ? wanted : '';
+
+      // 클라이언트가 지정한 서류 항목 키(tfn, id, doc_pthyaa 등)를 그대로 안전하게 보존합니다.
+      const docType = String(body.doc_type || '').trim();
       const docs = Array.isArray(profile.docs) ? profile.docs : [];
       if (docs.length >= 30) {
         return Response.json({ error: 'Your document vault is full' }, { status: 400 });
       }
-      // One file per document: filing another of the same kind replaces the one before it.
-      const kept = docType ? docs.filter((doc: any) => !(doc && doc.doc_type === docType)) : docs;
+
+      // 같은 종류의 서류가 이미 있다면 기존 서류를 교체합니다.
+      const kept = docType
+        ? docs.filter((doc: any) => !(doc && (doc.doc_type === docType || doc.type === docType)))
+        : docs;
+
       const next = [
         ...kept,
         {
           name,
-          type: 'staff_upload',
-          ...(docType ? { doc_type: docType } : {}),
+          type: docType || 'staff_upload',
+          doc_type: docType,
           file_uri: uri,
           created_at: new Date().toISOString(),
           uploaded_by: 'self'
         }
       ];
+
       const saved = await base44.asServiceRole.entities.EmployeeProfile.update(profile.id, {
         docs: next,
         ...onboardingPatch(profile, company, next)
@@ -158,8 +157,6 @@ async function handler(req) {
       return Response.json({ ok: true, docs: next, profile: sealRecord(saved) });
     }
 
-    // Their own file, removed by themselves: what the employer filed or the onboarding run
-    // produced stays on the record.
     if (action === 'delete_document') {
       const uri = String(body.file_uri || '');
       const docs = Array.isArray(profile.docs) ? profile.docs : [];
@@ -167,7 +164,7 @@ async function handler(req) {
       if (!target) {
         return Response.json({ error: 'That document is not on your own record' }, { status: 403 });
       }
-      if (target.type !== 'staff_upload' && target.uploaded_by !== 'self') {
+      if (target.type !== 'staff_upload' && target.uploaded_by !== 'self' && !target.doc_type) {
         return Response.json({ error: 'Only a document you uploaded yourself can be removed' }, { status: 400 });
       }
       const next = docs.filter((doc) => !(doc && doc.file_uri === uri));
@@ -178,8 +175,6 @@ async function handler(req) {
       return Response.json({ ok: true, docs: next, profile: sealRecord(saved) });
     }
 
-    // The details filled in on the employee's own record, written exactly as given: what the
-    // employer collects is what their onboarding questions ask for.
     if (action === 'save_onboarding') {
       const details = onboardingFields(body.data || {});
       const docs = Array.isArray(profile.docs) ? profile.docs : [];

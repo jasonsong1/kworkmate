@@ -42,23 +42,33 @@ function infoFilled(profile: any, key: string) {
   return false;
 }
 
-// A file counts for an item when it was filed under that type, when the item's own name appears in
-// the file's name, or — since the onboarding form files an attachment beside the question that
-// asked for it — when it is simply one of the employee's own uploads no other item has claimed.
+/**
+ * 서류 항목과 업로드된 파일 매칭 (서버 측)
+ * 항목의 key와 일치하는 파일만 정확히 매칭합니다.
+ */
 function fileFor(docs: any[], type: any, used: Set<any>) {
   const labels = [type.label, type.label_en, type.key]
     .map((value: any) => String(value || '').trim().toLowerCase())
     .filter(Boolean);
   const free = (doc: any) => doc && !used.has(doc);
+
+  // 1순위: doc_type 또는 type 일치
   const typed = docs.find((doc: any) => free(doc) && (doc.doc_type === type.key || doc.type === type.key));
   if (typed) return typed;
+
+  // 2순위: 질문 ID 또는 키 일치
+  const byQuestion = docs.find((doc: any) => free(doc) && (doc.question_id === type.key || doc.key === type.key));
+  if (byQuestion) return byQuestion;
+
+  // 3순위: 파일명에 명칭 포함 (3글자 이상)
   const byName = docs.find((doc: any) => {
     if (!free(doc)) return false;
     const name = String(doc.name || '').toLowerCase();
-    return labels.some((label: string) => label && name.includes(label));
+    return labels.some((label: string) => label && label.length >= 3 && name.includes(label));
   });
   if (byName) return byName;
-  return docs.find((doc: any) => free(doc) && (doc.type === 'onboarding' || doc.type === 'staff_upload')) || null;
+
+  return null;
 }
 
 export function checklistFor(profile: any, company: any) {
@@ -83,8 +93,6 @@ export function checklistFor(profile: any, company: any) {
   };
 }
 
-// The details an employee filled in on their own record, written exactly as given: what the
-// employer collects is what their onboarding questions ask for, so nothing is filtered here.
 export function onboardingFields(data: any) {
   const source = data || {};
   const out: any = {};
@@ -104,24 +112,21 @@ export function onboardingFields(data: any) {
     'bank_account_number',
     'bank_account_name'
   ].forEach((field) => {
-    if (field in source) out[field] = source[field];
+    if (source[field] !== undefined) out[field] = source[field];
   });
   return out;
 }
 
-// What a record's onboarding status becomes once its paperwork is worked out again.
-export function onboardingStatusFor(profile: any, company: any, docs: any[]) {
-  const withDocs = { ...(profile || {}), docs: docs || [] };
-  const checklist = checklistFor(withDocs, company);
+export function onboardingStatusFor(profile: any, company: any, docs?: any[]) {
+  const effective = { ...profile, ...(docs ? { docs } : {}) };
+  const checklist = checklistFor(effective, company);
   if (checklist.complete) return 'completed';
-  const started =
-    (docs || []).length > 0 ||
-    filled(profile, 'address') ||
-    filled(profile, 'date_of_birth') ||
-    filled(profile, 'emergency_contact_name') ||
-    filled(profile, 'tfn_number') ||
-    filled(profile, 'super_choice') ||
-    filled(profile, 'super_fund_name') ||
-    filled(profile, 'bank_bsb');
-  return started ? 'in_progress' : 'pending';
+  const hasAnyDoc = (effective.docs || []).some((doc: any) => doc && doc.type !== 'resume');
+  const hasAnyInfo =
+    filled(effective, 'address') ||
+    filled(effective, 'tfn_number') ||
+    effective.tfn_pending === true ||
+    filled(effective, 'bank_account_number');
+  if (hasAnyDoc || hasAnyInfo) return 'in_progress';
+  return 'pending';
 }

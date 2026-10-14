@@ -210,6 +210,7 @@ export default function StaffOnboardingCard() {
       if (saved && saved.profile) {
         setRecord(saved.profile);
         syncForm(saved.profile);
+        try { reload && reload(); } catch (_) {}
       }
       toast({ title: t('ob.uploaded') || '서류가 성공적으로 업로드되었습니다.' });
     } catch (error) {
@@ -287,6 +288,7 @@ export default function StaffOnboardingCard() {
       if (saved && saved.profile) {
         setRecord(saved.profile);
         syncForm(saved.profile);
+        try { reload && reload(); } catch (_) {}
       }
       toast({ title: t('ob.removed') || '서류가 삭제되었습니다.' });
     } catch (error) {

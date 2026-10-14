@@ -27,7 +27,7 @@ export const DEFAULT_DOC_TYPES = [
 // The employer's list, or the standard one when they have not saved a list yet.
 export function docTypesOf(company) {
   const stored = (company && company.onboarding_doc_types) || [];
-  const list = stored.length > 0 ? stored : DEFAULT_DOC_TYPES;
+  const list = Array.isArray(stored) && stored.length > 0 ? stored : DEFAULT_DOC_TYPES;
   return list.filter((type) => type && type.key && (type.label || type.label_en));
 }
 
@@ -108,27 +108,40 @@ export function fieldRows(profile, t) {
   ];
 }
 
-// A file counts for an item when it was filed under that type, when the item's own name appears in
-// the file's name, or — since the onboarding form files an attachment beside the question that
-// asked for it — when it is simply one of the employee's own uploads no other item has claimed.
-// The employer names what they want before the employee uploads, so nothing depends on a file name.
+/**
+ * 서류 항목과 업로드된 파일 매칭:
+ * 1. doc.doc_type이 정확히 type.key와 일치하는 파일 우선 매칭
+ * 2. doc.type이 정확히 type.key와 일치하는 파일 매칭
+ * 3. 파일 이름에 해당 서류의 명칭(라벨)이 정확히 들어간 파일 매칭
+ * 4. 타 서류를 임의로 가로채는 무차별 매칭(staff_upload)은 완전히 제거합니다.
+ */
 function fileFor(docs, type, used) {
   const labels = [type.label, type.label_en, type.key]
     .map((value) => String(value || '').trim().toLowerCase())
     .filter(Boolean);
   const free = (doc) => doc && !used.has(doc);
+
+  // 1순위: doc_type 또는 type이 항목의 key와 정확히 일치
   const typed = docs.find(
     (doc) => free(doc) && (doc.doc_type === type.key || doc.type === type.key)
   );
   if (typed) return typed;
+
+  // 2순위: 질문 ID 또는 키 일치
+  const byQuestion = docs.find(
+    (doc) => free(doc) && (doc.question_id === type.key || doc.key === type.key)
+  );
+  if (byQuestion) return byQuestion;
+
+  // 3순위: 파일명에 서류 라벨(3글자 이상)이 포함된 경우
   const byName = docs.find((doc) => {
     if (!free(doc)) return false;
     const name = String(doc.name || '').toLowerCase();
-    return labels.some((label) => label && name.includes(label));
+    return labels.some((label) => label && label.length >= 3 && name.includes(label));
   });
   if (byName) return byName;
-  // Nothing says which item this upload belongs to, so the next item without a file claims it.
-  return docs.find((doc) => free(doc) && (doc.type === 'onboarding' || doc.type === 'staff_upload')) || null;
+
+  return null;
 }
 
 export function checklistFor(profile, company, lang) {
@@ -149,12 +162,11 @@ export function checklistFor(profile, company, lang) {
     };
   });
   const required = items.filter((item) => item.required);
+  const done = required.filter((item) => item.done);
   return {
     items,
-    total: items.length,
-    done: items.filter((item) => item.done).length,
     requiredTotal: required.length,
-    requiredDone: required.filter((item) => item.done).length,
-    complete: required.every((item) => item.done)
+    requiredDone: done.length,
+    complete: required.length > 0 && done.length >= required.length
   };
 }
