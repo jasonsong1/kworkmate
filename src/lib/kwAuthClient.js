@@ -98,75 +98,166 @@ function formatUser(user) {
   const isSuper =
     user.role === 'admin' ||
     user.app_role === 'super_admin' ||
-    String(user.email || '').trim().toLowerCase() === 'sym910403@gmail.com';
+    (user.email && String(user.email).trim().toLowerCase() === 'sym910403@gmail.com');
+
   return {
     ...user,
-    // 플랫폼 전체 관리자 권한을 부여하여 사이드바의 플랫폼 관리 및 회사 전환 기능을 활성화합니다.
-    role: isSuper ? 'admin' : (user.role || 'user'),
-    app_role: isSuper ? 'company_admin' : (user.app_role || 'staff')
+    role: isSuper ? 'admin' : user.role || 'staff',
+    app_role: isSuper ? 'super_admin' : user.app_role || 'staff',
+    is_platform_admin: isSuper
   };
 }
 
+function storeIdentity(user) {
+  const formatted = formatUser(user);
+  if (formatted) {
+    writeRaw(IDENTITY_KEY, JSON.stringify(formatted));
+  } else {
+    dropRaw(IDENTITY_KEY);
+  }
+}
+
 export function kwIdentity() {
-  return formatUser(readTabJson(IDENTITY_KEY));
+  return readTabJson(IDENTITY_KEY) || readJson(IDENTITY_KEY);
 }
 
 export function kwExtras() {
   return readJson(EXTRAS_KEY) || {};
 }
 
-export function kwSetExtras(data) {
-  writeJson(EXTRAS_KEY, { ...kwExtras(), ...(data || {}) });
-}
-
-function storeIdentity(user) {
-  writeRaw(IDENTITY_KEY, JSON.stringify(formatUser(user)));
+export function kwSetExtras(extras) {
+  writeJson(EXTRAS_KEY, { ...kwExtras(), ...(extras || {}) });
 }
 
 export function kwClearSession() {
   dropRaw(TOKEN_KEY);
   dropRaw(IDENTITY_KEY);
+  localStorage.removeItem(EXTRAS_KEY);
   verifyPromise = null;
 }
 
-// Supabase Edge Functions로 직통 HTTP POST 요청을 보냅니다.
-export async function kwCall(name, payload) {
+// Supabase Edge Function을 직접 호출하는 코어 통신 함수
+export async function kwCall(fnName, payload = {}) {
   const token = kwToken();
-  const endpoint = `${supabaseUrl}/functions/v1/${name}`;
-  const response = await fetch(endpoint, {
+  const res = await fetch(`${supabaseUrl}/functions/v1/${fnName}`, {
     method: 'POST',
     headers: {
-      'Content-Type': 'application/json',
       'apikey': supabaseAnonKey,
       'Authorization': `Bearer ${supabaseAnonKey}`,
-      'x-kw-session': token
+      'x-kw-session': token,
+      'Content-Type': 'application/json'
     },
-    body: JSON.stringify({ ...(payload || {}), kw_session: token })
+    body: JSON.stringify(payload)
   });
 
-  const data = await response.json().catch(() => null);
-  if (!response.ok) {
-    const error = new Error((data && data.error) || `Request failed (${response.status})`);
-    error.status = response.status;
-    error.data = data || {};
+  const contentType = res.headers.get('content-type') || '';
+  const data = contentType.includes('application/json') ? await res.json() : await res.text();
+
+  if (!res.ok) {
+    const error = new Error((data && data.error) || `Edge function ${fnName} failed with ${res.status}`);
+    error.status = res.status;
+    error.data = data;
     throw error;
   }
   return data;
 }
 
+// 사원번호 또는 업무용 이메일로 로그인
 export async function kwLogin(identifier, password) {
-  const data = await kwCall('kwLogin', { identifier, password });
-  if (!data || !data.token) throw new Error('Wrong ID or password');
-  writeToken(data.token);
-  const formattedUser = formatUser(data.user);
-  storeIdentity(formattedUser);
-  verifyPromise = Promise.resolve({ ...(formattedUser || {}), ...kwExtras() });
-  return { ...data, user: formattedUser };
+  const result = await kwCall('kwLogin', {
+    identifier: (identifier || '').trim(),
+    password: password || ''
+  });
+
+  if (result.token) {
+    writeToken(result.token);
+  }
+  if (result.user) {
+    storeIdentity(result.user);
+  }
+  return result;
+}
+
+// Google OAuth 2.0 간편 로그인 시작
+export async function kwLoginWithGoogle(returnTo = '/') {
+  if (!supabase) throw new Error('Supabase 클라이언트가 초기화되지 않았습니다.');
+  const redirectTo = `${window.location.origin}/login?oauth=google&returnTo=${encodeURIComponent(returnTo)}`;
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider: 'google',
+    options: {
+      redirectTo,
+      queryParams: {
+        access_type: 'offline',
+        prompt: 'select_account'
+      }
+    }
+  });
+  if (error) throw error;
+  return data;
+}
+
+// Google OAuth 리디렉션 복귀 후 세션 및 권한 동기화
+export async function kwHandleOAuthCallback() {
+  if (!supabase) return null;
+  const { data: { session }, error } = await supabase.auth.getSession();
+  if (error || !session) return null;
+
+  const token = session.access_token;
+  const user = session.user;
+  if (!token || !user) return null;
+
+  // Supabase 세션 토큰을 세션 스토리지에 저장
+  writeToken(token);
+
+  // 백엔드 kwSession 함수로 프로필 및 권한 동기화
+  try {
+    const fnUrl = `${supabaseUrl}/functions/v1/kwSession`;
+    const res = await fetch(fnUrl, {
+      method: 'POST',
+      headers: {
+        'apikey': supabaseAnonKey,
+        'Authorization': `Bearer ${supabaseAnonKey}`,
+        'x-kw-session': token,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ action: 'me' })
+    });
+    if (res.ok) {
+      const payload = await res.json();
+      if (payload && payload.user) {
+        const formatted = formatUser(payload.user);
+        storeIdentity(formatted);
+        return formatted;
+      }
+    }
+  } catch (err) {
+    console.warn('[kwHandleOAuthCallback] kwSession sync failed:', err);
+  }
+
+  // 기본 사용자 정보 저장
+  const basic = formatUser({
+    id: user.id,
+    email: user.email,
+    full_name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'User',
+    role: user.email?.toLowerCase() === 'sym910403@gmail.com' ? 'admin' : 'staff'
+  });
+  storeIdentity(basic);
+  return basic;
 }
 
 export async function kwLogout() {
-  if (kwActive()) await kwCall('kwSession', { action: 'logout' }).catch(() => null);
-  kwClearSession();
+  try {
+    if (kwActive()) {
+      await kwCall('kwSession', { action: 'logout' });
+    }
+    if (supabase) {
+      await supabase.auth.signOut().catch(() => {});
+    }
+  } catch (error) {
+    // 로그아웃 시 서버 에러가 발생해도 로컬 세션은 정상 삭제합니다.
+  } finally {
+    kwClearSession();
+  }
 }
 
 export async function kwVerify() {
@@ -250,10 +341,10 @@ export async function kwEntityOp(entity, op, args = []) {
       payload.query = args[0];
       break;
     default:
-      break;
+      throw new Error(`Unsupported entity operation: ${op}`);
   }
-  const data = await kwCall('kwData', payload);
-  return data.result;
+  const result = await kwCall('kwData', payload);
+  return result && result.data !== undefined ? result.data : result;
 }
 
 function kwEntityHandler(entity) {
@@ -284,6 +375,7 @@ export function createSupabaseAppClient() {
   const auth = {
     me: () => kwMe(),
     isAuthenticated: () => kwVerify().then(Boolean),
+    loginWithGoogle: (returnTo) => kwLoginWithGoogle(returnTo),
     logout: async (redirect) => {
       await kwLogout();
       if (redirect) window.location.href = redirect;
