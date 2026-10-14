@@ -77,18 +77,34 @@ export function WorkspaceProvider({ children }) {
 
     setMe(user);
 
-    const superAdmin = Boolean(user && user.role === 'admin');
+    const superAdmin = Boolean(
+      user && (
+        user.role === 'admin' ||
+        user.app_role === 'super_admin' ||
+        (user.email && user.email.toLowerCase() === 'sym910403@gmail.com')
+      )
+    );
 
-    if (user && user.company_id) {
+    // 슈퍼어드민 계정에 회사가 지정되어 있지 않을 경우 시스템의 첫 번째 회사를 자동 연결합니다.
+    let effectiveCompanyId = user ? user.company_id : '';
+    if (user && superAdmin && !effectiveCompanyId) {
+      const allComps = await base44.entities.Company.filter({}).catch(() => []);
+      if (allComps.length > 0) {
+        effectiveCompanyId = allComps[0].id;
+        user.company_id = effectiveCompanyId;
+      }
+    }
+
+    if (user && effectiveCompanyId) {
       let [companies, allBranches] = await Promise.all([
-        base44.entities.Company.filter({ id: user.company_id }).catch(() => []),
-        base44.entities.Branch.filter({ company_id: user.company_id }).catch(() => [])
+        base44.entities.Company.filter({ id: effectiveCompanyId }).catch(() => []),
+        base44.entities.Branch.filter({ company_id: effectiveCompanyId }).catch(() => [])
       ]);
       // The tenant the account belongs to is read once more on the server when the direct read
       // comes back empty, so a linked employee is never shut out of their own workspace.
       if (companies.length === 0) {
         if (!linked) linked = await link();
-        if (linked && linked.company_id === user.company_id) {
+        if (linked && linked.company_id === effectiveCompanyId) {
           companies = linked.company ? [linked.company] : [];
           allBranches = linked.branches || [];
         }

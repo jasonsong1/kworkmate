@@ -146,7 +146,10 @@ async function handler(req) {
     } else {
       const guard = await managerFor(base44, req, job);
       if (guard.denied) return guard.denied;
-      const pending = await base44.asServiceRole.entities.Applicant.filter({ job_id: jobId, analysis_status: 'pending' });
+      const allApplicants = await base44.asServiceRole.entities.Applicant.filter({ job_id: jobId });
+      const pending = allApplicants.filter((a: any) =>
+        body.force ? true : (a.analysis_status === 'pending' || a.analysis_status === 'failed' || !a.ai_summary)
+      );
       targets = pending.slice(0, 8);
       pendingLeft = Math.max(0, pending.length - targets.length);
     }

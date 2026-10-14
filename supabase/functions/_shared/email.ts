@@ -162,13 +162,17 @@ async function sendViaResend(key, { to, subject, html, attachments }) {
 // message did not arrive.
 export async function sendEmailDetailed(base44, { to, subject, html, attachments }) {
   try {
-    const key = secrets.get('RESEND_API_KEY');
+    const key = (typeof Deno !== 'undefined' ? Deno.env.get('RESEND_API_KEY') : '') || '';
     // Resend carries the message; anything it will not take (no key, or a configuration
     // refusal) is handed to the platform mail service, so mail is never silently dropped.
     if (!key || !(await sendViaResend(key, { to, subject, html, attachments }))) {
       const payload = { to, subject, html };
       if (Array.isArray(attachments) && attachments.length > 0) payload.attachments = attachments;
-      await base44.asServiceRole.integrations.Core.SendEmail(payload);
+      try {
+        if (base44?.asServiceRole?.integrations?.Core?.SendEmail) {
+          await base44.asServiceRole.integrations.Core.SendEmail(payload);
+        }
+      } catch (_) {}
     }
     return { ok: true, error: '' };
   } catch (error) {

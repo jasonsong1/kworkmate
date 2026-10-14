@@ -164,16 +164,33 @@ export async function branchIdsFor(base44, profile) {
 // ---------- sessions ----------
 
 export async function openSession(base44, { profile, user_agent }) {
-  const branch_ids = await branchIdsFor(base44, profile);
+  const email = lower(profile.user_email || profile.email);
+  let isAdminUser = false;
+  try {
+    const userMatches = rowsOf(await base44.asServiceRole.entities.User.filter({ email }).catch(() => []));
+    if (userMatches.length > 0 && userMatches[0].role === 'admin') {
+      isAdminUser = true;
+    }
+  } catch (_) {}
+
+  const isSuper =
+    isAdminUser ||
+    profile.role === 'admin' ||
+    profile.app_role === 'super_admin' ||
+    email === 'sym910403@gmail.com';
+
+  const branch_ids = isSuper ? [] : await branchIdsFor(base44, profile);
+
   return await base44.asServiceRole.entities.LoginSession.create({
     token: `kw_${randomHex(24)}`,
     profile_id: profile.id,
-    email: lower(profile.user_email),
+    email,
     full_name: profile.full_name || '',
     company_id: profile.company_id || '',
     branch_id: profile.branch_id || '',
     branch_ids,
-    app_role: profile.app_role || 'staff',
+    role: isSuper ? 'admin' : (profile.role || 'user'),
+    app_role: isSuper ? 'company_admin' : (profile.app_role || 'staff'),
     active: true,
     expires_at: new Date(Date.now() + SESSION_DAYS * 24 * 60 * 60 * 1000).toISOString(),
     last_seen_at: new Date().toISOString(),
@@ -217,6 +234,7 @@ export async function closeSessionsFor(base44, profileId) {
 // me.email / me.company_id / me.branch_ids keeps working untouched.
 export function userFromSession(session) {
   const isSuper =
+    session.role === 'admin' ||
     session.app_role === 'super_admin' ||
     lower(session.email) === 'sym910403@gmail.com';
   return {

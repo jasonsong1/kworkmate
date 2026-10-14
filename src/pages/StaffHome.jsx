@@ -225,8 +225,6 @@ export default function StaffHome() {
                     </div>
                   )}
                 </div>
-                {/* 온보딩 정보 (접기/펼치기 토글 적용) */}
-                <OnboardingDetails profile={employeeProfile} company={company} />
               </>
             ) : me ? (
               /* 슈퍼어드민이나 관리자 등 별도 직원 레코드가 없는 계정을 위한 프로필 정보 */
@@ -322,8 +320,8 @@ export default function StaffHome() {
           </Card>
         )}
 
-        {/* 3. 하단 카드: 온보딩 서류 (접기/펼치기 숨김 토글이 적용된 서류 카드) */}
-        {employeeProfile && (
+        {/* 3. 하단 카드: 온보딩 서류 및 정보 (접기/펼치기 숨김 토글이 적용된 통합 카드) */}
+        {(employeeProfile || me) && (
           <div className="lg:col-span-2">
             <StaffOnboardingCard />
           </div>

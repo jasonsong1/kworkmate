@@ -69,7 +69,7 @@ async function handler(req: Request) {
         const target = existing[0];
         await base44.asServiceRole.entities.User.update(target.id, {
           role: 'admin',
-          app_role: 'company_admin',
+          app_role: 'super_admin',
           full_name: fullName || target.full_name,
           password_salt: salt,
           password_hash: hash,
@@ -77,6 +77,20 @@ async function handler(req: Request) {
           password_set_by: 'admin',
           password_updated_at: new Date().toISOString()
         });
+
+        // EmployeeProfile 테이블에도 슈퍼어드민 권한 동기화
+        const empProfiles = await base44.asServiceRole.entities.EmployeeProfile.filter({ user_email: email }).catch(() => []);
+        if (empProfiles.length > 0) {
+          await base44.asServiceRole.entities.EmployeeProfile.update(empProfiles[0].id, {
+            role: 'admin',
+            app_role: 'super_admin',
+            full_name: fullName || target.full_name,
+            password_salt: salt,
+            password_hash: hash,
+            password_set: true
+          });
+        }
+
         return Response.json({
           ok: true,
           user: {
@@ -88,13 +102,18 @@ async function handler(req: Request) {
         });
       }
 
-      // 신규 슈퍼어드민 프로필 생성
+      // 시스템 내 첫 번째 회사를 기본 연결 회사로 설정하여 로그인 즉시 모든 화면 사용 가능하도록 보장
+      const companies = await base44.asServiceRole.entities.Company.filter({}).catch(() => []);
+      const defaultCompanyId = (companies && companies[0] && companies[0].id) || '';
+
+      // 신규 슈퍼어드민 프로필 생성 (User)
       const created = await base44.asServiceRole.entities.User.create({
         user_email: email,
         email,
         full_name: fullName || email.split('@')[0],
         role: 'admin',
-        app_role: 'company_admin',
+        app_role: 'super_admin',
+        company_id: defaultCompanyId,
         status: 'active',
         password_salt: salt,
         password_hash: hash,
@@ -102,6 +121,34 @@ async function handler(req: Request) {
         password_set_by: 'admin',
         password_updated_at: new Date().toISOString()
       });
+
+      // EmployeeProfile 에도 슈퍼어드민으로 함께 생성하여 kwLogin 및 내 공간 완벽 지원
+      const empProfiles = await base44.asServiceRole.entities.EmployeeProfile.filter({ user_email: email }).catch(() => []);
+      if (empProfiles.length > 0) {
+        await base44.asServiceRole.entities.EmployeeProfile.update(empProfiles[0].id, {
+          role: 'admin',
+          app_role: 'super_admin',
+          full_name: fullName || email.split('@')[0],
+          password_salt: salt,
+          password_hash: hash,
+          password_set: true,
+          company_id: defaultCompanyId || empProfiles[0].company_id,
+          status: 'active'
+        });
+      } else {
+        await base44.asServiceRole.entities.EmployeeProfile.create({
+          user_email: email,
+          full_name: fullName || email.split('@')[0],
+          role: 'admin',
+          app_role: 'super_admin',
+          company_id: defaultCompanyId,
+          status: 'active',
+          password_salt: salt,
+          password_hash: hash,
+          password_set: true,
+          hire_date: new Date().toISOString().split('T')[0]
+        });
+      }
 
       return Response.json({
         ok: true,
@@ -122,7 +169,14 @@ async function handler(req: Request) {
 
     // 3. 슈퍼어드민 권한 부여
     if (action === 'grant') {
-      await base44.asServiceRole.entities.User.update(target.id, { role: 'admin', app_role: 'company_admin' });
+      await base44.asServiceRole.entities.User.update(target.id, { role: 'admin', app_role: 'super_admin' });
+      const targetEmail = target.email || target.user_email;
+      if (targetEmail) {
+        const empProfiles = await base44.asServiceRole.entities.EmployeeProfile.filter({ user_email: targetEmail }).catch(() => []);
+        if (empProfiles.length > 0) {
+          await base44.asServiceRole.entities.EmployeeProfile.update(empProfiles[0].id, { role: 'admin', app_role: 'super_admin' });
+        }
+      }
       return Response.json({ ok: true, role: 'admin' });
     }
 
