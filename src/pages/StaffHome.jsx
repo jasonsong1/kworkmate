@@ -173,6 +173,7 @@ export default function StaffHome() {
 
 
       <div className="grid gap-6 lg:grid-cols-2">
+        {/* 1. 좌측 카드: 내 프로필 */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
@@ -180,8 +181,8 @@ export default function StaffHome() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            {employeeProfile ?
-            <>
+            {employeeProfile ? (
+              <>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div>
                     <p className="text-xs text-muted-foreground">{t('common.name')}</p>
@@ -202,11 +203,11 @@ export default function StaffHome() {
                         {employeeProfile.hourly_rate ? money(employeeProfile.hourly_rate) : '—'}
                       </p>
                       <button
-                      type="button"
-                      onClick={() => setShowRate((value) => !value)}
-                      title={showRate ? t('staff.hideRate') : t('staff.showRate')}
-                      className="text-muted-foreground transition-colors hover:text-foreground">
-
+                        type="button"
+                        onClick={() => setShowRate((value) => !value)}
+                        title={showRate ? t('staff.hideRate') : t('staff.showRate')}
+                        className="text-muted-foreground transition-colors hover:text-foreground"
+                      >
                         {showRate ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
                       </button>
                     </div>
@@ -214,38 +215,55 @@ export default function StaffHome() {
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground">{t('employees.onboarding')}</p>
-                  {employeeProfile.onboarding_status === 'completed' ?
-                <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100">
+                  {employeeProfile.onboarding_status === 'completed' ? (
+                    <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100">
                       {t('employees.completed')}
-                    </Badge> :
-
-                <div className="mt-1">
+                    </Badge>
+                  ) : (
+                    <div className="mt-1">
                       <Badge variant="secondary">{t('employees.pending')}</Badge>
                     </div>
-                }
+                  )}
                 </div>
+                {/* 온보딩 정보 (접기/펼치기 토글 적용) */}
                 <OnboardingDetails profile={employeeProfile} company={company} />
-              </> :
-
-            <p className="py-4 text-sm text-muted-foreground">{t('common.none')}</p>
-            }
+              </>
+            ) : me ? (
+              /* 슈퍼어드민이나 관리자 등 별도 직원 레코드가 없는 계정을 위한 프로필 정보 */
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <p className="text-xs text-muted-foreground">{t('common.name')}</p>
+                  <p className="text-sm font-medium">{me.full_name || me.email}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">{t('common.email') || '이메일'}</p>
+                  <p className="font-mono text-sm">{me.email}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">{t('common.position')}</p>
+                  <p className="text-sm">
+                    {me.role === 'admin'
+                      ? t('platform.superAdmin') || '슈퍼어드민'
+                      : me.app_role === 'company_admin'
+                      ? '회사 관리자'
+                      : me.app_role || '관리자'}
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <p className="py-4 text-sm text-muted-foreground">{t('common.none')}</p>
+            )}
           </CardContent>
         </Card>
 
-        {/* The paperwork their own account can complete: their details and one file per document
-            their employer asks for. */}
-        {employeeProfile &&
-        <div className="lg:col-span-2">
-            <StaffOnboardingCard />
-          </div>}
-
-        {roster &&
-        <Card>
+        {/* 2. 우측 카드: 내 시프트 (내 프로필 바로 옆에 나란히 배치) */}
+        {roster && (
+          <Card>
             <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0">
               <CardTitle className="flex items-center gap-2 text-base">
                 <CalendarDays className="h-4 w-4" /> {t('staff.shifts')}
               </CardTitle>
-              {/* Everyone's shifts for the store, next to the person's own. */}
+              {/* 매장 전체 시프트 확인 버튼 */}
               <Button variant="outline" size="sm" onClick={() => setAllShiftsOpen(true)} disabled={!activeBranch}>
                 <Users className="mr-2 h-4 w-4" /> {t('staff.allShifts')}
               </Button>
@@ -253,37 +271,37 @@ export default function StaffHome() {
             <CardContent className="space-y-2">
               <div className="flex items-center gap-1 rounded-lg border px-2 py-1">
                 <Button
-                variant="ghost"
-                size="icon"
-                title={t('staff.weekPrev')}
-                disabled={!canGoBack(shiftWeek)}
-                onClick={() => setShiftWeek(addDaysIso(shiftWeek, -7))}>
-
+                  variant="ghost"
+                  size="icon"
+                  title={t('staff.weekPrev')}
+                  disabled={!canGoBack(shiftWeek)}
+                  onClick={() => setShiftWeek(addDaysIso(shiftWeek, -7))}
+                >
                   <ChevronLeft className="h-4 w-4" />
                 </Button>
                 <span className="px-2 text-sm font-medium">
                   {shiftWeek} → {addDaysIso(shiftWeek, 6)}
                 </span>
                 <Button
-                variant="ghost"
-                size="icon"
-                title={t('staff.weekNext')}
-                disabled={!canGoForward(shiftWeek)}
-                onClick={() => setShiftWeek(addDaysIso(shiftWeek, 7))}>
-
+                  variant="ghost"
+                  size="icon"
+                  title={t('staff.weekNext')}
+                  disabled={!canGoForward(shiftWeek)}
+                  onClick={() => setShiftWeek(addDaysIso(shiftWeek, 7))}
+                >
                   <ChevronRight className="h-4 w-4" />
                 </Button>
               </div>
 
-              {loading ?
-            <p className="py-6 text-center text-sm text-muted-foreground">
+              {loading ? (
+                <p className="py-6 text-center text-sm text-muted-foreground">
                   <Loader2 className="mx-auto h-5 w-5 animate-spin" />
-                </p> :
-            shifts.length === 0 ?
-            <p className="py-6 text-center text-sm text-muted-foreground">{t('staff.noShifts')}</p> :
-
-            shifts.map((shift) =>
-            <div key={shift.id} className="flex items-center justify-between rounded-lg border px-3 py-2">
+                </p>
+              ) : shifts.length === 0 ? (
+                <p className="py-6 text-center text-sm text-muted-foreground">{t('staff.noShifts')}</p>
+              ) : (
+                shifts.map((shift) => (
+                  <div key={shift.id} className="flex items-center justify-between rounded-lg border px-3 py-2">
                     <div>
                       <p className="text-sm font-medium">{shift.date}</p>
                       <p className="text-xs text-muted-foreground">{shift.position || ''}</p>
@@ -292,16 +310,24 @@ export default function StaffHome() {
                       {shift.start_time}–{shift.end_time}
                     </span>
                   </div>
-            )
-            }
+                ))
+              )}
 
-              {/* What the week adds up to, with the unpaid breaks already taken out. */}
+              {/* 주간 총 근무 시간 요약 */}
               <div className="flex items-center justify-between border-t pt-2 text-sm">
                 <span className="text-muted-foreground">{t('staff.totalHours')}</span>
                 <span className="font-mono font-medium">{hoursValue(weekHours)}</span>
               </div>
             </CardContent>
-          </Card>}
+          </Card>
+        )}
+
+        {/* 3. 하단 카드: 온보딩 서류 (접기/펼치기 숨김 토글이 적용된 서류 카드) */}
+        {employeeProfile && (
+          <div className="lg:col-span-2">
+            <StaffOnboardingCard />
+          </div>
+        )}
 
         {/* Availability is what a roster is built from, so a package without a roster keeps
             none of it. */}

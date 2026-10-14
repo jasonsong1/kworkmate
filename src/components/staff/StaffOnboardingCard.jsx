@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Check, Clock, Loader2, Trash2 } from 'lucide-react';
+import { Check, ChevronDown, ChevronUp, Clock, FileText, Loader2, Trash2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -22,6 +22,8 @@ export default function StaffOnboardingCard() {
   const { t, lang } = useI18n();
   const { company, employeeProfile } = useWorkspace();
   const { toast } = useToast();
+  // 온보딩 서류 및 폼 접기/펼치기 숨김 토글 상태 (기본값: false 접힘)
+  const [isOpen, setIsOpen] = useState(false);
   const [record, setRecord] = useState(null);
   const [form, setForm] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -161,11 +163,30 @@ export default function StaffOnboardingCard() {
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle className="text-base">{t('ob.title')}</CardTitle>
-        <p className="mt-1 text-xs text-muted-foreground">{t('ob.hint')}</p>
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+        <div>
+          <CardTitle className="text-base flex items-center gap-2">
+            <FileText className="h-4 w-4 text-muted-foreground" />
+            {t('ob.title')}
+          </CardTitle>
+          <p className="mt-1 text-xs text-muted-foreground">{t('ob.hint')}</p>
+        </div>
+        {/* 온보딩 서류 및 폼 숨김/펼치기 토글 버튼 */}
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={() => setIsOpen((prev) => !prev)}
+          className="h-8 gap-1 px-2 text-xs font-medium text-muted-foreground hover:text-foreground"
+          title={isOpen ? '서류 숨기기' : '서류 보기'}
+        >
+          <span>{isOpen ? '숨기기' : '펼치기'}</span>
+          {isOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+        </Button>
       </CardHeader>
-      <CardContent className="space-y-5">
+
+      {isOpen && (
+        <CardContent className="space-y-5 animate-in fade-in-50 duration-200">
         <div>
           <div className="flex items-center justify-between gap-3 text-sm">
             <span className="text-muted-foreground">
@@ -360,6 +381,7 @@ export default function StaffOnboardingCard() {
           </Button>
         </div>
       </CardContent>
+      )}
     </Card>
   );
 }

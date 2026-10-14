@@ -326,22 +326,80 @@ export function createSupabaseAppClient() {
 
   const integrations = {
     Core: {
+      // 1. 공개 파일 업로드 (회사 로고, 지점 사진, 포스터 이미지 등)
+      // 누구나 볼 수 있는 'public' 버킷에 업로드하고 직간접 접근 가능한 공개 URL(file_url)을 반환합니다.
+      UploadPublicFile: async ({ file }) => {
+        if (!supabase) throw new Error('Supabase 클라이언트가 초기화되지 않았습니다.');
+        const ext = file.name ? file.name.split('.').pop() : 'bin';
+        const fileName = `${Date.now()}_${Math.random().toString(36).slice(2, 9)}.${ext}`;
+        const filePath = `${fileName}`;
+        const { error } = await supabase.storage.from('public').upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: false
+        });
+        if (error) throw error;
+        const { data: publicUrlData } = supabase.storage.from('public').getPublicUrl(filePath);
+        return {
+          file_url: publicUrlData.publicUrl,
+          file_uri: `public/${filePath}`
+        };
+      },
+
+      // 2. 비공개 파일 업로드 (지원자 이력서, 온보딩 서약서, 개인정보 서류 등)
+      // 보안이 필요한 'private' 버킷에 업로드하고 안전한 내부 식별 경로(file_uri)를 반환합니다.
+      UploadPrivateFile: async ({ file }) => {
+        if (!supabase) throw new Error('Supabase 클라이언트가 초기화되지 않았습니다.');
+        const ext = file.name ? file.name.split('.').pop() : 'bin';
+        const fileName = `${Date.now()}_${Math.random().toString(36).slice(2, 9)}.${ext}`;
+        const filePath = `${fileName}`;
+        const { error } = await supabase.storage.from('private').upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: false
+        });
+        if (error) throw error;
+        return {
+          file_uri: `private/${filePath}`
+        };
+      },
+
+      // 3. 범용 파일 업로드 (하위 호환성 유지)
       UploadFile: async ({ file, bucket = 'private' }) => {
-        if (!supabase) throw new Error('Supabase client not initialized');
+        if (!supabase) throw new Error('Supabase 클라이언트가 초기화되지 않았습니다.');
         const ext = file.name ? file.name.split('.').pop() : 'bin';
         const fileName = `${Date.now()}_${Math.random().toString(36).slice(2, 9)}.${ext}`;
         const filePath = `${fileName}`;
         const { error } = await supabase.storage.from(bucket).upload(filePath, file);
         if (error) throw error;
+        if (bucket === 'public') {
+          const { data: publicUrlData } = supabase.storage.from('public').getPublicUrl(filePath);
+          return { file_url: publicUrlData.publicUrl, file_uri: `${bucket}/${filePath}` };
+        }
         return { file_uri: `${bucket}/${filePath}` };
       },
+
+      // 4. 비공개 파일 안전 열람을 위한 서명된 URL(Signed URL) 생성
       CreateFileSignedUrl: async ({ file_uri, expiresIn = 3600 }) => {
-        if (!supabase) throw new Error('Supabase client not initialized');
+        if (!supabase) throw new Error('Supabase 클라이언트가 초기화되지 않았습니다.');
         const parts = String(file_uri || '').split('/');
         const bucket = parts[0] || 'private';
         const path = parts.slice(1).join('/');
+        // 공개 버킷인 경우 서명 없이 바로 다운로드 가능한 URL 반환
+        if (bucket === 'public') {
+          const { data: publicUrlData } = supabase.storage.from('public').getPublicUrl(path);
+          return { signed_url: publicUrlData.publicUrl };
+        }
+        // 비공개 버킷인 경우 시간 제한 서명 URL 발급
         const { data, error } = await supabase.storage.from(bucket).createSignedUrl(path, expiresIn);
-        if (error) throw error;
+        if (error) {
+          // 클라이언트 세션 토큰이 다를 경우 kwSession 함수를 통해 서명 URL 발급 재시도
+          try {
+            const fallback = await kwSessionAction({ action: 'sign_document', file_uri });
+            if (fallback && fallback.signed_url) {
+              return { signed_url: fallback.signed_url };
+            }
+          } catch (_) {}
+          throw error;
+        }
         return { signed_url: data.signedUrl };
       }
     }
