@@ -14,7 +14,8 @@ export const MODULES = [
   'leave',
   'attendance',
   'templates',
-  'settings'
+  'settings',
+  'activity_logs'
 ];
 
 export const LEVELS = ['none', 'read', 'update', 'write'];
@@ -29,7 +30,8 @@ export const SCOPED_MODULES = [
   'interviews',
   'roster',
   'leave',
-  'attendance'
+  'attendance',
+  'activity_logs'
 ];
 
 // The dashboard is every position's read-only home, so no screen offers it as a configurable
@@ -44,7 +46,8 @@ export const NO_DELETE_MODULES = [
   'leave',
   'attendance',
   'templates',
-  'settings'
+  'settings',
+  'activity_logs'
 ];
 
 export function isConfigurable(module) {

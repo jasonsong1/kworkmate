@@ -16,6 +16,7 @@ import { usePermissions } from '@/lib/permissions';
 import { money, visaLabel } from '@/lib/bh';
 import { checklistFor } from '@/lib/onboardingDocs';
 import { base44 } from '@/api/base44Client';
+import { logActivity } from '@/lib/activityLogger';
 
 export default function Employees() {
   const { t, lang } = useI18n();
@@ -81,10 +82,26 @@ export default function Employees() {
   };
 
   const toggleActive = async (row) => {
+    const nextStatus = row.status === 'inactive' ? 'active' : 'inactive';
     await base44.entities.EmployeeProfile.update(row.id, {
-      status: row.status === 'inactive' ? 'active' : 'inactive'
+      status: nextStatus
     });
     toast({ title: t('common.save') });
+
+    // 직원 활성/비활성 상태 변경 로그 기록
+    logActivity({
+      module: 'employees',
+      action: 'update',
+      summary: `${row.full_name} 직원의 상태 변경 (${row.status || 'active'} -> ${nextStatus})`,
+      details: {
+        before: { status: row.status || 'active' },
+        after: { status: nextStatus }
+      },
+      targetId: row.id,
+      targetName: row.full_name,
+      branchId: activeBranch?.id
+    });
+
     load();
   };
 
@@ -102,6 +119,25 @@ export default function Employees() {
       title: t('employees.deleted'),
       description: data.kept ? t('employees.accessKept') : t('employees.accessBlocked')
     });
+
+    // 직원 삭제 로그 기록
+    logActivity({
+      module: 'employees',
+      action: 'delete',
+      summary: `${row.full_name} (${row.user_email}) 직원 삭제 처리`,
+      details: {
+        before: {
+          full_name: row.full_name,
+          user_email: row.user_email,
+          position: row.position,
+          hourly_rate: row.hourly_rate
+        }
+      },
+      targetId: row.id,
+      targetName: row.full_name,
+      branchId: activeBranch?.id
+    });
+
     load();
   };
 

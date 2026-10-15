@@ -356,7 +356,8 @@ export const GATEWAY_ENTITIES = {
   // own phone. Never anybody else's, whatever position they hold.
   Notification: { scope: 'company', company_field: 'company_id', self_field: 'user_email', module: 'dashboard', self_only: true, self_service: true },
   CalendarSubscription: { scope: 'company', company_field: 'company_id', self_field: 'user_email', module: 'dashboard', self_only: true, self_service: true },
-  PushSubscription: { scope: 'company', company_field: 'company_id', self_field: 'user_email', module: 'dashboard', self_only: true, self_service: true }
+  PushSubscription: { scope: 'company', company_field: 'company_id', self_field: 'user_email', module: 'dashboard', self_only: true, self_service: true },
+  ActivityLog: { scope: 'branch', branch_field: 'branch_id', module: 'activity_logs' }
 };
 
 const LEVEL_RANK = { none: 0, read: 1, update: 2, write: 3 };

@@ -10,6 +10,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { useI18n } from '@/lib/i18n';
 import { STATUS_KEYS, STATUS_TONES, hoursLabel, rangeLabel } from '@/lib/leave';
 import { base44 } from '@/api/base44Client';
+import { logActivity } from '@/lib/activityLogger';
 
 // The requests and what happened to them. A manager approves or declines here; declining asks
 // for the reason the employee will read.
@@ -33,6 +34,26 @@ export default function LeaveRequestsTable({ requests, canManage, showEmployee, 
       return;
     }
     toast({ title: t('leave.decided') });
+
+    // 휴가 결재 상세 로그 기록
+    logActivity({
+      module: 'leave',
+      action: decision === 'approved' ? 'approve' : 'reject',
+      summary: `${request.employee_name || request.employee_email} 직원의 휴가 신청 ${decision === 'approved' ? '승인' : '반려'} (${request.start_date} ~ ${request.end_date}, ${request.hours}시간)`,
+      details: {
+        before: { status: request.status },
+        after: { status: decision, reason: text || '' },
+        leave_type: request.leave_type_key,
+        hours: request.hours,
+        start_date: request.start_date,
+        end_date: request.end_date,
+        reason: text || ''
+      },
+      targetId: request.id,
+      targetName: request.employee_name || request.employee_email,
+      branchId: request.branch_id
+    });
+
     setDialog(null);
     setReason('');
     onDecided && onDecided();

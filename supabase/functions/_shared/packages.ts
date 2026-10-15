@@ -19,7 +19,8 @@ export const ALL_MODULES = [
   'leave',
   'attendance',
   'templates',
-  'settings'
+  'settings',
+  'activity_logs'
 ];
 
 // Features sit inside a module: the module stays, one part of it is not part of the package.

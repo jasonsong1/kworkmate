@@ -21,7 +21,8 @@ export const MODULE_LABELS = {
   leave: 'nav.leave',
   attendance: 'nav.attendance',
   templates: 'nav.templateDesign',
-  settings: 'nav.settings'
+  settings: 'nav.settings',
+  activity_logs: 'nav.activityLogs'
 };
 
 const MODULE_BY_PREFIX = [
@@ -42,6 +43,7 @@ const MODULE_BY_PREFIX = [
   ['/leave', 'leave'],
   ['/attendance', 'attendance'],
   ['/clock', 'attendance'],
+  ['/activity-logs', 'activity_logs'],
   ['/settings', 'settings']
 ];
 

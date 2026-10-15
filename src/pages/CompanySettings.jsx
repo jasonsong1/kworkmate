@@ -26,6 +26,7 @@ import { cleanDocTypes, docTypesOf } from '@/lib/onboardingDocs';
 import { questionsFromDraft, toDraft } from '@/lib/onboardingQuestions';
 import CompanyPicker from '@/components/platform/CompanyPicker';
 import { base44 } from '@/api/base44Client';
+import { logActivity } from '@/lib/activityLogger';
 
 // Some settings panels only make sense with the modules behind them: the permission table belongs
 // to a staff list, penalty rates to a roster.
@@ -158,6 +159,19 @@ export default function CompanySettings() {
       // place instead of reloading the whole back office, so the open tab stays open.
       patchCompany(payload);
       toast({ title: t('settings.saved') });
+
+      // 회사 설정 변경 감사 로그 기록
+      logActivity({
+        module: 'settings',
+        action: 'update',
+        summary: `회사 설정 업데이트 (${company.name || 'Company'}, 탭: ${tab})`,
+        details: {
+          tab,
+          updated_keys: Object.keys(payload || {})
+        },
+        targetId: company.id,
+        targetName: company.name
+      });
     } catch (error) {
       toast({ variant: 'destructive', title: error.message || t('settings.saveFailed') });
     } finally {

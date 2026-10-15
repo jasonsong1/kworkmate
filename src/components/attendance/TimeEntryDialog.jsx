@@ -15,6 +15,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { useI18n } from '@/lib/i18n';
 import { base44 } from '@/api/base44Client';
 import { todayIso } from '@/lib/bh';
+import { logActivity } from '@/lib/activityLogger';
 
 /**
  * ISO 문자열 또는 Date 객체를 YYYY-MM-DD 및 HH:mm 로 분리
@@ -176,9 +177,35 @@ export default function TimeEntryDialog({
           rejection_reason: approvalStatus === 'rejected' ? note : ''
         });
         toast({ title: '근태 기록이 성공적으로 수정되었습니다.' });
+
+        // 디테일한 근태 수정 로그 기록
+        logActivity({
+          module: 'attendance',
+          action: 'update',
+          summary: `${employeeName} 직원의 출퇴근 기록 수정 (${clockInTime} ~ ${hasClockOut ? clockOutTime : '미퇴근'}, ${minutes}분)`,
+          details: {
+            before: {
+              clock_in_at: entry.clock_in_at,
+              clock_out_at: entry.clock_out_at,
+              minutes: entry.minutes,
+              approval_status: entry.approval_status,
+            },
+            after: {
+              clock_in_at: clockInAt,
+              clock_out_at: clockOutAt,
+              minutes,
+              approval_status: approvalStatus,
+              rejection_reason: approvalStatus === 'rejected' ? note : ''
+            },
+            reason: note || ''
+          },
+          targetId: entry.id,
+          targetName: employeeName,
+          branchId: branch.id
+        });
       } else {
         // [신규 추가 모드]
-        await base44.entities.TimeEntry.create({
+        const created = await base44.entities.TimeEntry.create({
           branch_id: branch.id,
           employee_email: employeeEmail,
           employee_name: employeeName,
@@ -192,6 +219,27 @@ export default function TimeEntryDialog({
           rejection_reason: approvalStatus === 'rejected' ? note : ''
         });
         toast({ title: '근태 기록이 새로 등록되었습니다.' });
+
+        // 디테일한 근태 추가 로그 기록
+        logActivity({
+          module: 'attendance',
+          action: 'create',
+          summary: `${employeeName} 직원의 출퇴근 기록 수동 등록 (${clockInTime} ~ ${hasClockOut ? clockOutTime : '미퇴근'}, ${minutes}분)`,
+          details: {
+            after: {
+              employee_email: employeeEmail,
+              clock_in_at: clockInAt,
+              clock_out_at: clockOutAt,
+              minutes,
+              source: 'manual',
+              approval_status: approvalStatus
+            },
+            reason: note || ''
+          },
+          targetId: created?.id,
+          targetName: employeeName,
+          branchId: branch.id
+        });
       }
 
       if (onSaved) onSaved();

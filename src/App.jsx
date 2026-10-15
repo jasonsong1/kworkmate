@@ -40,6 +40,7 @@ import TemplateDesign from '@/pages/TemplateDesign';
 import JobDesign from '@/pages/JobDesign';
 import QrDesign from '@/pages/QrDesign';
 import PlatformAdmin from '@/pages/PlatformAdmin';
+import ActivityLogs from '@/pages/ActivityLogs';
 import Kiosk from '@/pages/Kiosk';
 import StaffHome from '@/pages/StaffHome';
 import Welcome from '@/pages/Welcome';
@@ -118,6 +119,7 @@ const AuthenticatedApp = () => {
           <Route path="/job-design" element={<JobDesign />} />
           <Route path="/qr-design" element={<QrDesign />} />
           <Route path="/clock" element={<Clock />} />
+          <Route path="/activity-logs" element={<ActivityLogs />} />
           <Route path="/platform" element={<PlatformAdmin />} />
         </Route>
       </Route>

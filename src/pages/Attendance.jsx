@@ -18,6 +18,7 @@ import { todayIso } from '@/lib/bh';
 import { dayRangeForState, formatTimeInZone, stateFromBranch } from '@/lib/holidays';
 import { kioskUrl, todayFor } from '@/lib/kioskLink';
 import { base44 } from '@/api/base44Client';
+import { logActivity } from '@/lib/activityLogger';
 
 const ALL = 'all';
 
@@ -117,6 +118,22 @@ export default function Attendance() {
       approved_at: new Date().toISOString(),
       rejection_reason: status === 'rejected' ? reason || '' : ''
     });
+
+    // 근태 승인/반려 로그 기록
+    logActivity({
+      module: 'attendance',
+      action: status === 'rejected' ? 'reject' : 'approve',
+      summary: `${row.employee_name || row.employee_email} 직원의 근태 기록 ${status === 'rejected' ? '반려' : '승인'}`,
+      details: {
+        before: { approval_status: row.approval_status },
+        after: { approval_status: status, rejection_reason: reason || '' },
+        reason: reason || ''
+      },
+      targetId: row.id,
+      targetName: row.employee_name || row.employee_email,
+      branchId: activeBranch?.id
+    });
+
     await load();
   };
 
@@ -130,6 +147,26 @@ export default function Attendance() {
     try {
       await base44.entities.TimeEntry.delete(row.id);
       toast({ title: '근태기록이 성공적으로 삭제되었습니다.' });
+
+      // 근태 삭제 디테일 로그 기록
+      logActivity({
+        module: 'attendance',
+        action: 'delete',
+        summary: `${empName} 직원의 출퇴근 근태기록 삭제 (${row.clock_in_at ? row.clock_in_at.slice(0, 16) : ''}, ${row.minutes || 0}분)`,
+        details: {
+          before: {
+            employee_email: row.employee_email,
+            clock_in_at: row.clock_in_at,
+            clock_out_at: row.clock_out_at,
+            minutes: row.minutes,
+            approval_status: row.approval_status
+          }
+        },
+        targetId: row.id,
+        targetName: empName,
+        branchId: activeBranch?.id
+      });
+
       await load();
     } catch (err) {
       console.error('[Attendance] delete error:', err);

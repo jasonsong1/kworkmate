@@ -12,6 +12,7 @@ import { EMPLOYMENT_TYPES, EMPLOYMENT_LABEL_KEYS, VISA_TYPES, VISA_LABEL_KEYS } 
 import { useWorkspace } from '@/lib/WorkspaceContext';
 import { usePermissions } from '@/lib/permissions';
 import { base44 } from '@/api/base44Client';
+import { logActivity } from '@/lib/activityLogger';
 
 // 직원의 기본 빈 양식 데이터
 const empty = {
@@ -240,6 +241,39 @@ export default function EmployeeDialog({ open, onOpenChange, branch, employee, o
       toast({
         title: employee ? t('employees.updated') : `${t('employees.added')} · ${saved.employee_number}`
       });
+
+      // 직원 정보 추가/수정 디테일 감사 로그 기록
+      logActivity({
+        module: 'employees',
+        action: employee ? 'update' : 'create',
+        summary: employee
+          ? `${form.full_name} 직원의 프로필 정보 수정 (직책: ${form.position || '미지정'}, 시급: $${form.hourly_rate || 0})`
+          : `신규 직원 ${form.full_name} (${form.user_email}) 등록`,
+        details: {
+          before: employee ? {
+            position: employee.position,
+            hourly_rate: employee.hourly_rate,
+            employment_type: employee.employment_type,
+            visa_type: employee.visa_type,
+            app_role: employee.app_role,
+            phone: employee.phone
+          } : null,
+          after: {
+            full_name: form.full_name,
+            user_email: form.user_email,
+            position: form.position,
+            hourly_rate: form.hourly_rate,
+            employment_type: form.employment_type,
+            visa_type: form.visa_type,
+            app_role: form.app_role,
+            phone: form.phone
+          }
+        },
+        targetId: savedId,
+        targetName: form.full_name,
+        branchId: branch?.id
+      });
+
       onOpenChange(false);
       onSaved && onSaved();
 
