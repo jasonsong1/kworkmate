@@ -227,26 +227,53 @@ export default function Onboarding() {
     setTaxForm((prev) => {
       const next = { ...prev };
 
-      // 1. Suburb
+      // 1. Email (Must check BEFORE address, because "Email address" contains the word "address"!)
+      if (
+        id === 'default_email' ||
+        lowerId.includes('email') ||
+        lowerLabel.includes('email') ||
+        lowerLabel.includes('이메일')
+      ) {
+        next.email = str;
+        return next;
+      }
+
+      // 2. Phone
+      if (
+        id === 'default_phone' ||
+        lowerId.includes('phone') ||
+        lowerLabel.includes('phone') ||
+        lowerLabel.includes('전화')
+      ) {
+        next.phone = str;
+        return next;
+      }
+
+      // 3. Suburb
       if (lowerId.includes('suburb') || lowerLabel.includes('suburb')) {
         next.suburb = str.toUpperCase();
         return next;
       }
 
-      // 2. State
+      // 4. State
       if (lowerId.includes('state') || lowerLabel.includes('state')) {
         next.state = str.toUpperCase();
         return next;
       }
 
-      // 3. Postcode
+      // 5. Postcode
       if (lowerId.includes('post') || lowerLabel.includes('post')) {
         next.postcode = str.replace(/\D/g, '').slice(0, 4);
         return next;
       }
 
-      // 4. Street address
-      if (lowerId.includes('address') || lowerLabel.includes('address')) {
+      // 6. Home / Residential street address (Exclude email questions!)
+      if (
+        !lowerId.includes('email') &&
+        !lowerLabel.includes('email') &&
+        !lowerLabel.includes('이메일') &&
+        (id === 'default_address' || lowerId.includes('address') || lowerLabel.includes('address') || lowerLabel.includes('주소'))
+      ) {
         next.addressLine = str;
         const parts = str.split(',').map((s) => s.trim());
         if (parts.length >= 2) {
@@ -258,10 +285,11 @@ export default function Onboarding() {
             next.postcode = match[2];
           }
         }
+        return next;
       }
 
-      // 5. Date of birth
-      if (id === 'default_dob' || id.includes('dob') || id.includes('birth')) {
+      // 7. Date of birth
+      if (id === 'default_dob' || id.includes('dob') || id.includes('birth') || lowerLabel.includes('birth') || lowerLabel.includes('생년월일')) {
         if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
           next.dob = str;
         } else if (/^\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4}$/.test(str)) {
@@ -270,37 +298,39 @@ export default function Onboarding() {
         } else {
           next.dob = str;
         }
+        return next;
       }
 
-      // 6. Name
-      if (id === 'default_name' || id === 'full_name') {
+      // 8. Name
+      if (id === 'default_name' || id === 'full_name' || lowerLabel.includes('full name') || lowerLabel.includes('성명')) {
         const parts = str.split(' ');
         next.givenNames = parts.slice(0, -1).join(' ') || parts[0] || '';
         next.familyName = parts.length > 1 ? parts[parts.length - 1] : '';
+        return next;
       }
 
-      // 7. Phone & Email
-      if (id === 'default_phone' || lowerId.includes('phone') || lowerLabel.includes('phone') || lowerLabel.includes('전화')) next.phone = str;
-      if (id === 'default_email' || lowerId.includes('email') || lowerLabel.includes('email') || lowerLabel.includes('이메일')) next.email = str;
-
-      // 8. TFN
+      // 9. TFN
       if (id === 'default_tfn') {
         next.tfnNumber = str;
         next.tfnMode = 'number';
+        return next;
       }
       if (id === 'default_tfn_held') {
         if (str === 'no') next.tfnMode = 'applied';
         if (str === 'yes') next.tfnMode = 'number';
+        return next;
       }
 
-      // 9. Tax-free threshold
+      // 10. Tax-free threshold
       if (id === 'default_tax_free') {
         next.taxFreeThreshold = str === 'yes' ? 'yes' : 'no';
+        return next;
       }
 
-      // 10. Student debt
+      // 11. Student debt
       if (id === 'default_hecs') {
         next.studentDebt = str === 'yes' ? 'yes' : 'no';
+        return next;
       }
 
       return next;
