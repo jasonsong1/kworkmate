@@ -384,14 +384,16 @@ export async function generateAtoNat3092Pdf({ employee = {}, company = {}, branc
   }
 
   // 4. Business address (Question 4)
-  // [중요] 지점설정(branch)의 실제 사업장 주소를 4번 질문의 전용 칸들에 정확히 기입합니다.
-  const branchAddr = String((branch && branch.address) || (company && company.address) || 'U4 1274 BOTANY RD').toUpperCase();
-  // Line 1 (Y: 157.5 -> textY: 161.5) - 4번 사업장 주소 첫 번째 줄
-  drawBoxesText(branchAddr.slice(0, 19), 22.9, 161.5, 19, 9.5);
-  // Line 2 (Y: 132.1 -> textY: 136.1) - 4번 사업장 주소 두 번째 줄 (19자 초과 시에만 기입)
-  if (branchAddr.length > 19) {
-    drawBoxesText(branchAddr.slice(19, 38), 22.9, 136.1, 19, 9.5);
+  // [중요] 지점설정의 도로명 주소만 4번 첫 줄에 넣고, Suburb/State/Postcode는 그 아래 전용 칸에만 나옵니다.
+  let rawAddr = String((branch && branch.address) || (company && company.address) || 'U4 1274 BOTANY RD').trim();
+  // 쉼표 뒤에 붙은 suburb, state, postcode 등은 완전히 제거하여 순수 도로명만 남김
+  if (rawAddr.includes(',')) {
+    rawAddr = rawAddr.split(',')[0].trim();
   }
+  const cleanAddr = rawAddr.toUpperCase();
+  // Line 1 (Y: 157.5 -> textY: 161.5) - 4번 사업장 주소 첫 줄 (예: U4 1274 BOTANY RD)
+  drawBoxesText(cleanAddr.slice(0, 19), 22.9, 161.5, 19, 9.5);
+  // [중요] Line 2는 'BOTANY, NSW, 2019' 같은 중복 값을 절대 찍지 않고 완전히 빈칸으로 비워둡니다.
   // Suburb/town/locality (Y: 105.2 -> textY: 109.2)
   const branchSuburb = String((branch && branch.suburb) || (company && company.suburb) || 'BOTANY').toUpperCase();
   drawBoxesText(branchSuburb, 22.9, 109.2, 19, 9.5);

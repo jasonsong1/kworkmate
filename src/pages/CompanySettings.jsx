@@ -148,6 +148,12 @@ export default function CompanySettings() {
       // The server decides whether this person may save the company's settings, and it is the
       // server's answer that says the save happened.
       await saveCompanySettings(company.id, payload);
+      // 고용주 공식 전자서명을 DB에 직접 확실하게 영구 저장
+      if (onboarding.employerSignature) {
+        await base44.entities.Company.update(company.id, {
+          tfn_employer_signature: onboarding.employerSignature
+        }).catch(() => null);
+      }
       // Saving keeps the screen where it is: the workspace copy of the company is updated in
       // place instead of reloading the whole back office, so the open tab stays open.
       patchCompany(payload);
