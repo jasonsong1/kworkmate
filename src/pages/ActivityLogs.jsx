@@ -189,8 +189,8 @@ export default function ActivityLogs() {
         title="활동 및 변경 로그"
         subtitle={
           isPlatformAdmin
-            ? '플랫폼 최고 관리자 모드: 모든 브랜치의 사용자 활동과 변경 이력을 조회합니다.'
-            : `${activeBranch?.name || '현재 지점'}의 사용자 활동과 변경 이력을 조회합니다.`
+            ? '플랫폼 최고 관리자 모드: 모든 브랜치의 활동 로그를 조회합니다 (최근 3개월 보관, 3개월 초과 시 자동 삭제).'
+            : `${activeBranch?.name || '현재 지점'}의 활동 로그를 조회합니다 (최근 3개월 보관, 3개월 초과 시 자동 삭제).`
         }
         actions={
           <Button
