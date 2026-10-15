@@ -128,37 +128,45 @@ export default function Onboarding() {
     (d) => d && d.kind !== 'info' && d.key !== 'tfn' && d.key !== 'super' && d.key !== 'contract'
   );
 
+  const maxBasePage = Math.max(
+    0,
+    ...baseQuestions.map((q) => Number(q.page) || 1)
+  );
+
   const syntheticDocQuestions = fileDocTypes
     .filter((docType) => {
       const lowerKey = String(docType.key || '').toLowerCase();
-      const lowerLabel = String(docType.label || docType.label_en || '').toLowerCase();
+      const lowerLabel = String(docType.label || docType.label_en || '').toLowerCase().trim();
       // 기존 질문 중 동일한 목적의 업로드 질문이 있는지 검사
       const exists = baseQuestions.some((q) => {
         if (q.type !== 'upload') return false;
-        const qLabel = String(q.label || '').toLowerCase();
-        const qId = String(q.id || '').toLowerCase();
+        const qLabel = String(q.label || '').toLowerCase().trim();
+        const qId = String(q.id || '').toLowerCase().trim();
         if (qId === lowerKey) return true;
         if (lowerKey === 'id' && (qLabel.includes('id') || qLabel.includes('신분증') || qLabel.includes('photo'))) return true;
         if (lowerKey === 'right_to_work' && (qLabel.includes('right') || qLabel.includes('work') || qLabel.includes('visa') || qLabel.includes('비자') || qLabel.includes('vevo'))) return true;
-        if (lowerLabel && qLabel.includes(lowerLabel)) return true;
+        if (lowerLabel && lowerLabel.length >= 3 && qLabel === lowerLabel) return true;
         return false;
       });
       return !exists;
     })
-    .map((docType) => ({
-      id: docType.key,
-      label: docType.label_en || docType.label || docType.key,
-      description: docType.key === 'id'
-        ? 'Passport photo page or Australian Driver Licence (PDF, JPG, PNG)'
-        : docType.key === 'right_to_work'
-        ? 'Australian Visa Grant Notice (VEVO), Passport, or Citizenship Certificate'
-        : 'Please attach the requested verification document (PDF, JPG, PNG)',
-      type: 'upload',
-      required: docType.required !== false,
-      page: 1,
-      page_title: '',
-      validation: { file_types: ['pdf', 'jpg', 'jpeg', 'png', 'webp'] }
-    }));
+    .map((docType, idx) => {
+      const labelText = docType.label || docType.label_en || docType.key;
+      return {
+        id: docType.key,
+        label: labelText,
+        description: docType.key === 'id'
+          ? 'Passport photo page or Australian Driver Licence (PDF, JPG, PNG)'
+          : docType.key === 'right_to_work'
+          ? 'Australian Visa Grant Notice (VEVO), Passport, or Citizenship Certificate'
+          : `Please upload the required verification document: ${labelText} (PDF, JPG, PNG)`,
+        type: 'upload',
+        required: docType.required !== false,
+        page: maxBasePage + idx + 1,
+        page_title: labelText,
+        validation: { file_types: ['pdf', 'jpg', 'jpeg', 'png', 'webp'] }
+      };
+    });
 
   const questions = [...baseQuestions, ...syntheticDocQuestions];
 

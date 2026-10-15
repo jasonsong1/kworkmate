@@ -51,7 +51,8 @@ async function handler(req) {
             default_super_fund_name: company.default_super_fund_name || '',
             default_super_fund_abn: company.default_super_fund_abn || '',
             default_super_fund_usi: company.default_super_fund_usi || '',
-            default_super_fund_phone: company.default_super_fund_phone || ''
+            default_super_fund_phone: company.default_super_fund_phone || '',
+            onboarding_doc_types: company.onboarding_doc_types || []
           }
         : null
     });
