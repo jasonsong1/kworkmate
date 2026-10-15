@@ -1,5 +1,5 @@
-import React from 'react';
-import { Lock, Plus, ShieldCheck, Trash2 } from 'lucide-react';
+import React, { useState } from 'react';
+import { Lock, PenTool, Plus, ShieldCheck, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { useI18n } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
+import EmployerSignatureDialog from '@/components/company/EmployerSignatureDialog';
 
 // 개인정보 수집 표준 항목 키
 const PERSONAL_FIELDS = [
@@ -23,6 +24,7 @@ const PERSONAL_FIELDS = [
  * 회사 설정 > 온보딩 탭의 서류 설정 및 개인정보 수집/암호화 설정 카드입니다.
  * - 온보딩 제출 서류 리스트 추가/삭제/필수 여부 설정
  * - 각 서류별 "암호화 보안 (비밀번호/얼굴인식 본인확인)" 토글 제공
+ * - TFN 서류의 경우 고용주 공식 e-Signature(사인 넣기) 등록 버튼 제공
  * - 수집할 개인정보 항목별 활성화 및 암호화 보안 토글 제공
  */
 export default function OnboardingSetupCard({
@@ -32,9 +34,12 @@ export default function OnboardingSetupCard({
   onFieldVisibilityChange,
   secureFields = {},
   onSecureFieldsChange,
+  employerSignature = '',
+  onEmployerSignatureChange,
   canEdit = false
 }) {
   const { t, lang } = useI18n();
+  const [sigDialogOpen, setSigDialogOpen] = useState(false);
 
   const setType = (index, patch) =>
     onChange(types.map((item, at) => (at === index ? { ...item, ...patch } : item)));
@@ -126,6 +131,27 @@ export default function OnboardingSetupCard({
                     onCheckedChange={(value) => setType(index, { secure: value })}
                   />
                 </div>
+
+                {/* TFN Declaration Form의 경우: 고용주 공식 전자서명 등록 버튼 */}
+                {type.key === 'tfn' && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={employerSignature ? 'outline' : 'secondary'}
+                    disabled={!canEdit}
+                    className={cn(
+                      'h-7 text-xs gap-1.5 font-medium transition-colors',
+                      employerSignature
+                        ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-700 hover:bg-emerald-500/20'
+                        : 'text-slate-700 hover:text-primary'
+                    )}
+                    onClick={() => setSigDialogOpen(true)}
+                    title="호주 국세청(ATO) 세무 서식 Section B에 자동 인쇄될 고용주 서명을 등록합니다."
+                  >
+                    <PenTool className="h-3.5 w-3.5" />
+                    {employerSignature ? '서명 등록됨 (수정)' : '사인 넣기'}
+                  </Button>
+                )}
 
                 {/* 필수 여부 토글 */}
                 <div className="flex items-center gap-2 text-xs font-medium">
@@ -222,6 +248,18 @@ export default function OnboardingSetupCard({
           </div>
         </CardContent>
       </Card>
+
+      {/* 고용주 공식 전자서명 등록 다이얼로그 */}
+      <EmployerSignatureDialog
+        open={sigDialogOpen}
+        onOpenChange={setSigDialogOpen}
+        initialSignature={employerSignature}
+        onSave={(sigDataUrl) => {
+          if (onEmployerSignatureChange) {
+            onEmployerSignatureChange(sigDataUrl);
+          }
+        }}
+      />
     </div>
   );
 }

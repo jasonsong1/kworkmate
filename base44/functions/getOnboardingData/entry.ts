@@ -34,7 +34,23 @@ export default async function (req) {
         start_date: employee.start_date || '',
         status: employee.onboarding_status || 'pending'
       },
-      branch: branch ? { name: branch.name, logo_url: branch.logo_url || '', brand_color: branch.brand_color || '#4338ca', address: [branch.address, branch.suburb, branch.state, branch.postcode].filter(Boolean).join(', ') } : null,
+      branch: branch
+        ? {
+            id: branch.id,
+            name: branch.name,
+            logo_url: branch.logo_url || '',
+            brand_color: branch.brand_color || '#4338ca',
+            address: branch.address || '',
+            suburb: branch.suburb || '',
+            state: branch.state || '',
+            postcode: branch.postcode || '',
+            phone: branch.phone || '',
+            contact_name: branch.contact_name || '',
+            contact_email: branch.contact_email || '',
+            contact_phone: branch.contact_phone || branch.phone || '',
+            full_address: [branch.address, branch.suburb, branch.state, branch.postcode].filter(Boolean).join(', ')
+          }
+        : null,
       // Only the questions the employer switched on: each one is a page of its own.
       onboarding_questions: ((company && company.onboarding_questions) || []).filter(
         (question) => question && question.visible !== false && String(question.label || '').trim()
@@ -48,7 +64,8 @@ export default async function (req) {
             default_super_fund_abn: company.default_super_fund_abn || '',
             default_super_fund_usi: company.default_super_fund_usi || '',
             default_super_fund_phone: company.default_super_fund_phone || '',
-            onboarding_doc_types: company.onboarding_doc_types || []
+            onboarding_doc_types: company.onboarding_doc_types || [],
+            tfn_employer_signature: company.tfn_employer_signature || ''
           }
         : null
     });

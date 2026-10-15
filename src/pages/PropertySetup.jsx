@@ -37,6 +37,9 @@ export default function PropertySetup() {
       state: branch.state || '',
       postcode: branch.postcode || '',
       phone: branch.phone || '',
+      contact_name: branch.contact_name || '',
+      contact_email: branch.contact_email || '',
+      contact_phone: branch.contact_phone || branch.phone || '',
       trading_hours: branch.trading_hours || '',
       employee_prefix: branch.employee_prefix || '',
       employee_number_padding: branch.employee_number_padding || 3,
@@ -191,7 +194,37 @@ export default function PropertySetup() {
                 <Input value={form.postcode} onChange={(e) => set('postcode', e.target.value)} />
               </div>
             </div>
-            <div className="sm:col-span-2">
+            <div className="sm:col-span-2 pt-2 border-t border-slate-100">
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
+                고용주 / 세무 서류 담당자 정보 (ATO Section B 연동)
+              </p>
+            </div>
+            <div>
+              <Label>담당자 이름 (Contact Person)</Label>
+              <Input
+                value={form.contact_name || ''}
+                onChange={(e) => set('contact_name', e.target.value)}
+                placeholder="예: PAYROLL MANAGER"
+              />
+            </div>
+            <div>
+              <Label>고용주 공식 이메일 (Primary Email)</Label>
+              <Input
+                type="email"
+                value={form.contact_email || ''}
+                onChange={(e) => set('contact_email', e.target.value)}
+                placeholder="예: payroll@company.com"
+              />
+            </div>
+            <div>
+              <Label>담당자 직통 전화번호 (Contact Phone)</Label>
+              <Input
+                value={form.contact_phone || ''}
+                onChange={(e) => set('contact_phone', e.target.value)}
+                placeholder="예: 0412 345 678"
+              />
+            </div>
+            <div className="sm:col-span-2 pt-2 border-t border-slate-100">
               <Label>{t('property.hours')}</Label>
               <TradingHoursEditor value={form.trading_hours} onChange={(next) => set('trading_hours', next)} />
             </div>

@@ -280,8 +280,8 @@ export default function Onboarding() {
       }
 
       // 7. Phone & Email
-      if (id === 'default_phone' || id.includes('phone')) next.phone = str;
-      if (id === 'default_email' || id.includes('email')) next.email = str;
+      if (id === 'default_phone' || lowerId.includes('phone') || lowerLabel.includes('phone') || lowerLabel.includes('전화')) next.phone = str;
+      if (id === 'default_email' || lowerId.includes('email') || lowerLabel.includes('email') || lowerLabel.includes('이메일')) next.email = str;
 
       // 8. TFN
       if (id === 'default_tfn') {
@@ -442,6 +442,7 @@ export default function Onboarding() {
         previous_family_name: taxForm.hasChangedName ? taxForm.previousFamilyName.trim() : '',
         date_of_birth: taxForm.dob.trim(),
         user_email: taxForm.email.trim() || data.employee?.user_email || '',
+        email: taxForm.email.trim() || data.employee?.user_email || '',
         phone: taxForm.phone.trim() || data.employee?.phone || '',
         address_line1: taxForm.addressLine.trim(),
         suburb: taxForm.suburb.trim(),

@@ -72,11 +72,12 @@ function signatureBlock(doc, dataUrl, y, label) {
 /**
  * [ATO 공식 규격] NAT 3092: Tax File Number Declaration PDF 생성
  */
-export async function buildTfnPdf({ employee, company, form, signatureDataUrl }) {
+export async function buildTfnPdf({ employee, company, branch, form, signatureDataUrl }) {
   try {
     const pdfBytes = await generateAtoNat3092Pdf({
       employee: employee || {},
       company: company || {},
+      branch: branch || {},
       form: form || {},
       signatureDataUrl
     });

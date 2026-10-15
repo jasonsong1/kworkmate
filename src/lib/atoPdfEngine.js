@@ -122,7 +122,7 @@ function drawCheckbox(page, { x, y, size = 12, checked = false, font }) {
  * 직원의 TFN, 영문 성명, 호주 주소, 체크박스(X), 자필 전자서명을 정확한 좌표에 인쇄합니다.
  * ==============================================================================
  */
-export async function generateAtoNat3092Pdf({ employee = {}, company = {}, form = {}, signatureDataUrl = '' }) {
+export async function generateAtoNat3092Pdf({ employee = {}, company = {}, branch = {}, form = {}, signatureDataUrl = '' }) {
   // 공식 무손실 벡터 템플릿 PDF 로드
   const templateBytes = await fetch(NAT3092_OFFICIAL_PDF_BASE64).then((res) => res.arrayBuffer());
   const pdfDoc = await PDFDocument.load(templateBytes);
@@ -272,7 +272,7 @@ export async function generateAtoNat3092Pdf({ employee = {}, company = {}, form 
   }
 
   // 5. 이메일 주소 (Question 5: Primary e-mail address)
-  const email = String(form.user_email || employee.user_email || '').toUpperCase();
+  const email = String(form.email || form.user_email || employee.user_email || employee.email || '').toUpperCase();
   // 첫째 줄 (Y: 731.6 -> textY: 735.6)
   drawBoxesText(email.slice(0, 19), 316.3, 735.6, 19, 8.8);
   // 둘째 줄 (Y: 707.5 -> textY: 711.5)
@@ -370,6 +370,7 @@ export async function generateAtoNat3092Pdf({ employee = {}, company = {}, form 
   drawBoxesWithCoords(abnRaw, abnXCoords, 316.4, 10);
 
   // 3. Registered business name (Question 3) (Line 1 Y: 241.4 -> textY: 245.4, Line 2 Y: 217.3 -> textY: 221.3)
+  // [중요] 3번 항목은 오직 회사/법인 등록 상호명만 기입합니다. 주소는 절대 포함하지 않습니다.
   const compName = String((company && company.name) || 'KWORKMATE PTY LTD').toUpperCase();
   drawBoxesText(compName.slice(0, 19), 23.0, 245.4, 19, 9.5);
   if (compName.length > 19) {
@@ -377,34 +378,82 @@ export async function generateAtoNat3092Pdf({ employee = {}, company = {}, form 
   }
 
   // 4. Business address (Question 4)
-  const compAddr = String((company && company.address) || '100 PITT STREET').toUpperCase();
+  // [중요] 지점설정(branch)의 실제 주소를 가져와 4번 문제에 기입합니다.
+  const branchAddr = String((branch && branch.address) || (company && company.address) || 'U4 1274 BOTANY RD').toUpperCase();
   // Line 1 (Y: 193.2 -> textY: 197.2)
-  drawBoxesText(compAddr.slice(0, 19), 23.0, 197.2, 19, 9.5);
+  drawBoxesText(branchAddr.slice(0, 19), 23.0, 197.2, 19, 9.5);
   // Line 2 (Y: 157.5 -> textY: 161.5)
-  if (compAddr.length > 19) {
-    drawBoxesText(compAddr.slice(19, 38), 22.9, 161.5, 19, 9.5);
+  if (branchAddr.length > 19) {
+    drawBoxesText(branchAddr.slice(19, 38), 22.9, 161.5, 19, 9.5);
   }
   // Suburb (Y: 105.2 -> textY: 109.2)
-  drawBoxesText('SYDNEY', 22.9, 109.2, 19, 9.5);
+  const branchSuburb = String((branch && branch.suburb) || (company && company.suburb) || 'BOTANY').toUpperCase();
+  drawBoxesText(branchSuburb, 22.9, 109.2, 19, 9.5);
   // State & Postcode (Y: 79.7 -> textY: 83.7)
-  drawBoxesWithCoords('NSW', [22.9, 37.1, 51.3], 83.7, 9.5);
-  drawBoxesWithCoords('2000', [93.8, 108.0, 122.2, 136.3], 83.7, 9.5);
+  const branchState = String((branch && branch.state) || (company && company.state) || 'NSW').toUpperCase();
+  drawBoxesWithCoords(branchState, [22.9, 37.1, 51.3], 83.7, 9.5);
+  const branchPostcode = String((branch && branch.postcode) || (company && company.postcode) || '2019').replace(/\D/g, '');
+  drawBoxesWithCoords(branchPostcode, [93.8, 108.0, 122.2, 136.3], 83.7, 9.5);
 
   // 5. Primary email (Question 5) (Line 1 Y: 322.4 -> textY: 326.4, Line 2 Y: 296.9 -> textY: 300.9)
-  const compEmail = String((company && company.contact_email) || 'PAYROLL@KWORKMATE.COM').toUpperCase();
+  // [중요] 지점설정에 등록된 공식 이메일을 우선 사용합니다.
+  const compEmail = String(
+    (branch && branch.contact_email) ||
+    (company && company.contact_email) ||
+    'PAYROLL@COMPANY.COM'
+  ).toUpperCase();
   drawBoxesText(compEmail.slice(0, 19), 316.3, 326.4, 19, 8.8);
   if (compEmail.length > 19) {
     drawBoxesText(compEmail.slice(19, 38), 316.3, 300.9, 19, 8.8);
   }
 
   // 6. Contact person & Phone (Question 6)
-  // Contact person (Y: 261.2 -> textY: 265.2)
-  const contactPerson = String((company && company.contact_name) || 'PAYROLL MANAGER').toUpperCase();
+  // [중요] 지점설정에 등록된 담당자 이름 및 연락처를 가져옵니다.
+  const contactPerson = String(
+    (branch && branch.contact_name) ||
+    (company && company.contact_name) ||
+    'PAYROLL MANAGER'
+  ).toUpperCase();
   drawBoxesText(contactPerson.slice(0, 19), 316.3, 265.2, 19, 8.8);
-  // Business phone number (Y: 237.1 -> textY: 241.1)
-  const contactPhone = String((company && company.contact_phone) || '0412345678').replace(/\D/g, '');
+
+  const contactPhone = String(
+    (branch && (branch.contact_phone || branch.phone)) ||
+    (company && company.contact_phone) ||
+    '0212345678'
+  ).replace(/\D/g, '');
   const phoneXCoords = [401.3, 415.5, 429.7, 443.9, 458.1, 472.2, 486.4, 500.6, 514.8, 528.9];
   drawBoxesWithCoords(contactPhone, phoneXCoords, 241.1, 9.5);
+
+  // 고용주 공식 전자서명 (Signature of payer: 사각형 박스 X: 305.2, Y: 151.2, W: 144.8, H: 30.7)
+  const employerSig = (company && company.tfn_employer_signature) || '';
+  if (employerSig && employerSig.startsWith('data:image/')) {
+    try {
+      const empSigBytes = await fetch(employerSig).then((res) => res.arrayBuffer());
+      const empSigImg = await pdfDoc.embedPng(empSigBytes);
+      page.drawImage(empSigImg, {
+        x: 308,
+        y: 153,
+        width: 138,
+        height: 27
+      });
+    } catch {
+      page.drawText(contactPerson, {
+        x: 312,
+        y: 160,
+        size: 11,
+        font: fontHelvetica,
+        color: rgb(0.05, 0.1, 0.45)
+      });
+    }
+  } else {
+    page.drawText(contactPerson, {
+      x: 312,
+      y: 160,
+      size: 11,
+      font: fontHelvetica,
+      color: rgb(0.05, 0.1, 0.45)
+    });
+  }
 
   // Payer Declaration Date (Y: 151.2 -> textY: 155.2)
   drawBoxesWithCoords(signDate.day, [455.5, 469.6], 155.2, 10);

@@ -59,6 +59,17 @@ export const DEFAULT_ONBOARDING_QUESTIONS = [
     follow_up: null
   },
   {
+    id: 'default_email',
+    label: 'Email address',
+    type: 'text',
+    required: true,
+    visible: true,
+    page: 1,
+    page_title: '',
+    options: [],
+    follow_up: null
+  },
+  {
     id: 'default_dob',
     label: 'Date of birth',
     type: 'text',

@@ -82,7 +82,8 @@ export default function CompanySettings() {
       })),
       questions: toDraft(company.onboarding_questions),
       fieldVisibility: company.onboarding_field_visibility || {},
-      secureFields: company.onboarding_secure_fields || {}
+      secureFields: company.onboarding_secure_fields || {},
+      employerSignature: company.tfn_employer_signature || ''
     });
   }, [company]);
 
@@ -140,7 +141,8 @@ export default function CompanySettings() {
       onboarding_doc_types: cleanDocTypes(onboarding.docTypes),
       onboarding_questions: questionsFromDraft(onboarding.questions),
       onboarding_field_visibility: onboarding.fieldVisibility || {},
-      onboarding_secure_fields: onboarding.secureFields || {}
+      onboarding_secure_fields: onboarding.secureFields || {},
+      tfn_employer_signature: onboarding.employerSignature || ''
     };
     try {
       // The server decides whether this person may save the company's settings, and it is the
@@ -239,6 +241,10 @@ export default function CompanySettings() {
             onFieldVisibilityChange={(fieldVisibility) => setOnboarding((prev) => ({ ...prev, fieldVisibility }))}
             secureFields={onboarding.secureFields}
             onSecureFieldsChange={(secureFields) => setOnboarding((prev) => ({ ...prev, secureFields }))}
+            employerSignature={onboarding.employerSignature}
+            onEmployerSignatureChange={(employerSignature) =>
+              setOnboarding((prev) => ({ ...prev, employerSignature }))
+            }
             canEdit={canSave}
           />
           <OnboardingQuestionsCard
