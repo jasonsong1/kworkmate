@@ -16,10 +16,9 @@ import { base44 } from '@/api/base44Client';
  * Supabase Edge Function('createCompany')을 호출하며,
  * 에러 발생 시 무한 로딩에 빠지지 않고 명확한 한국어 안내 메시지를 UI에 보여줍니다.
  */
-export default function AddCompanyDialog({ open, onOpenChange }) {
+export default function AddCompanyDialog({ open, onOpenChange, onCreated }) {
   const { t } = useI18n();
   const { toast } = useToast();
-  const navigate = useNavigate();
   const { refreshWorkspace } = useWorkspace();
   const [name, setName] = useState('');
   const [abn, setAbn] = useState('');
@@ -83,10 +82,13 @@ export default function AddCompanyDialog({ open, onOpenChange }) {
       // 3. 정상 생성 완료 처리
       await refreshWorkspace();
       onOpenChange(false);
+      if (typeof onCreated === 'function') {
+        onCreated(response?.data?.company);
+      }
       toast({
         title: t('company.created') || '회사가 성공적으로 생성되었습니다!'
       });
-      navigate('/branches');
+      // 플랫폼 관리 화면에 그대로 머무르고 엉뚱한 지점 페이지로 강제 이동하지 않습니다.
     } catch (err) {
       console.error('회사 생성 처리 중 예외 발생:', err);
       const friendlyMsg = formatErrorMessage(err?.message || err, trimmedName);

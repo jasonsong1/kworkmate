@@ -38,6 +38,7 @@ export default function CompanyManager() {
   const [editRow, setEditRow] = useState(null);
   const [confirm, setConfirm] = useState(null);
   const [busyId, setBusyId] = useState('');
+  const [refreshIndex, setRefreshIndex] = useState(0);
 
   // Searching happens on the server, so this keeps working with any number of companies.
   useEffect(() => {
@@ -56,7 +57,7 @@ export default function CompanyManager() {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [query, tab]);
+  }, [query, tab, refreshIndex]);
 
   const enter = async (item) => {
     if (company && company.id === item.id) return;
@@ -183,7 +184,11 @@ export default function CompanyManager() {
         </CardContent>
       </Card>
 
-      <AddCompanyDialog open={addOpen} onOpenChange={setAddOpen} />
+      <AddCompanyDialog
+        open={addOpen}
+        onOpenChange={setAddOpen}
+        onCreated={() => setRefreshIndex((p) => p + 1)}
+      />
 
       <EditCompanyDialog
         company={editRow}
