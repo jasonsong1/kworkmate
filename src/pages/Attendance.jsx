@@ -1,14 +1,16 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { CheckCircle2, FileBarChart, Loader2, MapPin, QrCode, XCircle } from 'lucide-react';
+import { CheckCircle2, FileBarChart, Loader2, MapPin, QrCode, XCircle, Plus, Pencil, Trash2 } from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
 import ApprovalActions from '@/components/attendance/ApprovalActions';
 import AttendanceReportDialog from '@/components/attendance/AttendanceReportDialog';
+import TimeEntryDialog from '@/components/attendance/TimeEntryDialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { useToast } from '@/components/ui/use-toast';
 import { useI18n } from '@/lib/i18n';
 import { useWorkspace } from '@/lib/WorkspaceContext';
 import { usePermissions } from '@/lib/permissions';
@@ -21,8 +23,13 @@ const ALL = 'all';
 
 export default function Attendance() {
   const { t } = useI18n();
-  const { activeBranch, me, scopeOf, employeeProfile } = useWorkspace();
-  const { canEdit } = usePermissions();
+  const { toast } = useToast();
+  const { activeBranch, me, scopeOf, employeeProfile, presetKey } = useWorkspace();
+  const { canEdit, isCompanyAdmin, isPlatformAdmin } = usePermissions();
+
+  // 근태 관리 권한 (출퇴근 수정, 추가, 삭제 가능 여부)
+  const canManageAttendance = canEdit('attendance') || presetKey === 'pro_director' || isCompanyAdmin || isPlatformAdmin;
+
   // "Own records only" is a data-range rule the person's position preset carries: a manager
   // sees the branch, a floor position sees nothing but itself.
   const selfOnly = scopeOf('attendance') === 'self';
@@ -36,6 +43,11 @@ export default function Attendance() {
   const [stats, setStats] = useState({ count: 0, minutes: 0, pending: 0 });
   const [loading, setLoading] = useState(true);
   const [reportOpen, setReportOpen] = useState(false);
+
+  // 근태 추가 및 수정 다이얼로그 상태
+  const [entryDialogOpen, setEntryDialogOpen] = useState(false);
+  const [selectedEntry, setSelectedEntry] = useState(null);
+  const [deletingId, setDeletingId] = useState(null);
 
   useEffect(() => {
     setEmployeeFilter(ALL);
@@ -108,6 +120,25 @@ export default function Attendance() {
     await load();
   };
 
+  // 근태 기록 삭제 함수
+  const handleDeleteEntry = async (row) => {
+    const empName = row.employee_name || row.employee_email;
+    if (!window.confirm(`${empName}의 출퇴근 근태기록을 정말 삭제하시겠습니까?`)) {
+      return;
+    }
+    setDeletingId(row.id);
+    try {
+      await base44.entities.TimeEntry.delete(row.id);
+      toast({ title: '근태기록이 성공적으로 삭제되었습니다.' });
+      await load();
+    } catch (err) {
+      console.error('[Attendance] delete error:', err);
+      toast({ variant: 'destructive', title: '삭제 실패: ' + (err.message || '') });
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   const hours = Math.floor(stats.minutes / 60);
   const minutes = stats.minutes % 60;
 
@@ -167,6 +198,20 @@ export default function Attendance() {
               </Select>
             )}
             <div className="flex items-center gap-2">
+              {canManageAttendance && (
+                <Button
+                  size="sm"
+                  className="flex-1 sm:flex-none h-9 text-xs gap-1.5 bg-primary text-primary-foreground font-semibold shadow-sm"
+                  onClick={() => {
+                    setSelectedEntry(null);
+                    setEntryDialogOpen(true);
+                  }}
+                  disabled={!activeBranch}
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  기록 추가
+                </Button>
+              )}
               <Button
                 variant="outline"
                 size="sm"
@@ -242,6 +287,9 @@ export default function Attendance() {
                     <TableHead>{t('attendance.wage')}</TableHead>
                     <TableHead>{t('attendance.geo')}</TableHead>
                     <TableHead>{t('attendance.approval')}</TableHead>
+                    {canManageAttendance && (
+                      <TableHead className="text-right">관리</TableHead>
+                    )}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -309,6 +357,33 @@ export default function Attendance() {
                           ) : null}
                         </div>
                       </TableCell>
+                      {canManageAttendance && (
+                        <TableCell className="text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                              title="수정"
+                              onClick={() => {
+                                setSelectedEntry(row);
+                                setEntryDialogOpen(true);
+                              }}
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                              title="삭제"
+                              onClick={() => handleDeleteEntry(row)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      )}
                     </TableRow>
                 )}
                 </TableBody>
@@ -322,6 +397,18 @@ export default function Attendance() {
         open={reportOpen}
         onOpenChange={setReportOpen}
         branch={activeBranch} />
+
+      <TimeEntryDialog
+        open={entryDialogOpen}
+        onOpenChange={(open) => {
+          setEntryDialogOpen(open);
+          if (!open) setSelectedEntry(null);
+        }}
+        entry={selectedEntry}
+        employees={employees}
+        branch={activeBranch}
+        onSaved={load}
+      />
       
     </div>);
 
