@@ -55,12 +55,6 @@ export default function Onboarding() {
   const [uploads, setUploads] = useState({});
   const [uploadingId, setUploadingId] = useState('');
 
-  // Company verification documents (ID, Right to Work, etc.)
-  const [companyDocUploads, setCompanyDocUploads] = useState({});
-  const [uploadingDocKey, setUploadingDocKey] = useState('');
-  const companyDocFileRef = useRef(null);
-  const pickingDocKey = useRef('');
-
   // ==============================================================================
   // Australian Taxation Office (ATO NAT 3092) Tax Form State
   // Pre-filled from employer questions and employee data
@@ -128,25 +122,6 @@ export default function Onboarding() {
   // Employer custom questions
   const questions = (data && data.onboarding_questions) || [];
 
-  // Required verification documents from company settings
-  const getCompanyDocTypes = () => {
-    const rawList = data?.company?.onboarding_doc_types || [
-      { key: 'id', label: 'Photo ID (Passport or Driver Licence)', label_en: 'Photo ID (Passport or Driver Licence)', required: true },
-      { key: 'right_to_work', label: 'Right to Work Evidence (VEVO / Passport)', label_en: 'Right to Work Evidence (VEVO / Passport)', required: true }
-    ];
-    return rawList
-      .filter((item) => item && item.kind !== 'info' && item.key !== 'tfn' && item.key !== 'super' && item.key !== 'contract')
-      .map((item) => {
-        let label = item.label_en || item.label || item.key;
-        if (item.key === 'id' || label.includes('신분증') || label.includes('ID')) {
-          label = 'Photo ID (Passport or Driver Licence)';
-        } else if (item.key === 'right_to_work' || label.includes('비자') || label.includes('Right to Work') || label.includes('VEVO')) {
-          label = 'Right to Work Evidence (VEVO / Passport / Citizenship)';
-        }
-        return { ...item, displayLabel: label };
-      });
-  };
-
   // Group questions by page
   const questionPages = [];
   const explicitPages = questions
@@ -166,11 +141,9 @@ export default function Onboarding() {
     page.title = titled ? String(titled.page_title).trim() : (page.questions[0]?.label || 'Questions');
   });
 
-  // Overall onboarding steps: [Question Pages...] -> [Required Documents] -> [ATO Tax Declaration] -> [Declaration & Signature]
-  const hasCompanyDocs = getCompanyDocTypes().length > 0;
+  // Overall onboarding steps: [Question Pages...] -> [ATO Tax Declaration] -> [Declaration & Signature]
   const pages = [
     ...questionPages.map((p, idx) => ({ type: 'questions', page: p, title: p.title || `Step ${idx + 1}` })),
-    ...(hasCompanyDocs ? [{ type: 'docs', title: 'Required Documents (ID & Right to Work)' }] : []),
     { type: 'tax', title: 'ATO Tax File Number Declaration (NAT 3092)' },
     { type: 'sign', title: 'Payee Declaration & Signature' }
   ];
@@ -319,42 +292,6 @@ export default function Onboarding() {
     }
   };
 
-  // Company verification document upload
-  const chooseCompanyDoc = (docKey) => {
-    pickingDocKey.current = docKey;
-    if (companyDocFileRef.current) {
-      companyDocFileRef.current.value = '';
-      companyDocFileRef.current.click();
-    }
-  };
-
-  const handleCompanyDocChange = async (event) => {
-    const file = event.target.files && event.target.files[0];
-    event.target.value = '';
-    const key = pickingDocKey.current;
-    if (!file || !key) return;
-
-    setUploadingDocKey(key);
-    setError('');
-    try {
-      const res = await base44.integrations.Core.UploadPrivateFile({ file });
-      if (!res || !res.file_uri) throw new Error('Failed to generate file upload path.');
-      setCompanyDocUploads((prev) => ({
-        ...prev,
-        [key]: {
-          name: file.name,
-          file_uri: res.file_uri,
-          url: res.file_uri,
-          uploaded_at: new Date().toISOString()
-        }
-      }));
-    } catch (err) {
-      setError(err.message || 'Failed to upload document.');
-    } finally {
-      setUploadingDocKey('');
-    }
-  };
-
   // Question validation
   const questionValid = (question) => {
     const val = answers[question.id] || {};
@@ -387,17 +324,7 @@ export default function Onboarding() {
       }
     }
 
-    // 2. Required verification documents step
-    if (currentPage.type === 'docs') {
-      const requiredDocs = getCompanyDocTypes().filter((d) => d.required !== false);
-      for (const doc of requiredDocs) {
-        if (!companyDocUploads[doc.key]) {
-          return `Please upload the required document: ${doc.displayLabel || doc.label || doc.key}.`;
-        }
-      }
-    }
-
-    // 3. ATO Tax Form step
+    // 2. ATO Tax Form step
     if (currentPage.type === 'tax') {
       if (!taxForm.familyName.trim()) return 'Please enter your surname / family name for the ATO declaration.';
       if (!taxForm.givenNames.trim()) return 'Please enter your first given name for the ATO declaration.';
@@ -411,7 +338,7 @@ export default function Onboarding() {
       }
     }
 
-    // 4. Signature step
+    // 3. Signature step
     if (currentPage.type === 'sign') {
       if (!signature) return 'Please provide your digital signature below.';
       if (!declaration) return 'Please check the declaration and consent box before proceeding.';
@@ -519,31 +446,38 @@ export default function Onboarding() {
         })
       ]);
 
-      // 5. Consolidate documents
+      // 5. Consolidate documents from applicant question uploads (mapping photo ID and right to work)
       const questionUploadsList = questions
         .filter((q) => q.type === 'upload' && uploads[q.id])
-        .map((q) => ({
-          name: `${q.label} (${uploads[q.id].name})`,
-          type: 'onboarding',
-          doc_type: q.id,
-          file_uri: uploads[q.id].file_uri,
-          url: uploads[q.id].file_uri,
-          created_at: now,
-          uploaded_by: 'applicant'
-        }));
-
-      const companyDocsList = Object.entries(companyDocUploads).map(([docKey, item]) => ({
-        name: item.name,
-        type: docKey,
-        doc_type: docKey,
-        file_uri: item.file_uri,
-        url: item.file_uri,
-        created_at: now,
-        uploaded_by: 'applicant'
-      }));
+        .map((q) => {
+          const lowerLabel = String(q.label || '').toLowerCase();
+          const lowerId = String(q.id || '').toLowerCase();
+          let docType = q.id;
+          if (lowerLabel.includes('id') || lowerLabel.includes('신분증') || lowerId.includes('id')) {
+            docType = 'id';
+          } else if (
+            lowerLabel.includes('right') ||
+            lowerLabel.includes('work') ||
+            lowerLabel.includes('visa') ||
+            lowerLabel.includes('비자') ||
+            lowerLabel.includes('vevo') ||
+            lowerId.includes('visa') ||
+            lowerId.includes('right_to_work')
+          ) {
+            docType = 'right_to_work';
+          }
+          return {
+            name: `${q.label} (${uploads[q.id].name})`,
+            type: docType,
+            doc_type: docType,
+            file_uri: uploads[q.id].file_uri,
+            url: uploads[q.id].file_uri,
+            created_at: now,
+            uploaded_by: 'applicant'
+          };
+        });
 
       const docs = [
-        ...companyDocsList,
         ...questionUploadsList,
         {
           name: 'ATO Tax File Number Declaration (NAT 3092)',
@@ -703,14 +637,13 @@ export default function Onboarding() {
           <h2 className="text-lg font-bold text-slate-900">{currentPage?.title}</h2>
           <p className="text-xs text-slate-500 mt-0.5">
             {currentPage?.type === 'questions' && 'Please complete the onboarding details requested by your employer.'}
-            {currentPage?.type === 'docs' && 'Please attach the required verification documents (Photo ID and Right to Work in Australia).'}
             {currentPage?.type === 'tax' && 'Your information has been pre-filled. Please review and complete your official ATO NAT 3092 Tax File Number Declaration.'}
             {currentPage?.type === 'sign' && 'Please review the payee declaration and provide your digital signature below.'}
           </p>
         </div>
 
         {/* ============================================================================== */}
-        {/* [Step Type 1]: Employer Questionnaire Step */}
+        {/* [Step Type 1]: Employer Questionnaire Step (Includes applicant file uploads) */}
         {/* ============================================================================== */}
         {currentPage?.type === 'questions' && (
           <section className="space-y-5 rounded-2xl border bg-white p-5 shadow-sm">
@@ -852,109 +785,7 @@ export default function Onboarding() {
         )}
 
         {/* ============================================================================== */}
-        {/* [Step Type 2]: Required Verification Documents Step (ID & Right to Work) */}
-        {/* ============================================================================== */}
-        {currentPage?.type === 'docs' && (
-          <section className="space-y-4 rounded-2xl border bg-white p-5 shadow-sm">
-            <div className="rounded-xl border border-blue-100 bg-blue-50/60 p-3.5 text-xs text-blue-900 leading-relaxed flex items-start gap-2.5">
-              <FileCheck className="h-4 w-4 shrink-0 text-blue-600 mt-0.5" />
-              <div>
-                <p className="font-semibold text-blue-950">Company Required Verification Documents</p>
-                Please upload the documents below in accordance with Australian workplace standards and identity verification requirements.
-              </div>
-            </div>
-
-            <div className="grid gap-3 pt-2">
-              {getCompanyDocTypes().map((docType) => {
-                const currentDoc = companyDocUploads[docType.key];
-                const isUploading = uploadingDocKey === docType.key;
-
-                return (
-                  <div
-                    key={docType.key}
-                    className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl border bg-slate-50/50 hover:bg-slate-50 transition-colors"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="font-semibold text-sm text-slate-800 break-words">
-                          {docType.displayLabel || docType.label || docType.key}
-                        </span>
-                        {docType.required !== false ? (
-                          <span className="text-[10px] font-bold text-red-600 bg-red-50 border border-red-200 px-1.5 py-0.5 rounded">
-                            Required
-                          </span>
-                        ) : (
-                          <span className="text-[10px] text-slate-500 bg-slate-200 px-1.5 py-0.5 rounded">
-                            Optional
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-xs text-slate-500 mt-1 break-words">
-                        {docType.key === 'id'
-                          ? 'Passport photo page or Australian Driver Licence (PDF, JPG, PNG)'
-                          : docType.key === 'right_to_work'
-                          ? 'Australian Visa Grant Notice (VEVO), Australian Passport, or Citizenship Certificate'
-                          : docType.label_en || 'Please attach the required document.'}
-                      </p>
-                      {currentDoc && (
-                        <div className="mt-2.5 flex items-center gap-2 text-xs font-medium text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded border border-emerald-200">
-                          <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
-                          <span className="break-all flex-1">{currentDoc.name}</span>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setCompanyDocUploads((prev) => {
-                                const next = { ...prev };
-                                delete next[docType.key];
-                                return next;
-                              })
-                            }
-                            className="text-slate-400 hover:text-red-500 text-xs ml-1"
-                          >
-                            Remove
-                          </button>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="shrink-0">
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant={currentDoc ? 'outline' : 'default'}
-                        disabled={isUploading}
-                        onClick={() => chooseCompanyDoc(docType.key)}
-                        className="text-xs h-9 min-w-[95px]"
-                      >
-                        {isUploading ? (
-                          <>
-                            <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
-                            Uploading...
-                          </>
-                        ) : currentDoc ? (
-                          'Change File'
-                        ) : (
-                          'Choose File'
-                        )}
-                      </Button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            <input
-              ref={companyDocFileRef}
-              type="file"
-              className="hidden"
-              accept=".pdf,.png,.jpg,.jpeg,.webp"
-              onChange={handleCompanyDocChange}
-            />
-          </section>
-        )}
-
-        {/* ============================================================================== */}
-        {/* [Step Type 3]: Australian Taxation Office (ATO) Tax Declaration (NAT 3092) */}
+        {/* [Step Type 2]: Australian Taxation Office (ATO) Tax Declaration (NAT 3092) */}
         {/* Pre-filled from earlier answers so the applicant only needs to review! */}
         {/* ============================================================================== */}
         {currentPage?.type === 'tax' && (
@@ -1173,7 +1004,7 @@ export default function Onboarding() {
                   { id: 'super_stream', label: 'Super / Annuity' }
                 ].map((item) => (
                   <div key={item.id} className="flex items-center gap-2">
-                    <RadioGroupItem value={item.id} id={`basis-${item.id}`} />
+                    <RadioGroupItem value="casual" id={`basis-${item.id}`} />
                     <label htmlFor={`basis-${item.id}`} className="text-xs cursor-pointer">
                       {item.label}
                     </label>
@@ -1259,7 +1090,7 @@ export default function Onboarding() {
         )}
 
         {/* ============================================================================== */}
-        {/* [Step Type 4]: Payee Declaration & Digital Signature */}
+        {/* [Step Type 3]: Payee Declaration & Digital Signature */}
         {/* ============================================================================== */}
         {currentPage?.type === 'sign' && (
           <section className="space-y-5 rounded-2xl border bg-white p-5 shadow-sm">
