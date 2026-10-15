@@ -44,6 +44,26 @@ function formatAtoDate(dateStr) {
 }
 
 /**
+ * Data URL(base64) 문자열을 순수 Uint8Array 바이트 배열로 안전하게 변환 (네트워크 fetch 없음)
+ */
+function dataUrlToBytes(dataUrl) {
+  try {
+    if (!dataUrl || typeof dataUrl !== 'string') return null;
+    const parts = dataUrl.split(',');
+    if (parts.length < 2) return null;
+    const binary = atob(parts[1].trim());
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+    return bytes;
+  } catch (err) {
+    console.error('[dataUrlToBytes] decode error:', err);
+    return null;
+  }
+}
+
+/**
  * 텍스트를 개별 문자 박스(Digit Box) 배열로 그리는 헬퍼 함수
  */
 function drawDigitBoxes(page, { x, y, width = 16, height = 20, count = 9, value = '', font, fontSize = 11 }) {
@@ -333,26 +353,26 @@ export async function generateAtoNat3092Pdf({ employee = {}, company = {}, branc
   drawBoxesWithCoords(signDate.year, [528.9, 543.1, 557.3, 571.4], 418.7, 10);
 
   // 자필 전자서명 이미지 오버레이 (공식 서명 사각형 박스: X: 305.0, Y: 414.7, W: 144.8, H: 30.7)
+  let sigEmbedded = false;
   if (signatureDataUrl && signatureDataUrl.startsWith('data:image/')) {
     try {
-      const sigBytes = await fetch(signatureDataUrl).then((res) => res.arrayBuffer());
-      const sigImg = await pdfDoc.embedPng(sigBytes);
-      page.drawImage(sigImg, {
-        x: 308,
-        y: 416,
-        width: 138,
-        height: 28
-      });
-    } catch {
-      page.drawText(surname + ' ' + givenNames, {
-        x: 312,
-        y: 424,
-        size: 13,
-        font: fontHelvetica,
-        color: rgb(0.05, 0.1, 0.45)
-      });
+      const sigBytes = dataUrlToBytes(signatureDataUrl);
+      if (sigBytes) {
+        const sigImg = await pdfDoc.embedPng(sigBytes);
+        page.drawImage(sigImg, {
+          x: 308,
+          y: 416,
+          width: 138,
+          height: 28
+        });
+        sigEmbedded = true;
+      }
+    } catch (e) {
+      console.warn('[atoPdfEngine] embedPng payee error:', e);
     }
-  } else {
+  }
+
+  if (!sigEmbedded) {
     page.drawText(surname + ' ' + givenNames, {
       x: 312,
       y: 424,
@@ -436,28 +456,27 @@ export async function generateAtoNat3092Pdf({ employee = {}, company = {}, branc
   // DECLARATION by payer: 고용주 공식 전자서명 (Signature of payer: 사각형 박스 X: 305.2, Y: 151.2, W: 144.8, H: 30.7)
   // [중요] 회사설정 > 온보딩 > TFN declaration form에 저장된 전자서명을 그대로 가져와 인쇄합니다.
   const employerSig = (company && company.tfn_employer_signature) || '';
+  let employerSigEmbedded = false;
   if (employerSig && employerSig.startsWith('data:image/')) {
     try {
-      const empSigBytes = await fetch(employerSig).then((res) => res.arrayBuffer());
-      const empSigImg = await pdfDoc.embedPng(empSigBytes);
-      page.drawImage(empSigImg, {
-        x: 308,
-        y: 153,
-        width: 138,
-        height: 27
-      });
-    } catch {
-      // 서명 이미지 디코딩 실패 시 담당자 이름 서명
-      page.drawText(contactPerson, {
-        x: 312,
-        y: 160,
-        size: 11,
-        font: fontHelvetica,
-        color: rgb(0.05, 0.1, 0.45)
-      });
+      const empSigBytes = dataUrlToBytes(employerSig);
+      if (empSigBytes) {
+        const empSigImg = await pdfDoc.embedPng(empSigBytes);
+        page.drawImage(empSigImg, {
+          x: 308,
+          y: 153,
+          width: 138,
+          height: 27
+        });
+        employerSigEmbedded = true;
+      }
+    } catch (e) {
+      console.warn('[atoPdfEngine] embedPng payer error:', e);
     }
-  } else {
-    // 서명이 아직 등록되지 않은 경우에도 'PAYROLL MANAGER'가 아닌 지점 담당자 이름(Pay Rol)을 기입
+  }
+
+  // 서명이 완전히 비어있거나 디코딩에 실패한 경우에만 fallback
+  if (!employerSigEmbedded) {
     page.drawText(contactPerson, {
       x: 312,
       y: 160,
