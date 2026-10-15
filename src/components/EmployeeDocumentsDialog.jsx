@@ -16,8 +16,6 @@ export default function EmployeeDocumentsDialog({ open, onOpenChange, employee }
   const { toast } = useToast();
   const [loadingId, setLoadingId] = useState(null);
   const [docs, setDocs] = useState([]);
-  const [uploading, setUploading] = useState(false);
-  const fileRef = useRef(null);
 
   const [currentEmployee, setCurrentEmployee] = useState(employee);
 
@@ -55,24 +53,6 @@ export default function EmployeeDocumentsDialog({ open, onOpenChange, employee }
     }
   };
 
-  const upload = async (event) => {
-    const file = event.target.files && event.target.files[0];
-    event.target.value = '';
-    if (!file) return;
-    setUploading(true);
-    try {
-      const { file_uri } = await base44.integrations.Core.UploadPrivateFile({ file });
-      const saved = await kwCall('kwSession', { action: 'add_document', file_uri, name: file.name });
-      setDocs((saved && saved.docs) || docs);
-      if (saved && saved.profile) setCurrentEmployee(saved.profile);
-      toast({ title: t('employees.docUploaded') });
-    } catch (error) {
-      toast({ title: error.message || t('employees.docUploadFailed'), variant: 'destructive' });
-    } finally {
-      setUploading(false);
-    }
-  };
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[85vh] max-w-3xl overflow-y-auto overflow-x-hidden w-full">
@@ -81,32 +61,6 @@ export default function EmployeeDocumentsDialog({ open, onOpenChange, employee }
             <span>{t('employees.vault')} — {employee ? employee.full_name : ''}</span>
           </DialogTitle>
         </DialogHeader>
-
-        {viaOwnRecord && (
-          <div className="flex w-full items-center justify-between gap-3 rounded-lg border px-4 py-3">
-            <p className="text-sm text-muted-foreground">{t('employees.docUploadHint')}</p>
-            <Button
-              size="sm"
-              onClick={() => fileRef.current && fileRef.current.click()}
-              disabled={uploading}
-            >
-              {uploading ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <>
-                  <Upload className="mr-2 h-3.5 w-3.5" /> {t('common.upload')}
-                </>
-              )}
-            </Button>
-            <input
-              ref={fileRef}
-              type="file"
-              className="hidden"
-              accept=".pdf,.png,.jpg,.jpeg,.webp,.doc,.docx,.xls,.xlsx"
-              onChange={upload}
-            />
-          </div>
-        )}
 
         {/* 1. 온보딩 서류 및 추가 제출 서류를 단일 통합 목록으로 표시 (하단 중복 제거 완료) */}
         {(currentEmployee || employee) && company && (
