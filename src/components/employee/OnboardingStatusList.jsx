@@ -1,13 +1,14 @@
 import React from 'react';
-import { Check, Clock, FileCheck, FileText, Loader2, Shield } from 'lucide-react';
+import { Check, Clock, FileCheck, FileText, Loader2, Shield, PenTool } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useI18n } from '@/lib/i18n';
 import { checklistFor } from '@/lib/onboardingDocs';
+import { cn } from '@/lib/utils';
 
 // What a hire has handed in and what is still missing, read from the employer's own list and the
 // employee's record. Consolidates all onboarding files and any extra documents into a single view.
-export default function OnboardingStatusList({ profile, company, onOpen, loadingUri, onRemove, canDelete = false }) {
+export default function OnboardingStatusList({ profile, company, onOpen, onSignTfn, loadingUri, onRemove, canDelete = false }) {
   const { t, lang } = useI18n();
   const checklist = checklistFor(profile, company, lang);
 
@@ -70,22 +71,41 @@ export default function OnboardingStatusList({ profile, company, onOpen, loading
               </Badge>
             )}
             {item.file && item.file.file_uri && (
-              <Button
-                size="sm"
-                variant="outline"
-                className="shrink-0"
-                disabled={loadingUri === item.file.file_uri}
-                onClick={() => onOpen(item.file)}
-              >
-                {loadingUri === item.file.file_uri ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <>
-                    <FileText className="mr-1.5 h-3.5 w-3.5" />
-                    {t('ob.open')}
-                  </>
+              <div className="flex items-center gap-1.5 shrink-0">
+                {(item.key === 'tfn' || item.file.type === 'ato_tfn' || (item.file.name && item.file.name.includes('NAT 3092'))) && onSignTfn && (
+                  <Button
+                    size="sm"
+                    variant={item.file.signed_by_employer ? 'outline' : 'default'}
+                    className={cn(
+                      'h-8 text-xs gap-1 font-medium transition-all',
+                      !item.file.signed_by_employer
+                        ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm ring-1 ring-emerald-500/30'
+                        : 'border-emerald-500/40 text-emerald-700 bg-emerald-500/10'
+                    )}
+                    onClick={() => onSignTfn(item.file)}
+                    title="호주 국세청 Section B에 고용주 공식 서명을 즉시 날인합니다."
+                  >
+                    <PenTool className="h-3.5 w-3.5" />
+                    {item.file.signed_by_employer ? '고용주 서명 완료 (재날인)' : '고용주 서명 날인'}
+                  </Button>
                 )}
-              </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8 text-xs shrink-0"
+                  disabled={loadingUri === item.file.file_uri}
+                  onClick={() => onOpen(item.file)}
+                >
+                  {loadingUri === item.file.file_uri ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <>
+                      <FileText className="mr-1.5 h-3.5 w-3.5" />
+                      {t('ob.open')}
+                    </>
+                  )}
+                </Button>
+              </div>
             )}
           </div>
         ))}

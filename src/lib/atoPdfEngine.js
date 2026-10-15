@@ -777,3 +777,56 @@ export async function generateAtoNat13080Pdf({ employee, company, form, signatur
 
   return await pdfDoc.save();
 }
+
+/**
+ * ==============================================================================
+ * 3. 기존 ATO NAT 3092 PDF에 고용주 공식 서명 및 날짜를 직접 추가 날인(Stamp)하는 함수
+ * ==============================================================================
+ */
+export async function stampEmployerSignatureOnTfnPdf(existingPdfBytes, employerSignatureDataUrl, signDateObj = null) {
+  if (!existingPdfBytes) throw new Error('PDF bytes required');
+  if (!employerSignatureDataUrl) throw new Error('Signature data URL required');
+
+  const pdfDoc = await PDFDocument.load(existingPdfBytes);
+  const pages = pdfDoc.getPages();
+  if (pages.length === 0) throw new Error('No pages found in PDF');
+
+  const page = pages[0]; // NAT 3092는 1페이지 서식
+  const fontHelvetica = await pdfDoc.embedFont(StandardFonts.Helvetica);
+
+  // 1. 고용주 공식 서명 이미지 날인 (X: 308, Y: 153, W: 138, H: 27)
+  const sigImg = await embedImageSafe(pdfDoc, employerSignatureDataUrl);
+  if (sigImg) {
+    page.drawImage(sigImg, {
+      x: 308,
+      y: 153,
+      width: 138,
+      height: 27
+    });
+  }
+
+  // 2. 고용주 서명 날짜 날인 (Payer Declaration Date)
+  const signDate = signDateObj || formatAtoDate(new Date().toISOString());
+  const drawBoxes = (val, xCoords, y, cellW = 10) => {
+    const chars = String(val || '').split('');
+    chars.forEach((c, idx) => {
+      if (idx < xCoords.length) {
+        const xc = xCoords[idx];
+        const textW = fontHelvetica.widthOfTextAtSize(c, 10);
+        page.drawText(c, {
+          x: xc + (cellW - textW) / 2,
+          y,
+          size: 10,
+          font: fontHelvetica,
+          color: rgb(0.1, 0.1, 0.1)
+        });
+      }
+    });
+  };
+
+  drawBoxes(signDate.day, [455.5, 469.6], 155.2, 10);
+  drawBoxes(signDate.month, [492.3, 506.5], 155.2, 10);
+  drawBoxes(signDate.year, [529.2, 543.3, 557.5, 571.7], 155.2, 10);
+
+  return await pdfDoc.save();
+}
