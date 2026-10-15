@@ -165,6 +165,19 @@ export default function CompanySettings() {
     }
   };
 
+  const handleEmployerSignatureChange = async (employerSignature) => {
+    setOnboarding((prev) => ({ ...prev, employerSignature }));
+    if (!company) return;
+    try {
+      await saveCompanySettings(company.id, { tfn_employer_signature: employerSignature });
+      patchCompany({ tfn_employer_signature: employerSignature });
+      toast({ title: '고용주 공식 전자서명이 안전하게 저장되었습니다.' });
+    } catch (e) {
+      console.error('[CompanySettings] direct signature save error:', e);
+      toast({ variant: 'destructive', title: '서명 저장 실패: ' + (e.message || '') });
+    }
+  };
+
   // A super admin who has not entered a company yet picks one here instead of waiting on
   // settings that belong to no company.
   if (isPlatformAdmin && !company) {
@@ -248,9 +261,7 @@ export default function CompanySettings() {
             secureFields={onboarding.secureFields}
             onSecureFieldsChange={(secureFields) => setOnboarding((prev) => ({ ...prev, secureFields }))}
             employerSignature={onboarding.employerSignature}
-            onEmployerSignatureChange={(employerSignature) =>
-              setOnboarding((prev) => ({ ...prev, employerSignature }))
-            }
+            onEmployerSignatureChange={handleEmployerSignatureChange}
             canEdit={canSave}
           />
           <OnboardingQuestionsCard
