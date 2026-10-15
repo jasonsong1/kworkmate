@@ -132,30 +132,69 @@ export async function generateAtoNat3092Pdf({ employee = {}, company = {}, form 
   const fontCourier = await pdfDoc.embedFont(StandardFonts.CourierBold);
   const fontHelvetica = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
-  // 네모 칸 글자 인쇄 헬퍼 (호주 관공서 서식 규격)
-  const drawBoxesText = (text, startX, y, pitch, maxLen = 30, fontSize = 9.5) => {
+  // 박스 크기 규격: 폭 12.3pt, 높이 16.5pt
+  const BOX_WIDTH = 12.3;
+
+  /**
+   * 고정 X 좌표 배열이 있는 박스에 텍스트 인쇄 (글자별 수평/수직 정중앙 정렬)
+   */
+  const drawBoxesWithCoords = (text, xCoords, textY, fontSize = 10) => {
     const chars = String(text || '').toUpperCase().split('');
-    for (let i = 0; i < Math.min(chars.length, maxLen); i++) {
-      const char = chars[i];
+    let charIdx = 0;
+    for (let i = 0; i < xCoords.length && charIdx < chars.length; i++) {
+      const char = chars[charIdx++];
       if (char === ' ') continue;
+      const textWidth = fontCourier.widthOfTextAtSize(char, fontSize);
+      const charX = xCoords[i] + (BOX_WIDTH - textWidth) / 2;
       page.drawText(char, {
-        x: startX + i * pitch + 1,
-        y: y + 1,
+        x: charX,
+        y: textY,
         size: fontSize,
         font: fontCourier,
-        color: rgb(0.05, 0.05, 0.15) // 선명한 잉크 다크블루/블랙
+        color: rgb(0.05, 0.05, 0.15)
       });
     }
   };
 
-  // 체크박스 'X' 마킹 헬퍼 (볼펜 수기 마킹)
-  const markX = (x, y) => {
-    page.drawText('X', {
-      x,
-      y,
-      size: 11,
+  /**
+   * 일정한 pitch 간격의 연속 박스에 텍스트 인쇄 (글자별 수평/수직 정중앙 정렬)
+   */
+  const drawBoxesText = (text, startX, textY, maxLen = 19, fontSize = 9.5, pitch = 14.17) => {
+    const chars = String(text || '').toUpperCase().split('');
+    let boxIdx = 0;
+    for (let i = 0; i < chars.length && boxIdx < maxLen; i++) {
+      const char = chars[i];
+      if (char === ' ') {
+        boxIdx++; // 띄어쓰기는 한 칸 비움
+        continue;
+      }
+      const textWidth = fontCourier.widthOfTextAtSize(char, fontSize);
+      const boxLeft = startX + boxIdx * pitch;
+      const charX = boxLeft + (BOX_WIDTH - textWidth) / 2;
+      page.drawText(char, {
+        x: charX,
+        y: textY,
+        size: fontSize,
+        font: fontCourier,
+        color: rgb(0.05, 0.05, 0.15)
+      });
+      boxIdx++;
+    }
+  };
+
+  /**
+   * 체크박스 정중앙에 'X' 마킹 (호주 ATO 표준 규격)
+   */
+  const markX = (boxX, boxY, boxW = 12.3) => {
+    const mark = 'X';
+    const markSize = 10.5;
+    const textWidth = fontHelvetica.widthOfTextAtSize(mark, markSize);
+    page.drawText(mark, {
+      x: boxX + (boxW - textWidth) / 2,
+      y: boxY + 3.5,
+      size: markSize,
       font: fontHelvetica,
-      color: rgb(0.05, 0.1, 0.45)
+      color: rgb(0.05, 0.1, 0.45) // 볼펜 감청색 잉크
     });
   };
 
@@ -164,28 +203,29 @@ export async function generateAtoNat3092Pdf({ employee = {}, company = {}, form 
   // 1. TFN 9자리 (Question 1)
   const tfnRaw = String(form.tfn_number || employee.tfn_number || '').replace(/\D/g, '');
   if (form.tfn_exemption === 'applied' || form.tfn_pending || employee.tfn_pending) {
-    // 예외 사유 1: TFN 신청 후 28일 이내 유예 (X: 377, Y: 721)
-    markX(377, 721);
+    // 예외 사유 1: TFN 신청 후 28일 이내 유예 (X: 278.0, Y: 707.5)
+    markX(278.0, 707.5);
   } else if (form.tfn_exemption === 'under18') {
-    // 예외 사유 2: 18세 미만 비과세 (X: 377, Y: 698)
-    markX(377, 698);
+    // 예외 사유 2: 18세 미만 비과세 (X: 278.0, Y: 683.4)
+    markX(278.0, 683.4);
   } else if (form.tfn_exemption === 'pensioner') {
-    // 예외 사유 3: 연금/수당 수급자 (X: 377, Y: 675)
-    markX(377, 675);
+    // 예외 사유 3: 연금/수당 수급자 (X: 278.0, Y: 659.3)
+    markX(278.0, 659.3);
   } else if (tfnRaw && tfnRaw.length === 9) {
-    // 정규 9자리 네모 칸 (Y: 726으로 박스 내부 정확 안착)
-    drawBoxesText(tfnRaw, 144, 726, 14.6, 9, 10.5);
+    // 정규 9자리 네모 칸 (3개 - 3개 - 3개 그리드 좌표 완벽 일치)
+    const tfnXCoords = [136.3, 150.5, 164.7, 193.0, 207.2, 221.4, 249.7, 263.9, 278.0];
+    drawBoxesWithCoords(tfnRaw, tfnXCoords, 735.6, 10.5);
   } else {
     // 미입력 시 신청 중으로 체크
-    markX(377, 721);
+    markX(278.0, 707.5);
   }
 
   // 2. 성명 (Question 2: Name)
   const title = String(form.title || employee.title || 'Mr').toLowerCase();
-  if (title === 'mrs') markX(200, 633);
-  else if (title === 'miss') markX(238, 633);
-  else if (title === 'ms') markX(275, 633);
-  else markX(162, 633); // Mr (기본)
+  if (title === 'mrs') markX(193.0, 633.8);
+  else if (title === 'miss') markX(235.5, 633.8);
+  else if (title === 'ms') markX(278.0, 633.8);
+  else markX(150.5, 633.8); // Mr (기본)
 
   // 성(Surname) & 이름(First given name) & 중간이름(Other given names)
   const surname = String(form.family_name || form.surname || employee.surname || '').trim() ||
@@ -195,112 +235,118 @@ export async function generateAtoNat3092Pdf({ employee = {}, company = {}, form 
     String(form.full_name || employee.full_name || '').trim();
   const otherNames = String(form.other_names || employee.other_names || '').trim();
 
-  // Surname 칸 (Y: 606으로 라벨 아래 박스 내부 정확 정렬)
-  drawBoxesText(surname, 27, 606, 11.4, 25, 9.5);
-  // First given name 칸 (Y: 578)
-  drawBoxesText(givenNames, 27, 578, 11.4, 25, 9.5);
-  // Other given names 칸 (Y: 550)
+  // Surname 칸 (Y: 606.9 박스 내부 정확 정렬 -> textY: 610.9)
+  drawBoxesText(surname, 22.9, 610.9, 19, 9.5);
+  // First given name 칸 (Y: 579.9 박스 내부 -> textY: 583.9)
+  drawBoxesText(givenNames, 22.9, 583.9, 19, 9.5);
+  // Other given names 칸 (Y: 553.0 박스 내부 -> textY: 557.0)
   if (otherNames) {
-    drawBoxesText(otherNames, 27, 550, 11.4, 25, 9.5);
+    drawBoxesText(otherNames, 22.9, 557.0, 19, 9.5);
   }
 
   // 3. 호주 거주 주소 (Question 3: Home address)
   const addressLine1 = String(form.address_line1 || form.address || employee.address || '123 GEORGE STREET').toUpperCase();
   const addressLine2 = String(form.address_line2 || '').toUpperCase();
-  drawBoxesText(addressLine1.slice(0, 25), 27, 515, 11.4, 25, 9.5);
+  // Address Line 1 (Y: 514.7 -> textY: 518.7)
+  drawBoxesText(addressLine1.slice(0, 19), 22.9, 518.7, 19, 9.5);
+  // Address Line 2 (Y: 490.6 -> textY: 494.6)
   if (addressLine2) {
-    drawBoxesText(addressLine2.slice(0, 25), 27, 489, 11.4, 25, 9.5);
+    drawBoxesText(addressLine2.slice(0, 19), 22.9, 494.6, 19, 9.5);
   }
 
+  // Suburb (Y: 465.1 -> textY: 469.1)
   const suburb = String(form.suburb || employee.suburb || 'SYDNEY').toUpperCase();
-  drawBoxesText(suburb, 27, 463, 11.4, 25, 9.5);
+  drawBoxesText(suburb, 22.9, 469.1, 19, 9.5);
 
+  // State (3칸) & Postcode (4칸) (Y: 439.6 -> textY: 443.6)
   const state = String(form.state || employee.state || 'NSW').toUpperCase();
-  page.drawText(state, { x: 37, y: 437, size: 9.5, font: fontCourier, color: rgb(0.05, 0.05, 0.15) });
+  drawBoxesWithCoords(state, [22.9, 37.1, 51.3], 443.6, 9.5);
 
   const postcode = String(form.postcode || employee.postcode || '2000').replace(/\D/g, '');
-  drawBoxesText(postcode, 96, 437, 11.4, 4, 9.5);
+  drawBoxesWithCoords(postcode, [93.8, 108.0, 122.1, 136.3], 443.6, 9.5);
 
-  // 4. 이전 성 (Question 4: Previous family name)
+  // 4. 이전 성 (Question 4: Previous family name) (Y: 392.6 -> textY: 396.6)
   const prevFamilyName = String(form.previous_family_name || '').toUpperCase();
   if (prevFamilyName) {
-    drawBoxesText(prevFamilyName, 27, 391, 11.4, 25, 9.5);
+    drawBoxesText(prevFamilyName, 22.9, 396.6, 19, 9.5);
   }
 
   // 5. 이메일 주소 (Question 5: Primary e-mail address)
   const email = String(form.user_email || employee.user_email || '').toUpperCase();
-  drawBoxesText(email.slice(0, 25), 321, 726, 10.8, 25, 9);
-  if (email.length > 25) {
-    drawBoxesText(email.slice(25, 50), 321, 700, 10.8, 25, 9);
+  // 첫째 줄 (Y: 731.6 -> textY: 735.6)
+  drawBoxesText(email.slice(0, 19), 316.3, 735.6, 19, 8.8);
+  // 둘째 줄 (Y: 707.5 -> textY: 711.5)
+  if (email.length > 19) {
+    drawBoxesText(email.slice(19, 38), 316.3, 711.5, 19, 8.8);
   }
 
-  // 6. 생년월일 (Question 6: Date of birth)
+  // 6. 생년월일 (Question 6: Date of birth) (Y: 674.2 -> textY: 678.2)
   const dob = formatAtoDate(form.date_of_birth || employee.date_of_birth || '1998-01-01');
-  drawBoxesText(dob.day || '01', 469, 673, 11.4, 2);
-  drawBoxesText(dob.month || '01', 503, 673, 11.4, 2);
-  drawBoxesText(dob.year || '1998', 537, 673, 11.4, 4);
+  drawBoxesWithCoords(dob.day || '01', [455.2, 469.4], 678.2, 10);
+  drawBoxesWithCoords(dob.month || '01', [492.1, 506.2], 678.2, 10);
+  drawBoxesWithCoords(dob.year || '1998', [528.9, 543.1, 557.3, 571.4], 678.2, 10);
 
-  // 7. 고용 형태 (Question 7: On what basis are you paid?)
+  // 7. 고용 형태 (Question 7: On what basis are you paid?) (Y: 636.8)
   const empType = String(form.employment_type || employee.employment_type || 'casual').toLowerCase();
   if (empType === 'full_time' || empType.includes('full')) {
-    markX(356, 633); // Full-time
+    markX(356.0, 636.8); // Full-time
   } else if (empType === 'part_time' || empType.includes('part')) {
-    markX(408, 633); // Part-time
+    markX(411.3, 636.8); // Part-time
   } else if (empType === 'labour_hire') {
-    markX(460, 633); // Labour hire
+    markX(449.5, 636.8); // Labour hire
   } else if (empType === 'super_stream') {
-    markX(520, 633); // Superannuation income stream
+    markX(516.2, 636.8); // Superannuation income stream
   } else {
-    markX(576, 633); // Casual employment (기본)
+    markX(571.4, 636.8); // Casual employment (기본)
   }
 
-  // 8. 세법상 거주자 구분 (Question 8: Residency)
+  // 8. 세법상 거주자 구분 (Question 8: Residency) (Y: 597.3)
   const resStatus = String(form.residency_status || employee.residency_status || 'resident').toLowerCase();
   if (resStatus.includes('holiday') || resStatus.includes('working') || employee.visa_type === 'working_holiday') {
-    markX(576, 601); // Working holiday maker
+    markX(571.9, 597.3); // Working holiday maker
   } else if (resStatus === 'foreign' || employee.visa_type === 'student') {
-    markX(472, 601); // Foreign resident
+    markX(469.9, 597.3); // Foreign resident
   } else {
-    markX(382, 601); // Australian resident
+    markX(384.0, 597.3); // Australian resident
   }
 
-  // 9. 비과세 기준액 신청 (Question 9: Tax-free threshold)
+  // 9. 비과세 기준액 신청 (Question 9: Tax-free threshold) (Y: 534.0)
   const claimTaxFree = Boolean(form.tax_free_threshold ?? employee.tax_free_threshold ?? true);
   if (claimTaxFree) {
-    markX(342, 535); // Yes
+    markX(330.5, 534.0); // Yes
   } else {
-    markX(378, 535); // No
+    markX(367.3, 534.0); // No
   }
 
-  // 10. 학자금 대출 여부 (Question 10: HELP/VSL/TSL debt)
+  // 10. 학자금 대출 여부 (Question 10: HELP/VSL/TSL debt) (Y: 474.7)
   const hasHecs = Boolean(form.hecs_help ?? employee.hecs_help ?? false);
   if (hasHecs) {
-    markX(342, 477); // Yes
+    markX(330.5, 474.7); // Yes
   } else {
-    markX(576, 477); // No
+    markX(571.4, 474.7); // No
   }
 
-  // 서명란 (DECLARATION by payee)
+  // 서명란 날짜 (DECLARATION by payee Date) (Y: 414.7 -> textY: 418.7)
   const signDate = formatAtoDate(form.signed_at || employee.signed_at || new Date().toISOString());
-  drawBoxesText(signDate.day, 470, 419, 11.4, 2);
-  drawBoxesText(signDate.month, 504, 419, 11.4, 2);
-  drawBoxesText(signDate.year, 538, 419, 11.4, 4);
+  drawBoxesWithCoords(signDate.day, [455.2, 469.4], 418.7, 10);
+  drawBoxesWithCoords(signDate.month, [492.1, 506.2], 418.7, 10);
+  drawBoxesWithCoords(signDate.year, [528.9, 543.1, 557.3, 571.4], 418.7, 10);
 
-  // 자필 전자서명 이미지 오버레이 (Signature 사각형 칸: X: 310~450, Y: 418~458)
+  // 자필 전자서명 이미지 오버레이 (공식 서명 사각형 박스: X: 305.0, Y: 414.7, W: 144.8, H: 30.7)
   if (signatureDataUrl && signatureDataUrl.startsWith('data:image/')) {
     try {
       const sigBytes = await fetch(signatureDataUrl).then((res) => res.arrayBuffer());
       const sigImg = await pdfDoc.embedPng(sigBytes);
       page.drawImage(sigImg, {
-        x: 315,
-        y: 418,
-        width: 135,
-        height: 40
+        x: 308,
+        y: 416,
+        width: 138,
+        height: 28
       });
     } catch {
       page.drawText(surname + ' ' + givenNames, {
-        x: 325,
-        y: 430,
+        x: 312,
+        y: 424,
         size: 13,
         font: fontHelvetica,
         color: rgb(0.05, 0.1, 0.45)
@@ -308,8 +354,8 @@ export async function generateAtoNat3092Pdf({ employee = {}, company = {}, form 
     }
   } else {
     page.drawText(surname + ' ' + givenNames, {
-      x: 325,
-      y: 430,
+      x: 312,
+      y: 424,
       size: 13,
       font: fontHelvetica,
       color: rgb(0.05, 0.1, 0.45)
@@ -317,35 +363,53 @@ export async function generateAtoNat3092Pdf({ employee = {}, company = {}, form 
   }
 
   // ==================== [SECTION B: 고용주란 (Payer)] ====================
-  // 1. ABN (Question 1)
-  const abnRaw = String((company && company.abn) || '51824753556').replace(/\D/g, '');
-  drawBoxesText(abnRaw, 128, 318, 14.0, 11, 10);
 
-  // 3. Registered business name (Question 3)
+  // 1. ABN 11자리 (Question 1) (Y: 312.4 -> textY: 316.4)
+  const abnRaw = String((company && company.abn) || '51824753556').replace(/\D/g, '');
+  const abnXCoords = [22.9, 37.1, 65.4, 79.6, 93.8, 122.1, 136.3, 150.5, 178.8, 193.0, 207.2];
+  drawBoxesWithCoords(abnRaw, abnXCoords, 316.4, 10);
+
+  // 3. Registered business name (Question 3) (Line 1 Y: 241.4 -> textY: 245.4, Line 2 Y: 217.3 -> textY: 221.3)
   const compName = String((company && company.name) || 'KWORKMATE PTY LTD').toUpperCase();
-  drawBoxesText(compName, 27, 269, 11.4, 30, 9.5);
+  drawBoxesText(compName.slice(0, 19), 23.0, 245.4, 19, 9.5);
+  if (compName.length > 19) {
+    drawBoxesText(compName.slice(19, 38), 23.0, 221.3, 19, 9.5);
+  }
 
   // 4. Business address (Question 4)
   const compAddr = String((company && company.address) || '100 PITT STREET').toUpperCase();
-  drawBoxesText(compAddr, 27, 213, 11.4, 30, 9.5);
-  drawBoxesText('SYDNEY', 27, 165, 11.4, 25, 9.5);
-  page.drawText('NSW', { x: 37, y: 140, size: 9.5, font: fontCourier, color: rgb(0.05, 0.05, 0.15) });
-  drawBoxesText('2000', 96, 140, 11.4, 4, 9.5);
+  // Line 1 (Y: 193.2 -> textY: 197.2)
+  drawBoxesText(compAddr.slice(0, 19), 23.0, 197.2, 19, 9.5);
+  // Line 2 (Y: 157.5 -> textY: 161.5)
+  if (compAddr.length > 19) {
+    drawBoxesText(compAddr.slice(19, 38), 22.9, 161.5, 19, 9.5);
+  }
+  // Suburb (Y: 105.2 -> textY: 109.2)
+  drawBoxesText('SYDNEY', 22.9, 109.2, 19, 9.5);
+  // State & Postcode (Y: 79.7 -> textY: 83.7)
+  drawBoxesWithCoords('NSW', [22.9, 37.1, 51.3], 83.7, 9.5);
+  drawBoxesWithCoords('2000', [93.8, 108.0, 122.2, 136.3], 83.7, 9.5);
 
-  // 5. Primary email (Question 5)
+  // 5. Primary email (Question 5) (Line 1 Y: 322.4 -> textY: 326.4, Line 2 Y: 296.9 -> textY: 300.9)
   const compEmail = String((company && company.contact_email) || 'PAYROLL@KWORKMATE.COM').toUpperCase();
-  drawBoxesText(compEmail, 321, 324, 10.8, 25, 9);
+  drawBoxesText(compEmail.slice(0, 19), 316.3, 326.4, 19, 8.8);
+  if (compEmail.length > 19) {
+    drawBoxesText(compEmail.slice(19, 38), 316.3, 300.9, 19, 8.8);
+  }
 
   // 6. Contact person & Phone (Question 6)
+  // Contact person (Y: 261.2 -> textY: 265.2)
   const contactPerson = String((company && company.contact_name) || 'PAYROLL MANAGER').toUpperCase();
-  drawBoxesText(contactPerson, 321, 270, 10.8, 25, 9);
+  drawBoxesText(contactPerson.slice(0, 19), 316.3, 265.2, 19, 8.8);
+  // Business phone number (Y: 237.1 -> textY: 241.1)
   const contactPhone = String((company && company.contact_phone) || '0412345678').replace(/\D/g, '');
-  drawBoxesText(contactPhone, 436, 244, 10.8, 12, 9);
+  const phoneXCoords = [401.3, 415.5, 429.7, 443.9, 458.1, 472.2, 486.4, 500.6, 514.8, 528.9];
+  drawBoxesWithCoords(contactPhone, phoneXCoords, 241.1, 9.5);
 
-  // Payer Declaration Date
-  drawBoxesText(signDate.day, 470, 173, 11.4, 2);
-  drawBoxesText(signDate.month, 504, 173, 11.4, 2);
-  drawBoxesText(signDate.year, 538, 173, 11.4, 4);
+  // Payer Declaration Date (Y: 151.2 -> textY: 155.2)
+  drawBoxesWithCoords(signDate.day, [455.5, 469.6], 155.2, 10);
+  drawBoxesWithCoords(signDate.month, [492.3, 506.5], 155.2, 10);
+  drawBoxesWithCoords(signDate.year, [529.2, 543.3, 557.5, 571.7], 155.2, 10);
 
   return await pdfDoc.save();
 }
