@@ -476,6 +476,7 @@ export async function generateAtoNat3092Pdf({ employee = {}, company = {}, branc
   // [중요] 회사설정(Company Settings > Onboarding > TFN)에 사용자가 직접 그린 실제 서명 이미지만 인쇄합니다.
   // 가짜 기본 서명이나 텍스트 이름은 절대 출력하지 않습니다.
   const employerSig = (company && company.tfn_employer_signature) || '';
+  let employerSigned = false;
   if (employerSig && typeof employerSig === 'string' && employerSig.startsWith('data:image/')) {
     try {
       const empSigImg = await embedImageSafe(pdfDoc, employerSig);
@@ -486,6 +487,7 @@ export async function generateAtoNat3092Pdf({ employee = {}, company = {}, branc
           width: 138,
           height: 27
         });
+        employerSigned = true;
       }
     } catch (e) {
       console.error('[atoPdfEngine] embed payer signature error:', e);
@@ -493,9 +495,12 @@ export async function generateAtoNat3092Pdf({ employee = {}, company = {}, branc
   }
 
   // Payer Declaration Date (Y: 151.2 -> textY: 155.2)
-  drawBoxesWithCoords(signDate.day, [455.5, 469.6], 155.2, 10);
-  drawBoxesWithCoords(signDate.month, [492.3, 506.5], 155.2, 10);
-  drawBoxesWithCoords(signDate.year, [529.2, 543.3, 557.5, 571.7], 155.2, 10);
+  // [중요] 고용주 서명이 실제로 날인되었을 때만 날짜를 찍습니다! 고용주가 아직 서명하지 않았다면 날짜 칸도 빈칸으로 비워둡니다.
+  if (employerSigned) {
+    drawBoxesWithCoords(signDate.day, [455.5, 469.6], 155.2, 10);
+    drawBoxesWithCoords(signDate.month, [492.3, 506.5], 155.2, 10);
+    drawBoxesWithCoords(signDate.year, [529.2, 543.3, 557.5, 571.7], 155.2, 10);
+  }
 
   return await pdfDoc.save();
 }
@@ -794,7 +799,15 @@ export async function stampEmployerSignatureOnTfnPdf(existingPdfBytes, employerS
   const page = pages[0]; // NAT 3092는 1페이지 서식
   const fontHelvetica = await pdfDoc.embedFont(StandardFonts.Helvetica);
 
-  // 1. 고용주 공식 서명 이미지 날인 (X: 308, Y: 153, W: 138, H: 27)
+  // 1. 기존 서명 영역 클린업 및 고용주 공식 서명 이미지 날인 (X: 308, Y: 153, W: 138, H: 27)
+  page.drawRectangle({
+    x: 306,
+    y: 152,
+    width: 142,
+    height: 29,
+    color: rgb(1, 1, 1)
+  });
+
   const sigImg = await embedImageSafe(pdfDoc, employerSignatureDataUrl);
   if (sigImg) {
     page.drawImage(sigImg, {
@@ -805,8 +818,19 @@ export async function stampEmployerSignatureOnTfnPdf(existingPdfBytes, employerS
     });
   }
 
-  // 2. 고용주 서명 날짜 날인 (Payer Declaration Date)
+  // 2. 고용주 서명 날짜 날인 (Payer Declaration Date: 글자 겹침 방지 위해 박스 내부 흰색 클린업 후 단 1번만 날인)
   const signDate = signDateObj || formatAtoDate(new Date().toISOString());
+  const allDateCoords = [455.5, 469.6, 492.3, 506.5, 529.2, 543.3, 557.5, 571.7];
+  allDateCoords.forEach((xc) => {
+    page.drawRectangle({
+      x: xc + 0.5,
+      y: 152,
+      width: 11,
+      height: 18,
+      color: rgb(1, 1, 1)
+    });
+  });
+
   const drawBoxes = (val, xCoords, y, cellW = 10) => {
     const chars = String(val || '').split('');
     chars.forEach((c, idx) => {
