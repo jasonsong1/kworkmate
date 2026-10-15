@@ -119,8 +119,48 @@ export default function Onboarding() {
     load();
   }, [token]);
 
-  // Employer custom questions
-  const questions = (data && data.onboarding_questions) || [];
+  // 1. Employer custom questions
+  const baseQuestions = (data && data.onboarding_questions) || [];
+
+  // 2. 회사설정(온보딩 서류 설정)에 등록된 필수/선택 서류 중 질문에 아직 없는 것(Test Doc 등) 동적 결합
+  const companyDocTypes = (data && data.company && data.company.onboarding_doc_types) || [];
+  const fileDocTypes = companyDocTypes.filter(
+    (d) => d && d.kind !== 'info' && d.key !== 'tfn' && d.key !== 'super' && d.key !== 'contract'
+  );
+
+  const syntheticDocQuestions = fileDocTypes
+    .filter((docType) => {
+      const lowerKey = String(docType.key || '').toLowerCase();
+      const lowerLabel = String(docType.label || docType.label_en || '').toLowerCase();
+      // 기존 질문 중 동일한 목적의 업로드 질문이 있는지 검사
+      const exists = baseQuestions.some((q) => {
+        if (q.type !== 'upload') return false;
+        const qLabel = String(q.label || '').toLowerCase();
+        const qId = String(q.id || '').toLowerCase();
+        if (qId === lowerKey) return true;
+        if (lowerKey === 'id' && (qLabel.includes('id') || qLabel.includes('신분증') || qLabel.includes('photo'))) return true;
+        if (lowerKey === 'right_to_work' && (qLabel.includes('right') || qLabel.includes('work') || qLabel.includes('visa') || qLabel.includes('비자') || qLabel.includes('vevo'))) return true;
+        if (lowerLabel && qLabel.includes(lowerLabel)) return true;
+        return false;
+      });
+      return !exists;
+    })
+    .map((docType) => ({
+      id: docType.key,
+      label: docType.label_en || docType.label || docType.key,
+      description: docType.key === 'id'
+        ? 'Passport photo page or Australian Driver Licence (PDF, JPG, PNG)'
+        : docType.key === 'right_to_work'
+        ? 'Australian Visa Grant Notice (VEVO), Passport, or Citizenship Certificate'
+        : 'Please attach the requested verification document (PDF, JPG, PNG)',
+      type: 'upload',
+      required: docType.required !== false,
+      page: 1,
+      page_title: '',
+      validation: { file_types: ['pdf', 'jpg', 'jpeg', 'png', 'webp'] }
+    }));
+
+  const questions = [...baseQuestions, ...syntheticDocQuestions];
 
   // Group questions by page
   const questionPages = [];

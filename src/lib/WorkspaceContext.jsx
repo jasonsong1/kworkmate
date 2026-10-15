@@ -149,12 +149,12 @@ export function WorkspaceProvider({ children }) {
         if (byIdList.length > 0) profile = byIdList[0];
       }
       if (!profile && effectiveCompanyId) {
-        const byComp = await base44.entities.EmployeeProfile.filter({ user_email: user.email, company_id: effectiveCompanyId }).catch(() => []);
+        const byComp = await base44.entities.EmployeeProfile.filter({ user_email: user.email, company_id: effectiveCompanyId }, { sort: '-created_date' }).catch(() => []);
         const byCompList = toArray(byComp);
         if (byCompList.length > 0) profile = byCompList[0];
       }
       if (!profile) {
-        const profilesRaw = await base44.entities.EmployeeProfile.filter({ user_email: user.email }).catch(() => []);
+        const profilesRaw = await base44.entities.EmployeeProfile.filter({ user_email: user.email }, { sort: '-created_date' }).catch(() => []);
         const profiles = toArray(profilesRaw);
         profile = profiles[0] || null;
       }

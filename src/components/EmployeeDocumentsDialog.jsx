@@ -1,11 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { FileText, Loader2, Trash2, Upload, FileCheck, Shield } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
+import { FileText, Loader2, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useToast } from '@/components/ui/use-toast';
 import { useI18n } from '@/lib/i18n';
-import { formatDateTime } from '@/lib/bh';
 import { base44 } from '@/api/base44Client';
 import { kwActive, kwCall, kwIdentity } from '@/lib/kwAuthClient';
 import { useWorkspace } from '@/lib/WorkspaceContext';
@@ -19,7 +17,6 @@ export default function EmployeeDocumentsDialog({ open, onOpenChange, employee }
   const [loadingId, setLoadingId] = useState(null);
   const [docs, setDocs] = useState([]);
   const [uploading, setUploading] = useState(false);
-  const [removingId, setRemovingId] = useState(null);
   const fileRef = useRef(null);
 
   const [currentEmployee, setCurrentEmployee] = useState(employee);
@@ -76,36 +73,6 @@ export default function EmployeeDocumentsDialog({ open, onOpenChange, employee }
     }
   };
 
-  const remove = async (doc) => {
-    if (!doc || !doc.file_uri) return;
-    setRemovingId(doc.file_uri);
-    try {
-      const saved = await kwCall('kwSession', { action: 'delete_document', file_uri: doc.file_uri });
-      setDocs((saved && saved.docs) || docs.filter((item) => item.file_uri !== doc.file_uri));
-      if (saved && saved.profile) setCurrentEmployee(saved.profile);
-      toast({ title: t('employees.docDeleted') });
-    } catch (error) {
-      toast({ title: error.message || t('employees.docDeleteFailed'), variant: 'destructive' });
-    } finally {
-      setRemovingId(null);
-    }
-  };
-
-  const isAtoDoc = (doc) => {
-    if (!doc) return false;
-    const name = String(doc.name || '').toLowerCase();
-    const type = String(doc.type || '').toLowerCase();
-    const docType = String(doc.doc_type || '').toLowerCase();
-    return (
-      docType.startsWith('ato_') ||
-      type.startsWith('ato_') ||
-      name.includes('nat 3092') ||
-      name.includes('nat 13080') ||
-      name.includes('tfn declaration') ||
-      name.includes('superannuation standard choice')
-    );
-  };
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[85vh] max-w-3xl overflow-y-auto overflow-x-hidden w-full">
@@ -141,6 +108,7 @@ export default function EmployeeDocumentsDialog({ open, onOpenChange, employee }
           </div>
         )}
 
+        {/* 1. 온보딩 서류 및 추가 제출 서류를 단일 통합 목록으로 표시 (하단 중복 제거 완료) */}
         {(currentEmployee || employee) && company && (
           <OnboardingStatusList
             profile={currentEmployee || employee}
@@ -150,68 +118,8 @@ export default function EmployeeDocumentsDialog({ open, onOpenChange, employee }
           />
         )}
 
+        {/* 2. 온보딩 질문 상세 답변 (아코디언) */}
         {(currentEmployee || employee) && <OnboardingDetails profile={currentEmployee || employee} company={company} />}
-
-        {docs.length === 0 ? (
-          <p className="py-8 text-center text-sm text-muted-foreground">{t('employees.noDocs')}</p>
-        ) : (
-          <div className="w-full divide-y rounded-lg border bg-card">
-            {docs.map((doc, index) => {
-              const ato = isAtoDoc(doc);
-              return (
-                <div key={`${doc.file_uri}-${index}`} className="flex items-center gap-3 px-4 py-3">
-                  {ato ? (
-                    <FileCheck className="h-4 w-4 shrink-0 text-emerald-600" />
-                  ) : (
-                    <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
-                  )}
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium flex flex-wrap items-center gap-2 break-all">
-                      <span className="break-all">{doc.name || 'Document'}</span>
-                      {ato && (
-                        <span className="inline-flex shrink-0 items-center gap-1 rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 border border-emerald-200">
-                          <Shield className="h-2.5 w-2.5" /> ATO Official
-                        </span>
-                      )}
-                    </p>
-                    <p className="text-xs text-muted-foreground">{formatDateTime(doc.created_at)}</p>
-                  </div>
-                  <Badge variant={ato ? 'default' : 'secondary'} className={`shrink-0 capitalize ${ato ? 'bg-emerald-600 hover:bg-emerald-700' : ''}`}>
-                    {ato ? 'ATO Form' : String(doc.type || 'file').replace(/_/g, ' ')}
-                  </Badge>
-                  <Button
-                    size="sm"
-                    variant={ato ? 'default' : 'outline'}
-                    className={ato ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : ''}
-                    onClick={() => openDoc(doc)}
-                    disabled={loadingId === doc.file_uri}
-                  >
-                    {loadingId === doc.file_uri ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    ) : (
-                      t('common.open')
-                    )}
-                  </Button>
-                  {viaOwnRecord && (doc.uploaded_by === 'self' || doc.type === 'staff_upload') && !ato && (
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => remove(doc)}
-                      disabled={removingId === doc.file_uri}
-                      title={t('common.delete')}
-                    >
-                      {removingId === doc.file_uri ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      ) : (
-                        <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                      )}
-                    </Button>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
       </DialogContent>
     </Dialog>
   );

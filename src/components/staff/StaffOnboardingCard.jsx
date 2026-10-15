@@ -45,12 +45,14 @@ export default function StaffOnboardingCard({ onProfileUpdated }) {
   const { me, company, employeeProfile } = useWorkspace();
   const { toast } = useToast();
 
-  // 통합 카드 펼침/접힘 상태 (sessionStorage로 기억하여 새로고침/재렌더링 시에도 유지)
+  // 통합 카드 펼침/접힘 상태 (기본적으로 펼쳐서 온보딩 서류 상태를 바로 볼 수 있게 함)
   const [isOpen, setIsOpen] = useState(() => {
     try {
-      return sessionStorage.getItem('kw_onboarding_open') === 'true';
+      const stored = sessionStorage.getItem('kw_onboarding_open');
+      if (stored !== null) return stored === 'true';
+      return true;
     } catch (_) {
-      return false;
+      return true;
     }
   });
 

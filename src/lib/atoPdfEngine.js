@@ -164,28 +164,28 @@ export async function generateAtoNat3092Pdf({ employee = {}, company = {}, form 
   // 1. TFN 9자리 (Question 1)
   const tfnRaw = String(form.tfn_number || employee.tfn_number || '').replace(/\D/g, '');
   if (form.tfn_exemption === 'applied' || form.tfn_pending || employee.tfn_pending) {
-    // 예외 사유 1: TFN 신청 후 28일 이내 유예 (X: 378, Y: 727)
-    markX(378, 727);
+    // 예외 사유 1: TFN 신청 후 28일 이내 유예 (X: 377, Y: 721)
+    markX(377, 721);
   } else if (form.tfn_exemption === 'under18') {
-    // 예외 사유 2: 18세 미만 비과세 (X: 378, Y: 704)
-    markX(378, 704);
+    // 예외 사유 2: 18세 미만 비과세 (X: 377, Y: 698)
+    markX(377, 698);
   } else if (form.tfn_exemption === 'pensioner') {
-    // 예외 사유 3: 연금/수당 수급자 (X: 378, Y: 681)
-    markX(378, 681);
+    // 예외 사유 3: 연금/수당 수급자 (X: 377, Y: 675)
+    markX(377, 675);
   } else if (tfnRaw && tfnRaw.length === 9) {
-    // 정규 9자리 네모 칸
-    drawBoxesText(tfnRaw, 144, 736, 14.6, 9, 10.5);
+    // 정규 9자리 네모 칸 (Y: 726으로 박스 내부 정확 안착)
+    drawBoxesText(tfnRaw, 144, 726, 14.6, 9, 10.5);
   } else {
     // 미입력 시 신청 중으로 체크
-    markX(378, 727);
+    markX(377, 721);
   }
 
   // 2. 성명 (Question 2: Name)
   const title = String(form.title || employee.title || 'Mr').toLowerCase();
-  if (title === 'mrs') markX(198, 643);
-  else if (title === 'miss') markX(236, 643);
-  else if (title === 'ms') markX(273, 643);
-  else markX(161, 643); // Mr (기본)
+  if (title === 'mrs') markX(200, 633);
+  else if (title === 'miss') markX(238, 633);
+  else if (title === 'ms') markX(275, 633);
+  else markX(162, 633); // Mr (기본)
 
   // 성(Surname) & 이름(First given name) & 중간이름(Other given names)
   const surname = String(form.family_name || form.surname || employee.surname || '').trim() ||
@@ -195,112 +195,112 @@ export async function generateAtoNat3092Pdf({ employee = {}, company = {}, form 
     String(form.full_name || employee.full_name || '').trim();
   const otherNames = String(form.other_names || employee.other_names || '').trim();
 
-  // Surname 칸
-  drawBoxesText(surname, 27, 624, 11.4, 25, 9.5);
-  // First given name 칸
-  drawBoxesText(givenNames, 27, 596, 11.4, 25, 9.5);
-  // Other given names 칸
+  // Surname 칸 (Y: 606으로 라벨 아래 박스 내부 정확 정렬)
+  drawBoxesText(surname, 27, 606, 11.4, 25, 9.5);
+  // First given name 칸 (Y: 578)
+  drawBoxesText(givenNames, 27, 578, 11.4, 25, 9.5);
+  // Other given names 칸 (Y: 550)
   if (otherNames) {
-    drawBoxesText(otherNames, 27, 568, 11.4, 25, 9.5);
+    drawBoxesText(otherNames, 27, 550, 11.4, 25, 9.5);
   }
 
   // 3. 호주 거주 주소 (Question 3: Home address)
   const addressLine1 = String(form.address_line1 || form.address || employee.address || '123 GEORGE STREET').toUpperCase();
   const addressLine2 = String(form.address_line2 || '').toUpperCase();
-  drawBoxesText(addressLine1.slice(0, 25), 27, 533, 11.4, 25, 9.5);
+  drawBoxesText(addressLine1.slice(0, 25), 27, 515, 11.4, 25, 9.5);
   if (addressLine2) {
-    drawBoxesText(addressLine2.slice(0, 25), 27, 507, 11.4, 25, 9.5);
+    drawBoxesText(addressLine2.slice(0, 25), 27, 489, 11.4, 25, 9.5);
   }
 
   const suburb = String(form.suburb || employee.suburb || 'SYDNEY').toUpperCase();
-  drawBoxesText(suburb, 27, 482, 11.4, 25, 9.5);
+  drawBoxesText(suburb, 27, 463, 11.4, 25, 9.5);
 
   const state = String(form.state || employee.state || 'NSW').toUpperCase();
-  page.drawText(state, { x: 37, y: 457, size: 9.5, font: fontCourier, color: rgb(0.05, 0.05, 0.15) });
+  page.drawText(state, { x: 37, y: 437, size: 9.5, font: fontCourier, color: rgb(0.05, 0.05, 0.15) });
 
   const postcode = String(form.postcode || employee.postcode || '2000').replace(/\D/g, '');
-  drawBoxesText(postcode, 96, 456, 11.4, 4, 9.5);
+  drawBoxesText(postcode, 96, 437, 11.4, 4, 9.5);
 
   // 4. 이전 성 (Question 4: Previous family name)
   const prevFamilyName = String(form.previous_family_name || '').toUpperCase();
   if (prevFamilyName) {
-    drawBoxesText(prevFamilyName, 27, 410, 11.4, 25, 9.5);
+    drawBoxesText(prevFamilyName, 27, 391, 11.4, 25, 9.5);
   }
 
   // 5. 이메일 주소 (Question 5: Primary e-mail address)
   const email = String(form.user_email || employee.user_email || '').toUpperCase();
-  drawBoxesText(email.slice(0, 25), 321, 745, 10.8, 25, 9);
+  drawBoxesText(email.slice(0, 25), 321, 726, 10.8, 25, 9);
   if (email.length > 25) {
-    drawBoxesText(email.slice(25, 50), 321, 719, 10.8, 25, 9);
+    drawBoxesText(email.slice(25, 50), 321, 700, 10.8, 25, 9);
   }
 
   // 6. 생년월일 (Question 6: Date of birth)
   const dob = formatAtoDate(form.date_of_birth || employee.date_of_birth || '1998-01-01');
-  drawBoxesText(dob.day || '01', 468, 693, 11.4, 2);
-  drawBoxesText(dob.month || '01', 502, 693, 11.4, 2);
-  drawBoxesText(dob.year || '1998', 536, 693, 11.4, 4);
+  drawBoxesText(dob.day || '01', 469, 673, 11.4, 2);
+  drawBoxesText(dob.month || '01', 503, 673, 11.4, 2);
+  drawBoxesText(dob.year || '1998', 537, 673, 11.4, 4);
 
   // 7. 고용 형태 (Question 7: On what basis are you paid?)
   const empType = String(form.employment_type || employee.employment_type || 'casual').toLowerCase();
   if (empType === 'full_time' || empType.includes('full')) {
-    markX(356, 650); // Full-time
+    markX(356, 633); // Full-time
   } else if (empType === 'part_time' || empType.includes('part')) {
-    markX(408, 650); // Part-time
+    markX(408, 633); // Part-time
   } else if (empType === 'labour_hire') {
-    markX(460, 650); // Labour hire
+    markX(460, 633); // Labour hire
   } else if (empType === 'super_stream') {
-    markX(512, 650); // Superannuation income stream
+    markX(520, 633); // Superannuation income stream
   } else {
-    markX(564, 650); // Casual employment (기본)
+    markX(576, 633); // Casual employment (기본)
   }
 
   // 8. 세법상 거주자 구분 (Question 8: Residency)
   const resStatus = String(form.residency_status || employee.residency_status || 'resident').toLowerCase();
   if (resStatus.includes('holiday') || resStatus.includes('working') || employee.visa_type === 'working_holiday') {
-    markX(566, 614); // Working holiday maker
+    markX(576, 601); // Working holiday maker
   } else if (resStatus === 'foreign' || employee.visa_type === 'student') {
-    markX(461, 614); // Foreign resident
+    markX(472, 601); // Foreign resident
   } else {
-    markX(377, 614); // Australian resident
+    markX(382, 601); // Australian resident
   }
 
   // 9. 비과세 기준액 신청 (Question 9: Tax-free threshold)
   const claimTaxFree = Boolean(form.tax_free_threshold ?? employee.tax_free_threshold ?? true);
   if (claimTaxFree) {
-    markX(440, 550); // Yes
+    markX(342, 535); // Yes
   } else {
-    markX(482, 550); // No
+    markX(378, 535); // No
   }
 
   // 10. 학자금 대출 여부 (Question 10: HELP/VSL/TSL debt)
   const hasHecs = Boolean(form.hecs_help ?? employee.hecs_help ?? false);
   if (hasHecs) {
-    markX(440, 495); // Yes
+    markX(342, 477); // Yes
   } else {
-    markX(562, 495); // No
+    markX(576, 477); // No
   }
 
   // 서명란 (DECLARATION by payee)
   const signDate = formatAtoDate(form.signed_at || employee.signed_at || new Date().toISOString());
-  drawBoxesText(signDate.day, 486, 437, 11.4, 2);
-  drawBoxesText(signDate.month, 516, 437, 11.4, 2);
-  drawBoxesText(signDate.year, 542, 437, 11.4, 4);
+  drawBoxesText(signDate.day, 470, 419, 11.4, 2);
+  drawBoxesText(signDate.month, 504, 419, 11.4, 2);
+  drawBoxesText(signDate.year, 538, 419, 11.4, 4);
 
-  // 자필 전자서명 이미지 오버레이 (Signature 사각형 칸: X: 310~450, Y: 420~460)
+  // 자필 전자서명 이미지 오버레이 (Signature 사각형 칸: X: 310~450, Y: 418~458)
   if (signatureDataUrl && signatureDataUrl.startsWith('data:image/')) {
     try {
       const sigBytes = await fetch(signatureDataUrl).then((res) => res.arrayBuffer());
       const sigImg = await pdfDoc.embedPng(sigBytes);
       page.drawImage(sigImg, {
-        x: 325,
-        y: 425,
-        width: 125,
-        height: 38
+        x: 315,
+        y: 418,
+        width: 135,
+        height: 40
       });
     } catch {
       page.drawText(surname + ' ' + givenNames, {
-        x: 330,
-        y: 438,
+        x: 325,
+        y: 430,
         size: 13,
         font: fontHelvetica,
         color: rgb(0.05, 0.1, 0.45)
@@ -308,8 +308,8 @@ export async function generateAtoNat3092Pdf({ employee = {}, company = {}, form 
     }
   } else {
     page.drawText(surname + ' ' + givenNames, {
-      x: 330,
-      y: 438,
+      x: 325,
+      y: 430,
       size: 13,
       font: fontHelvetica,
       color: rgb(0.05, 0.1, 0.45)
@@ -319,33 +319,33 @@ export async function generateAtoNat3092Pdf({ employee = {}, company = {}, form 
   // ==================== [SECTION B: 고용주란 (Payer)] ====================
   // 1. ABN (Question 1)
   const abnRaw = String((company && company.abn) || '51824753556').replace(/\D/g, '');
-  drawBoxesText(abnRaw, 128, 337, 14.0, 11, 10);
+  drawBoxesText(abnRaw, 128, 318, 14.0, 11, 10);
 
   // 3. Registered business name (Question 3)
   const compName = String((company && company.name) || 'KWORKMATE PTY LTD').toUpperCase();
-  drawBoxesText(compName, 27, 287, 11.4, 30, 9.5);
+  drawBoxesText(compName, 27, 269, 11.4, 30, 9.5);
 
   // 4. Business address (Question 4)
   const compAddr = String((company && company.address) || '100 PITT STREET').toUpperCase();
-  drawBoxesText(compAddr, 27, 231, 11.4, 30, 9.5);
-  drawBoxesText('SYDNEY', 27, 183, 11.4, 25, 9.5);
-  page.drawText('NSW', { x: 37, y: 158, size: 9.5, font: fontCourier, color: rgb(0.05, 0.05, 0.15) });
-  drawBoxesText('2000', 96, 158, 11.4, 4, 9.5);
+  drawBoxesText(compAddr, 27, 213, 11.4, 30, 9.5);
+  drawBoxesText('SYDNEY', 27, 165, 11.4, 25, 9.5);
+  page.drawText('NSW', { x: 37, y: 140, size: 9.5, font: fontCourier, color: rgb(0.05, 0.05, 0.15) });
+  drawBoxesText('2000', 96, 140, 11.4, 4, 9.5);
 
   // 5. Primary email (Question 5)
   const compEmail = String((company && company.contact_email) || 'PAYROLL@KWORKMATE.COM').toUpperCase();
-  drawBoxesText(compEmail, 321, 343, 10.8, 25, 9);
+  drawBoxesText(compEmail, 321, 324, 10.8, 25, 9);
 
   // 6. Contact person & Phone (Question 6)
   const contactPerson = String((company && company.contact_name) || 'PAYROLL MANAGER').toUpperCase();
-  drawBoxesText(contactPerson, 321, 289, 10.8, 25, 9);
+  drawBoxesText(contactPerson, 321, 270, 10.8, 25, 9);
   const contactPhone = String((company && company.contact_phone) || '0412345678').replace(/\D/g, '');
-  drawBoxesText(contactPhone, 436, 262, 10.8, 12, 9);
+  drawBoxesText(contactPhone, 436, 244, 10.8, 12, 9);
 
   // Payer Declaration Date
-  drawBoxesText(signDate.day, 486, 191, 11.4, 2);
-  drawBoxesText(signDate.month, 516, 191, 11.4, 2);
-  drawBoxesText(signDate.year, 542, 191, 11.4, 4);
+  drawBoxesText(signDate.day, 470, 173, 11.4, 2);
+  drawBoxesText(signDate.month, 504, 173, 11.4, 2);
+  drawBoxesText(signDate.year, 538, 173, 11.4, 4);
 
   return await pdfDoc.save();
 }

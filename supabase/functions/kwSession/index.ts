@@ -23,13 +23,18 @@ function rowsOf(result: any) {
   return Array.isArray(result) ? result : (result && result.items) || [];
 }
 
-async function profileForEmail(base44: any, email: string) {
-  const found = rowsOf(
+async function profileForEmail(base44: any, email: string, preferredCompanyId?: string) {
+  const allProfiles = rowsOf(
     await base44.asServiceRole.entities.EmployeeProfile
-      .filter({ user_email: lower(email) }, { limit: 1 })
+      .filter({ user_email: lower(email) }, { sort: '-created_date', limit: 10 })
       .catch(() => [])
   );
-  return found[0] || null;
+  if (allProfiles.length === 0) return null;
+  if (preferredCompanyId) {
+    const matched = allProfiles.find((p: any) => p.company_id === preferredCompanyId);
+    if (matched) return matched;
+  }
+  return allProfiles[0];
 }
 
 function onboardingPatch(profile: any, company: any, docs: any[]) {
@@ -91,7 +96,7 @@ async function handler(req: any) {
     const me = await resolveCaller(base44, req);
     if (!me) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const profile = await profileForEmail(base44, me.email);
+    const profile = await profileForEmail(base44, me.email, me.company_id);
     if (!profile) {
       return Response.json({
         ok: true,
