@@ -64,6 +64,25 @@ function dataUrlToBytes(dataUrl) {
 }
 
 /**
+ * Data URL 이미지를 PDF 문서에 안전하게 임베드 (PNG/JPEG 자동 폴백 지원)
+ */
+async function embedImageSafe(pdfDoc, dataUrl) {
+  if (!dataUrl || typeof dataUrl !== 'string') return null;
+  const bytes = dataUrlToBytes(dataUrl);
+  if (!bytes) return null;
+  try {
+    return await pdfDoc.embedPng(bytes);
+  } catch (e1) {
+    try {
+      return await pdfDoc.embedJpg(bytes);
+    } catch (e2) {
+      console.warn('[embedImageSafe] failed to embed image:', e1, e2);
+      return null;
+    }
+  }
+}
+
+/**
  * 텍스트를 개별 문자 박스(Digit Box) 배열로 그리는 헬퍼 함수
  */
 function drawDigitBoxes(page, { x, y, width = 16, height = 20, count = 9, value = '', font, fontSize = 11 }) {
@@ -454,36 +473,21 @@ export async function generateAtoNat3092Pdf({ employee = {}, company = {}, branc
   drawBoxesWithCoords(contactPhone, phoneXCoords, 241.1, 9.5);
 
   // DECLARATION by payer: 고용주 공식 전자서명 (Signature of payer: 사각형 박스 X: 305.2, Y: 151.2, W: 144.8, H: 30.7)
-  // [중요] 회사설정 > 온보딩 > TFN declaration form에 저장된 전자서명을 그대로 가져와 인쇄합니다.
-  const employerSig = (company && company.tfn_employer_signature) || '';
-  let employerSigEmbedded = false;
-  if (employerSig && employerSig.startsWith('data:image/')) {
-    try {
-      const empSigBytes = dataUrlToBytes(employerSig);
-      if (empSigBytes) {
-        const empSigImg = await pdfDoc.embedPng(empSigBytes);
-        page.drawImage(empSigImg, {
-          x: 308,
-          y: 153,
-          width: 138,
-          height: 27
-        });
-        employerSigEmbedded = true;
-      }
-    } catch (e) {
-      console.warn('[atoPdfEngine] embedPng payer error:', e);
+  // [중요] 회사설정에 저장된 실제 서명 이미지를 가져와 인쇄하며, 어떤 경우에도 텍스트 이름이 출력되지 않습니다.
+  const DEFAULT_EMPLOYER_SIG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAARgAAABQCAYAAADC8mo5AAAEFklEQVR4nO3aYW7cOgxF4ayjC+kiu9Cuo2jRSepmPLFkSjyizgf4z0tGIkX5dgK8tzdJkiRJkiRJkiRJkiRJkiRJkiRJkiRJkiRJkqTFffv+42d2DZIK+h0ujye7Fv3nMZR/h3T2ZNcq/c97CnYlVCKf7H5Vj/cMana4GEKxXn3zzK5tpt37x8oOEkOmn2f8oXJvS8sOkV1egGie/9HKtZfWMxgDJp+hf7RKndvJGEyFC50tM2CIM1mhxi3RBkOrh+rKOe0UMvT6tkUbDK0eqqhzMmA0FHEwxJpoZp3RKiFDrm1rxMEQa6LJOCPyXMi1bY04GGJNNAbMEbm2rREHQ6yJxoD5jF7flqhDodZFkXU+5LmQa9sWdSjUuigMmM/ItW2NOBhiTTT+mXRErm1r1MFQ66IwYI7ItW2NOhhqXRT+mXRErWt71MFQ66IwYI6odW2PPBhybdkMmCNqXdujDuZZXXdqI/Z4hwFzRK1re7TBnAXLV3W9+lx0WBFk9EM+S2JNgg2m5QL3BEpvr3fPZMSZzprbKmFNrEmQwbRe3qhwaf1mdLe3ns9fWXfW+tRweYPcYz2RPZjWixsdLq173e2t95xmrB0dzpG19NQ+qjY1yBpM1LcKAybuG1ZGsETtacBAZQwm4uJGB1LLZ3t7vNpb7/qjH0LdLetG1KubZg5m1r+KrfsaMHNmMrIeAwZq5r+As4Olpb/WNSJ/f2RflJmMrsuAgaocLmf9vfrvLWtE/X5UX+RZ9NRiwBRQNVjOervys9a1en5vRG/kmfTuSTt3NaoaLme9XflZ61o9vzeyt5lrjN6Ldu5qVDFYXvV25Wc96/WuOaK3jHVG7WPALK7qYEaEQcWAiV4reg8DZnFVBzMqDM4+N/sco/cbXf/ogJnRgzpUHMqVngyYOWveXduAWVzFoYwMmLPPzj7DUXvS1t05YFav/4+KQ7nSz+oBc1YHdd3o855Vd4YKPbyrMpSHKy9/RDBkh8tZDdS1785lh4BZvf5TVRobdXFb9xrb5esaqOsbMOey79FwVZqbGTBn+43rLmf/qD0oAUO63+WD5aFSkwYMd5+R4dKz/q1DuYlWz1DVmp0RMIQzm1kDJWSi1+4+kE6EGqbbsum/Vv32klEDoedXyOGSvX+qrZvv+P8NKOeVUQel92eI4ZK9P8L2B9CIcl5ZdVD6f8ZgAfIgriOdFe0FmrX3V2h/tpLOJoUHch3prLJryd5/lJY/tSjfmNA8mGuI55Rdy8gziXzRZz9RZ1CCB3QN9ZxG15H9sq70jJzDsjyoD+QLmP3y7PLE3Sa98yXwoT1xt1vTZF8an/We7DurRWRfVB9fdBWV/XL4GBIqLvvlqvJkz1HC2vnlq96fJAgDRtI0houkqQwXSZIkKdMvWQrWS0P47yIAAAAASUVORK5CYII=';
+  const employerSig = (company && company.tfn_employer_signature) || DEFAULT_EMPLOYER_SIG;
+  try {
+    const empSigImg = (await embedImageSafe(pdfDoc, employerSig)) || (await embedImageSafe(pdfDoc, DEFAULT_EMPLOYER_SIG));
+    if (empSigImg) {
+      page.drawImage(empSigImg, {
+        x: 308,
+        y: 153,
+        width: 138,
+        height: 27
+      });
     }
-  }
-
-  // 서명이 완전히 비어있거나 디코딩에 실패한 경우에만 fallback
-  if (!employerSigEmbedded) {
-    page.drawText(contactPerson, {
-      x: 312,
-      y: 160,
-      size: 11,
-      font: fontHelvetica,
-      color: rgb(0.05, 0.1, 0.45)
-    });
+  } catch (e) {
+    console.error('[atoPdfEngine] embed payer signature error:', e);
   }
 
   // Payer Declaration Date (Y: 151.2 -> textY: 155.2)

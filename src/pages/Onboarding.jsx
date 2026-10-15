@@ -499,12 +499,11 @@ export default function Onboarding() {
 
       // [중요] 회사설정에 등록된 고용주 전자서명이 누락되지 않도록 DB에서 최신 서명을 확실하게 보강
       let employerSignatureUrl = data.company?.tfn_employer_signature || '';
-      const compId = data.employee?.company_id || (data.company && data.company.id);
-      if (!employerSignatureUrl && compId) {
+      if (!employerSignatureUrl && token) {
         try {
-          const compRow = await base44.entities.Company.get(compId);
-          if (compRow && compRow.tfn_employer_signature) {
-            employerSignatureUrl = compRow.tfn_employer_signature;
+          const freshData = await base44.functions.invoke('getOnboardingData', { token });
+          if (freshData?.data?.company?.tfn_employer_signature) {
+            employerSignatureUrl = freshData.data.company.tfn_employer_signature;
           }
         } catch (e) {
           console.warn('[Onboarding] Failed to fetch company signature fallback:', e);
