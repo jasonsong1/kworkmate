@@ -1004,7 +1004,7 @@ export default function Onboarding() {
                   { id: 'super_stream', label: 'Super / Annuity' }
                 ].map((item) => (
                   <div key={item.id} className="flex items-center gap-2">
-                    <RadioGroupItem value="casual" id={`basis-${item.id}`} />
+                    <RadioGroupItem value={item.id} id={`basis-${item.id}`} />
                     <label htmlFor={`basis-${item.id}`} className="text-xs cursor-pointer">
                       {item.label}
                     </label>
