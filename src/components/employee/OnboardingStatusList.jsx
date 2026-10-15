@@ -25,8 +25,16 @@ export default function OnboardingStatusList({ profile, company, onOpen, onSignT
     if (!doc || !doc.file_uri) return false;
     const uri = doc.file_uri || doc.url;
     if (usedUris.has(uri)) return false;
-    // 이력서 등 온보딩 외 파일 제외
+    // 이력서 및 연금 선택서(Superannuation Choice) 제외
     if (doc.type === 'resume') return false;
+    if (
+      doc.type === 'ato_super' ||
+      doc.doc_type === 'ato_super' ||
+      (doc.name && doc.name.includes('NAT 13080')) ||
+      (doc.name && doc.name.toLowerCase().includes('superannuation'))
+    ) {
+      return false;
+    }
     return true;
   });
 

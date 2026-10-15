@@ -16,7 +16,6 @@ export const DEFAULT_DOC_TYPES = [
     kind: 'info'
   },
   { key: 'tfn', label: 'TFN Declaration (ATO NAT 3092)', label_en: 'TFN declaration form (NAT 3092)', required: true },
-  { key: 'super', label: 'Superannuation Choice (ATO NAT 13080)', label_en: 'Super choice form (NAT 13080)', required: true },
   { key: 'bank', label: '은행 계좌 정보', label_en: 'Bank account details', required: true, kind: 'info' },
   {
     key: 'contract',
@@ -30,7 +29,14 @@ export const DEFAULT_DOC_TYPES = [
 export function docTypesOf(company) {
   const stored = (company && company.onboarding_doc_types) || [];
   const list = Array.isArray(stored) && stored.length > 0 ? stored : DEFAULT_DOC_TYPES;
-  return list.filter((type) => type && type.key && (type.label || type.label_en));
+  return list
+    .filter((type) => type && type.key && (type.label || type.label_en))
+    .filter(
+      (type) =>
+        type.key !== 'super' &&
+        !String(type.label || '').toLowerCase().includes('superannuation') &&
+        !String(type.label || '').toLowerCase().includes('연금')
+    );
 }
 
 export function cleanDocTypes(types) {

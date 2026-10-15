@@ -31,7 +31,7 @@ const empty = {
   language: 'ko',
   pin: '',
   onboarding_status: 'pending',
-  send_invite: true,
+  send_invite: false,
   send_onboarding_email: true
 };
 
@@ -441,20 +441,14 @@ export default function EmployeeDialog({ open, onOpenChange, branch, employee, o
             <p className="mt-1 text-xs text-muted-foreground">{t('employees.pinHint')}</p>
           </div>
 
-          {/* 신규 등록 시 옵션 */}
+          {/* 신규 등록 시 온보딩 안내 메일 발송 옵션 */}
           {!employee && (
-            <>
-              <div className="flex items-center justify-between rounded-lg border px-4 py-3">
-                <span className="text-sm">{t('employees.inviteHint')}</span>
-                <Switch checked={form.send_invite} onCheckedChange={(v) => set('send_invite', v)} />
-              </div>
-              <div className="flex items-center justify-between rounded-lg border px-4 py-3">
-                <span className="text-sm">{t('employees.sendOnboarding')}</span>
-                <Switch
-                  checked={form.send_onboarding_email}
-                  onCheckedChange={(v) => set('send_onboarding_email', v)} />
-              </div>
-            </>
+            <div className="flex items-center justify-between rounded-lg border px-4 py-3 sm:col-span-2">
+              <span className="text-sm">{t('employees.sendOnboarding')}</span>
+              <Switch
+                checked={form.send_onboarding_email}
+                onCheckedChange={(v) => set('send_onboarding_email', v)} />
+            </div>
           )}
 
           {/* 기존 직원 수정 시 온보딩 제어 카드 (다크/라이트 테마 일체화) */}
