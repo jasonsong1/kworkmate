@@ -150,14 +150,7 @@ export default function ModuleAccessManager() {
         if (delErr) throw delErr;
       }
 
-      // Edge Function에도 백그라운드로 동기화 호출
-      base44.functions.invoke('managePackageModules', {
-        action,
-        package: key,
-        modules: action === 'save' ? targetModules : undefined,
-      }).catch(() => {});
-
-      // 최신 상태 재로딩
+      // 최신 상태 재로딩 (Supabase DB 직접 조회)
       await load();
       toast({ title: t('pkgModule.saved') });
     } catch (error) {
