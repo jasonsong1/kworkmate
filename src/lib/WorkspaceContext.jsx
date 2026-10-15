@@ -1,6 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { base44 } from '@/api/base44Client';
 import { coversEveryBranch } from '@/lib/access';
+import { supabase } from '@/lib/supabaseClient';
 
 const WorkspaceContext = createContext(null);
 
@@ -33,7 +34,37 @@ export function WorkspaceProvider({ children }) {
 
   const loadPackageStatus = useCallback(async (branchId) => {
     const status = await base44.functions.invoke('getPackageStatus', { branch_id: branchId || '' }).catch(() => null);
-    const data = status && status.data && !status.data.error ? status.data : null;
+    let data = status && status.data && !status.data.error ? status.data : null;
+
+    // Supabase DB package_module 테이블에서 요금제별 최신 모듈 목록 보강 (activity_logs 등 누락 방지)
+    if (data && data.package && supabase) {
+      try {
+        const { data: pmRow } = await supabase
+          .from('package_module')
+          .select('modules')
+          .eq('package', data.package)
+          .maybeSingle();
+
+        if (pmRow && Array.isArray(pmRow.modules)) {
+          data = { ...data, modules: pmRow.modules };
+
+          // 프리셋에서 activity_logs 권한이 설정되어 있고 요금제 모듈에도 포함되어 있다면 access 복원
+          if (pmRow.modules.includes('activity_logs') && data.access && !data.access.activity_logs) {
+            const presets = toArray(data.presets);
+            const myPreset = presets.find((p) => p.key === data.preset_key);
+            if (myPreset && myPreset.access && myPreset.access.activity_logs) {
+              data.access = {
+                ...data.access,
+                activity_logs: myPreset.access.activity_logs
+              };
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('[WorkspaceContext] package_module sync warning:', e);
+      }
+    }
+
     setPkg(data);
     setPermissions(
       data
