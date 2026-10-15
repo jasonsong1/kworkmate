@@ -24,7 +24,8 @@ const ALLOWED_KEYS = [
   'onboarding_docs',
   'onboarding_questions',
   'onboarding_doc_types',
-  'onboarding_field_visibility'
+  'onboarding_field_visibility',
+  'tfn_employer_signature'
 ];
 
 // Company settings are written through here rather than from the browser: the caller's own grant

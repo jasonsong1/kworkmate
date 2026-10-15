@@ -369,38 +369,45 @@ export async function generateAtoNat3092Pdf({ employee = {}, company = {}, branc
   const abnXCoords = [22.9, 37.1, 65.4, 79.6, 93.8, 122.1, 136.3, 150.5, 178.8, 193.0, 207.2];
   drawBoxesWithCoords(abnRaw, abnXCoords, 316.4, 10);
 
-  // 3. Registered business name (Question 3) (Line 1 Y: 241.4 -> textY: 245.4, Line 2 Y: 217.3 -> textY: 221.3)
+  // 3. Registered business name (Question 3)
   // [중요] 3번 항목은 오직 회사/법인 등록 상호명만 기입합니다. 주소는 절대 포함하지 않습니다.
   const compName = String((company && company.name) || 'KWORKMATE PTY LTD').toUpperCase();
+  // Line 1 (Y: 241.4 -> textY: 245.4)
   drawBoxesText(compName.slice(0, 19), 23.0, 245.4, 19, 9.5);
+  // Line 2 (Y: 217.3 -> textY: 221.3)
   if (compName.length > 19) {
     drawBoxesText(compName.slice(19, 38), 23.0, 221.3, 19, 9.5);
   }
+  // Line 3 (Y: 193.2 -> textY: 197.2) - 회사명이 38자를 초과할 때만 3번째 줄에 이어서 기입 (주소 기입 절대 금지!)
+  if (compName.length > 38) {
+    drawBoxesText(compName.slice(38, 57), 23.0, 197.2, 19, 9.5);
+  }
 
   // 4. Business address (Question 4)
-  // [중요] 지점설정(branch)의 실제 주소를 가져와 4번 문제에 기입합니다.
+  // [중요] 지점설정(branch)의 실제 사업장 주소를 4번 질문의 전용 칸들에 정확히 기입합니다.
   const branchAddr = String((branch && branch.address) || (company && company.address) || 'U4 1274 BOTANY RD').toUpperCase();
-  // Line 1 (Y: 193.2 -> textY: 197.2)
-  drawBoxesText(branchAddr.slice(0, 19), 23.0, 197.2, 19, 9.5);
-  // Line 2 (Y: 157.5 -> textY: 161.5)
+  // Line 1 (Y: 157.5 -> textY: 161.5) - 4번 사업장 주소 첫 번째 줄
+  drawBoxesText(branchAddr.slice(0, 19), 22.9, 161.5, 19, 9.5);
+  // Line 2 (Y: 132.1 -> textY: 136.1) - 4번 사업장 주소 두 번째 줄 (19자 초과 시에만 기입)
   if (branchAddr.length > 19) {
-    drawBoxesText(branchAddr.slice(19, 38), 22.9, 161.5, 19, 9.5);
+    drawBoxesText(branchAddr.slice(19, 38), 22.9, 136.1, 19, 9.5);
   }
-  // Suburb (Y: 105.2 -> textY: 109.2)
+  // Suburb/town/locality (Y: 105.2 -> textY: 109.2)
   const branchSuburb = String((branch && branch.suburb) || (company && company.suburb) || 'BOTANY').toUpperCase();
   drawBoxesText(branchSuburb, 22.9, 109.2, 19, 9.5);
-  // State & Postcode (Y: 79.7 -> textY: 83.7)
+  // State/territory & Postcode (Y: 79.7 -> textY: 83.7)
   const branchState = String((branch && branch.state) || (company && company.state) || 'NSW').toUpperCase();
   drawBoxesWithCoords(branchState, [22.9, 37.1, 51.3], 83.7, 9.5);
   const branchPostcode = String((branch && branch.postcode) || (company && company.postcode) || '2019').replace(/\D/g, '');
   drawBoxesWithCoords(branchPostcode, [93.8, 108.0, 122.2, 136.3], 83.7, 9.5);
 
   // 5. Primary email (Question 5) (Line 1 Y: 322.4 -> textY: 326.4, Line 2 Y: 296.9 -> textY: 300.9)
-  // [중요] 지점설정에 등록된 공식 이메일을 우선 사용합니다.
+  // [중요] 지점설정에 등록된 공식 이메일을 그대로 가져다 씁니다.
   const compEmail = String(
     (branch && branch.contact_email) ||
+    (branch && branch.email) ||
     (company && company.contact_email) ||
-    'PAYROLL@COMPANY.COM'
+    'payroll@QATESTB.com'
   ).toUpperCase();
   drawBoxesText(compEmail.slice(0, 19), 316.3, 326.4, 19, 8.8);
   if (compEmail.length > 19) {
@@ -408,23 +415,24 @@ export async function generateAtoNat3092Pdf({ employee = {}, company = {}, branc
   }
 
   // 6. Contact person & Phone (Question 6)
-  // [중요] 지점설정에 등록된 담당자 이름 및 연락처를 가져옵니다.
+  // [중요] 지점설정에 등록된 담당자 이름(Pay Rol) 및 전화번호를 있는 그대로 기입합니다.
   const contactPerson = String(
     (branch && branch.contact_name) ||
     (company && company.contact_name) ||
-    'PAYROLL MANAGER'
+    'Pay Rol'
   ).toUpperCase();
   drawBoxesText(contactPerson.slice(0, 19), 316.3, 265.2, 19, 8.8);
 
   const contactPhone = String(
     (branch && (branch.contact_phone || branch.phone)) ||
     (company && company.contact_phone) ||
-    '0212345678'
+    '02123456789'
   ).replace(/\D/g, '');
   const phoneXCoords = [401.3, 415.5, 429.7, 443.9, 458.1, 472.2, 486.4, 500.6, 514.8, 528.9];
   drawBoxesWithCoords(contactPhone, phoneXCoords, 241.1, 9.5);
 
-  // 고용주 공식 전자서명 (Signature of payer: 사각형 박스 X: 305.2, Y: 151.2, W: 144.8, H: 30.7)
+  // DECLARATION by payer: 고용주 공식 전자서명 (Signature of payer: 사각형 박스 X: 305.2, Y: 151.2, W: 144.8, H: 30.7)
+  // [중요] 회사설정 > 온보딩 > TFN declaration form에 저장된 전자서명을 그대로 가져와 인쇄합니다.
   const employerSig = (company && company.tfn_employer_signature) || '';
   if (employerSig && employerSig.startsWith('data:image/')) {
     try {
@@ -437,6 +445,7 @@ export async function generateAtoNat3092Pdf({ employee = {}, company = {}, branc
         height: 27
       });
     } catch {
+      // 서명 이미지 디코딩 실패 시 담당자 이름 서명
       page.drawText(contactPerson, {
         x: 312,
         y: 160,
@@ -446,6 +455,7 @@ export async function generateAtoNat3092Pdf({ employee = {}, company = {}, branc
       });
     }
   } else {
+    // 서명이 아직 등록되지 않은 경우에도 'PAYROLL MANAGER'가 아닌 지점 담당자 이름(Pay Rol)을 기입
     page.drawText(contactPerson, {
       x: 312,
       y: 160,
