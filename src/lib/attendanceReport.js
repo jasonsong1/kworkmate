@@ -85,10 +85,12 @@ function payRow(row, options) {
   const date = dayPart(row.clock_in_at, options.state);
   const type = dayTypeFor(date, options.state, options.regional);
   const email = String(row.employee_email || '').toLowerCase();
+  // 직원의 패널티 적용 여부 확인 (미설정 시 기본: 미적용/false)
+  const isPenaltyEnabled = Boolean(options.penaltiesEnabled && options.penaltiesEnabled[email]);
   // The person's own penalties, where the store set them, stand in for the company's.
   const table = (options.overridesByEmail && options.overridesByEmail[email]) || options.multipliers;
-  const dayMultiplier = multiplierFor(type.key, table);
-  const penalty = penaltyFor(row, options);
+  const dayMultiplier = isPenaltyEnabled ? multiplierFor(type.key, table) : 1;
+  const penalty = isPenaltyEnabled ? penaltyFor(row, options) : null;
   // Penalties do not stack: the higher of the day rate and the penalty earned applies.
   const multiplier = penalty && penalty.multiplier > dayMultiplier ? penalty.multiplier : dayMultiplier;
   const rate = options.rates[email];
@@ -111,6 +113,7 @@ export function reportRows(entries, options = {}) {
     multipliers: null,
     overridesByEmail: {},
     rates: {},
+    penaltiesEnabled: {},
     regional: {},
     penalties: [],
     ...options
@@ -143,6 +146,7 @@ export function estimatedPay(entries, options = {}) {
     multipliers: null,
     overridesByEmail: {},
     rates: {},
+    penaltiesEnabled: {},
     regional: {},
     penalties: [],
     ...options

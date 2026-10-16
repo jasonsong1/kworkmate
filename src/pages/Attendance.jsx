@@ -15,7 +15,8 @@ import { useI18n } from '@/lib/i18n';
 import { useWorkspace } from '@/lib/WorkspaceContext';
 import { usePermissions } from '@/lib/permissions';
 import { todayIso } from '@/lib/bh';
-import { dayRangeForState, formatTimeInZone, stateFromBranch } from '@/lib/holidays';
+import { dayRangeForState, formatTimeInZone, stateFromBranch, dayTypeFor, localDate } from '@/lib/holidays';
+import { payMultipliers } from '@/components/company/PayMultipliersCard';
 import { kioskUrl, todayFor } from '@/lib/kioskLink';
 import { base44 } from '@/api/base44Client';
 import { logActivity } from '@/lib/activityLogger';
@@ -26,7 +27,7 @@ const ALL = 'all';
 export default function Attendance() {
   const { t } = useI18n();
   const { toast } = useToast();
-  const { activeBranch, me, scopeOf, employeeProfile, presetKey } = useWorkspace();
+  const { activeBranch, me, scopeOf, employeeProfile, presetKey, company } = useWorkspace();
   const { canEdit, isCompanyAdmin, isPlatformAdmin } = usePermissions();
 
   // 근태 관리 권한 (출퇴근 수정, 추가, 삭제 가능 여부)
@@ -187,19 +188,55 @@ export default function Attendance() {
   const hours = Math.floor(stats.minutes / 60);
   const minutes = stats.minutes % 60;
 
-  // A day's pay is the hours on the record times the person's own hourly rate, so the wage is
-  // there the moment they clock out. A record with no rate set — or one nobody has clocked out
-  // of yet — simply shows nothing.
-  const rateOf = (email) => {
-    const person =
+  // 직원 정보 조회
+  const employeeOf = (email) => {
+    return (
       employees.find((item) => item.user_email === email) ||
-      (employeeProfile && employeeProfile.user_email === email ? employeeProfile : null);
+      (employeeProfile && employeeProfile.user_email === email ? employeeProfile : null)
+    );
+  };
+
+  // 직원의 기본 시급(Hourly Rate)
+  const rateOf = (email) => {
+    const person = employeeOf(email);
     const rate = person ? Number(person.hourly_rate) : 0;
     return Number.isFinite(rate) && rate > 0 ? rate : 0;
   };
-  const wageOf = (row) => {
+
+  // 주말·공휴일 패널티 배율 계산:
+  // 직원의 penalty_rates_enabled가 true일 때만 회사 설정의 패널티 배율(토요일, 일요일, 공휴일)을 적용하고,
+  // false이거나 미설정된 직원은 기본 1배(기본 시급)를 유지합니다.
+  const multiplierOf = (row) => {
+    const person = employeeOf(row.employee_email);
+    if (!person || !person.penalty_rates_enabled) {
+      return { multiplier: 1, key: 'weekday', label: '' };
+    }
+    const date = localDate(row.clock_in_at, branchState);
+    const dayType = dayTypeFor(date, branchState);
+    const multipliers = payMultipliers(company?.pay_multipliers);
+    const multiplier = Number(multipliers[dayType.key]) || 1;
+
+    let label = '';
+    if (dayType.key === 'saturday') label = '토요일';
+    else if (dayType.key === 'sunday') label = '일요일';
+    else if (dayType.key === 'public_holiday') {
+      label = dayType.holiday?.ko || dayType.holiday?.en || '공휴일';
+    }
+
+    return { multiplier, key: dayType.key, label };
+  };
+
+  // 일당 상세 계산 (기본 시급, 적용 배율, 근무 시간, 최종 일당)
+  const wageDetailsOf = (row) => {
     const rate = rateOf(row.employee_email);
-    return row.minutes && rate ? (row.minutes / 60) * rate : 0;
+    const { multiplier, key, label } = multiplierOf(row);
+    const hours = row.minutes ? row.minutes / 60 : 0;
+    const wage = hours && rate ? hours * rate * multiplier : 0;
+    return { wage, rate, multiplier, key, label, hours };
+  };
+
+  const wageOf = (row) => {
+    return wageDetailsOf(row).wage;
   };
   const money = (value) => `$${value.toFixed(2)}`;
   // A turned-down punch is not paid, so it stays out of the total.
@@ -361,7 +398,23 @@ export default function Attendance() {
                         {row.minutes ? `${Math.floor(row.minutes / 60)}h ${row.minutes % 60}m` : '—'}
                       </TableCell>
                       <TableCell className="text-sm font-medium">
-                        {wageOf(row) ? money(wageOf(row)) : '—'}
+                        {(() => {
+                          const details = wageDetailsOf(row);
+                          if (!details.wage) return '—';
+                          return (
+                            <div className="flex items-center gap-1.5">
+                              <span>{money(details.wage)}</span>
+                              {details.multiplier > 1 && (
+                                <span
+                                  className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-semibold bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-200 dark:border-amber-900/50"
+                                  title={`${details.label ? details.label + ' 할증: ' : ''}기본 시급 $${details.rate} × ${details.multiplier}배`}
+                                >
+                                  ×{details.multiplier}
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">

@@ -24,6 +24,7 @@ const empty = {
   visa_type: '',
   app_role: 'staff',
   hourly_rate: '',
+  penalty_rates_enabled: false,
   employment_type: 'casual',
   start_date: '',
   phone: '',
@@ -101,6 +102,7 @@ export default function EmployeeDialog({ open, onOpenChange, branch, employee, o
         visa_type: employee.visa_type || '',
         app_role: employee.app_role || 'staff',
         hourly_rate: employee.hourly_rate ?? '',
+        penalty_rates_enabled: Boolean(employee.penalty_rates_enabled),
         employment_type: employee.employment_type || 'casual',
         start_date: employee.start_date || '',
         phone: employee.phone || '',
@@ -316,6 +318,7 @@ export default function EmployeeDialog({ open, onOpenChange, branch, employee, o
           before: employee ? {
             position: employee.position,
             hourly_rate: employee.hourly_rate,
+            penalty_rates_enabled: employee.penalty_rates_enabled,
             employment_type: employee.employment_type,
             visa_type: employee.visa_type,
             app_role: employee.app_role,
@@ -326,6 +329,7 @@ export default function EmployeeDialog({ open, onOpenChange, branch, employee, o
             user_email: form.user_email,
             position: form.position,
             hourly_rate: form.hourly_rate,
+            penalty_rates_enabled: form.penalty_rates_enabled,
             employment_type: form.employment_type,
             visa_type: form.visa_type,
             app_role: form.app_role,
@@ -628,6 +632,36 @@ export default function EmployeeDialog({ open, onOpenChange, branch, employee, o
                 )}
               </div>
             )}
+
+            {/* 패널티 시급 적용 여부 토글 스위치 (기본값: false / 미적용) */}
+            <div className="sm:col-span-2 rounded-xl border border-muted bg-muted/20 p-3.5 space-y-1">
+              <div className="flex items-center justify-between gap-3">
+                <div className="space-y-0.5">
+                  <div className="flex items-center gap-2">
+                    <Label className="text-sm font-medium cursor-pointer">
+                      주말·공휴일 패널티 시급 적용
+                    </Label>
+                    {form.penalty_rates_enabled ? (
+                      <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">
+                        적용 중
+                      </span>
+                    ) : (
+                      <span className="text-[11px] font-normal px-2 py-0.5 rounded-full bg-muted text-muted-foreground border">
+                        미적용 (기본)
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    토요일, 일요일 및 공휴일 근무 시 회사 설정에 정의된 패널티 시급(할증 배율)을 적용합니다. (기본: 미적용)
+                  </p>
+                </div>
+                <Switch
+                  checked={form.penalty_rates_enabled}
+                  onCheckedChange={(checked) => set('penalty_rates_enabled', checked)}
+                  disabled={!canEditEmployees}
+                />
+              </div>
+            </div>
 
             <div>
               <Label>{t('employees.startDate')}</Label>

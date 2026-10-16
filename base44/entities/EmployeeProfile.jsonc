@@ -47,6 +47,10 @@
     "hourly_rate": {
       "type": "number"
     },
+    "penalty_rates_enabled": {
+      "type": "boolean",
+      "default": false
+    },
     "employment_type": {
       "type": "string",
       "enum": [

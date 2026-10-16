@@ -45,13 +45,18 @@ async function fetchRange(branchId, from, to) {
 async function fetchRates(branchId) {
   const page = await base44.entities.EmployeeProfile.filter(
     { branch_id: branchId },
-    { limit: 500, fields: ['user_email', 'hourly_rate'] }
+    { limit: 500, fields: ['user_email', 'hourly_rate', 'penalty_rates_enabled'] }
   );
   const rates = {};
+  const penaltiesEnabled = {};
   (page.items || []).forEach((profile) => {
-    if (profile.user_email) rates[profile.user_email.toLowerCase()] = profile.hourly_rate;
+    if (profile.user_email) {
+      const email = profile.user_email.toLowerCase();
+      rates[email] = profile.hourly_rate;
+      penaltiesEnabled[email] = Boolean(profile.penalty_rates_enabled);
+    }
   });
-  return rates;
+  return { rates, penaltiesEnabled };
 }
 
 // The dates imported from the official state schedule count as holidays once applied.
@@ -71,6 +76,7 @@ export default function AttendanceReportDialog({ open, onOpenChange, branch }) {
   const [to, setTo] = useState(todayIso());
   const [rows, setRows] = useState([]);
   const [rates, setRates] = useState({});
+  const [penaltiesEnabled, setPenaltiesEnabled] = useState({});
   const [regional, setRegional] = useState({});
   const [loading, setLoading] = useState(false);
   const [ready, setReady] = useState(false);
@@ -84,18 +90,20 @@ export default function AttendanceReportDialog({ open, onOpenChange, branch }) {
     penalties: branchPenalties.length > 0 ? branchPenalties : payPenalties(company ? company.pay_multipliers : null),
     overridesByEmail: {},
     rates,
+    penaltiesEnabled,
     regional
   };
 
   const run = async () => {
     if (!branch || !from || !to) return;
     setLoading(true);
-    const [entries, employeeRates, imported] = await Promise.all([
+    const [entries, empData, imported] = await Promise.all([
       fetchRange(branch.id, from, to),
       fetchRates(branch.id),
       fetchRegional(company ? company.id : '', state)
     ]);
-    setRates(employeeRates);
+    setRates(empData.rates || {});
+    setPenaltiesEnabled(empData.penaltiesEnabled || {});
     setRegional(regionalMap(imported, company ? company.holiday_exclusions : []));
     setRows(entries);
     setReady(true);
