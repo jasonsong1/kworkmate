@@ -622,7 +622,7 @@ export default function EmployeeDialog({ open, onOpenChange, branch, employee, o
                       className="shrink-0 gap-1.5"
                     >
                       <KeyRound className="h-3.5 w-3.5" />
-                      비밀번호 확인
+                      확인
                     </Button>
                   </div>
                 )}
