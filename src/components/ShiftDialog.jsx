@@ -270,38 +270,28 @@ export default function ShiftDialog({
 
           {/* 시프트 프리셋 빠른 선택 버튼 옵션 */}
           {shiftTemplates.length > 0 && (
-            <div className="sm:col-span-2 space-y-1.5 rounded-lg border border-dashed border-border/80 bg-muted/20 p-2.5">
-              <div className="flex items-center justify-between text-xs">
-                <span className="font-medium text-foreground flex items-center gap-1.5">
-                  <Clock className="h-3.5 w-3.5 text-primary" />
-                  시프트 프리셋 선택
-                </span>
-                <span className="text-[11px] text-muted-foreground">버튼을 누르면 시간이 자동 입력됩니다</span>
+            <div className="sm:col-span-2 space-y-2">
+              <div className="flex items-center justify-between">
+                <Label className="text-sm font-medium">시프트 프리셋</Label>
+                <span className="text-xs text-muted-foreground">버튼 클릭 시 시간 자동 입력</span>
               </div>
-              <div className="flex flex-wrap gap-2 pt-1">
+              <div className="flex flex-wrap gap-2">
                 {shiftTemplates.map((tmpl) => {
                   const isSelected = form.start_time === tmpl.start_time && form.end_time === tmpl.end_time;
                   return (
-                    <button
+                    <Button
                       key={tmpl.key || tmpl.label}
                       type="button"
+                      variant={isSelected ? 'default' : 'outline'}
+                      size="sm"
                       onClick={() => applyShiftTemplate(tmpl)}
-                      className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-all ${
-                        isSelected
-                          ? 'bg-primary text-primary-foreground shadow-sm ring-2 ring-primary/30'
-                          : 'bg-card border border-border/80 text-foreground hover:bg-muted hover:border-primary/50'
-                      }`}
+                      className="h-9 px-3.5 text-xs font-medium"
                     >
-                      <Sparkles className="h-3 w-3 opacity-70" />
                       <span>{tmpl.label || tmpl.key}</span>
-                      <span
-                        className={`text-[10px] ${
-                          isSelected ? 'text-primary-foreground/90' : 'text-muted-foreground font-mono'
-                        }`}
-                      >
-                        ({tmpl.start_time}–{tmpl.end_time})
+                      <span className="ml-1.5 opacity-80">
+                        ({tmpl.start_time} - {tmpl.end_time})
                       </span>
-                    </button>
+                    </Button>
                   );
                 })}
               </div>
