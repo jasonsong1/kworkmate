@@ -180,9 +180,36 @@ export async function buildDraft(base44, branch, weekStart) {
   const shifts = (setting && Array.isArray(setting.shifts) ? setting.shifts : []).filter(
     (s) => s && s.key && toMin(s.start_time) !== null && toMin(s.end_time) !== null
   );
-  const requirements = (setting && Array.isArray(setting.requirements) ? setting.requirements : []).filter(
-    (r) => r && Number(r.count) > 0
-  );
+
+  // 지점의 영업시간(trading_hours)을 분석하여 실제 비즈니스를 운영하는 요일(0: Mon ~ 6: Sun)만 추출합니다.
+  // 지점 설정에 없는 요일(예: 주말 휴무)은 시프트를 요구하지도 않고, 미배정 에러도 생성하지 않습니다.
+  const operatingDays = (() => {
+    const raw = String(branch?.trading_hours || '').trim();
+    if (!raw) return null; // 별도 영업시간이 없으면 전체 요일 허용
+    const dayMap = {
+      mon: 0, monday: 0,
+      tue: 1, tuesday: 1,
+      wed: 2, wednesday: 2,
+      thu: 3, thursday: 3,
+      fri: 4, friday: 4,
+      sat: 5, saturday: 5,
+      sun: 6, sunday: 6
+    };
+    const days = new Set();
+    const parts = raw.split('·').map((s) => s.trim()).filter(Boolean);
+    for (const part of parts) {
+      const match = part.match(/^([a-zA-Z]+)/);
+      if (match) {
+        const key = match[1].toLowerCase();
+        if (dayMap[key] !== undefined) days.add(dayMap[key]);
+      }
+    }
+    return days.size > 0 ? days : null;
+  })();
+
+  const requirements = (setting && Array.isArray(setting.requirements) ? setting.requirements : [])
+    .filter((r) => r && Number(r.count) > 0)
+    .filter((r) => !operatingDays || operatingDays.has(Number(r.day)));
   if (shifts.length === 0 || requirements.length === 0) {
     return { error: 'no_settings' };
   }

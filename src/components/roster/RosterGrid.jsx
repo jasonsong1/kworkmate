@@ -40,22 +40,34 @@ export default function RosterGrid({
             <th className="sticky left-0 z-10 w-44 bg-card px-3 py-2 text-left text-xs font-medium text-muted-foreground">
               {t('common.employee')}
             </th>
-            {days.map((day) => (
-              <th key={day.date} className="px-2 py-2 text-center text-xs font-medium text-muted-foreground">
-                <div>{day.short}</div>
-                <div className="font-normal text-[11px]">{day.date.slice(5)}</div>
-                {/* What the last build could not fill, one line per position, so the day itself
-                    says which seat is open and by how many. */}
-                {(missingFor ? missingFor(day.date) : []).map((item) => (
-                  <span
-                    key={item.position}
-                    className="mt-1 block rounded-full bg-destructive/10 px-2 py-0.5 text-[10px] font-medium text-destructive"
-                  >
-                    {item.position} {t('roster.unassigned')}{item.missing}
-                  </span>
-                ))}
-              </th>
-            ))}
+            {days.map((day) => {
+              const isClosed = day.isOpen === false;
+              return (
+                <th
+                  key={day.date}
+                  className={`px-2 py-2 text-center text-xs font-medium text-muted-foreground transition-colors ${
+                    isClosed ? 'bg-muted/30 dark:bg-muted/10 opacity-75' : ''
+                  }`}
+                >
+                  <div className={isClosed ? 'text-muted-foreground/80' : ''}>{day.short}</div>
+                  <div className="font-normal text-[11px]">{day.date.slice(5)}</div>
+                  {isClosed ? (
+                    <span className="mt-1 inline-block rounded-full bg-slate-200/70 px-2 py-0.5 text-[10px] font-medium text-slate-600 dark:bg-slate-800/80 dark:text-slate-400">
+                      {t('roster.closed') || '휴무'}
+                    </span>
+                  ) : (
+                    (missingFor ? missingFor(day.date) : []).map((item) => (
+                      <span
+                        key={item.position}
+                        className="mt-1 block rounded-full bg-destructive/10 px-2 py-0.5 text-[10px] font-medium text-destructive"
+                      >
+                        {item.position} {t('roster.unassigned')}{item.missing}
+                      </span>
+                    ))
+                  )}
+                </th>
+              );
+            })}
             <th className="w-20 border-l px-2 py-2 text-right text-xs font-medium text-muted-foreground">
               {t('roster.totalHours')}
             </th>
@@ -109,11 +121,15 @@ export default function RosterGrid({
                   </div>
                 </div>
               </td>
-              {days.map((day) => (
-                <td
-                  key={`${employee.id || employee.user_email}-${day.date}`}
-                  className="border-t p-1"
-                  onDragOver={canManage ? (event) => event.preventDefault() : undefined}
+              {days.map((day) => {
+                const isClosed = day.isOpen === false;
+                return (
+                  <td
+                    key={`${employee.id || employee.user_email}-${day.date}`}
+                    className={`border-t p-1 transition-colors ${
+                      isClosed ? 'bg-muted/20 dark:bg-muted/5' : ''
+                    }`}
+                    onDragOver={canManage ? (event) => event.preventDefault() : undefined}
                   onDrop={
                     canManage && onMoveShift ?
                     () => {
@@ -165,7 +181,8 @@ export default function RosterGrid({
                     null}
                   </div>
                 </td>
-              ))}
+              );
+            })}
               <td className="border-t border-l px-3 py-3 text-right font-mono text-xs">
                 {hoursFor(employee.user_email) > 0 ? hoursValue(hoursFor(employee.user_email)) : '—'}
               </td>

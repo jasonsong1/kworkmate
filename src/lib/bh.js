@@ -309,3 +309,19 @@ export function isDelayed(invitedAt, confirmedAt) {
   if (!invitedAt || confirmedAt) return false;
   return Date.now() - new Date(invitedAt).getTime() > 48 * 60 * 60 * 1000;
 }
+
+// 매장의 영업시간(trading_hours) 문자열을 분석하여 해당 요일에 영업하는지 판별합니다.
+// 영업시간이 설정되어 있지 않으면 기본값으로 true(오픈)를 반환합니다.
+export function isBranchOpenOnDay(tradingHoursStr, dayShortOrIndex) {
+  if (!tradingHoursStr || !tradingHoursStr.trim()) return true;
+  const DAY_SHORTS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+  let target = '';
+  if (typeof dayShortOrIndex === 'number') {
+    target = DAY_SHORTS[dayShortOrIndex] || '';
+  } else {
+    target = String(dayShortOrIndex || '').trim().toLowerCase().slice(0, 3);
+  }
+  if (!target) return true;
+  const parts = String(tradingHoursStr).split('·').map((s) => s.trim().toLowerCase()).filter(Boolean);
+  return parts.some((p) => p.startsWith(target));
+}

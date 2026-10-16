@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/components/ui/use-toast';
 import { useI18n } from '@/lib/i18n';
 import { useWorkspace } from '@/lib/WorkspaceContext';
-import { DAYS } from '@/lib/bh';
+import { DAYS, isBranchOpenOnDay } from '@/lib/bh';
 import { base44 } from '@/api/base44Client';
 
 // A week everyone gets, and the numbers a person can be raised to.
@@ -152,6 +152,8 @@ export default function RosterSettingsDialog({ open, onOpenChange, branch, onSav
     const requirements = [];
     shifts.forEach((shift) => {
       for (let day = 0; day < 7; day += 1) {
+        // 지점이 비즈니스를 안 하는 휴무일은 시프트 요구사항에서 제외합니다.
+        if (!isBranchOpenOnDay(branch.trading_hours, day)) continue;
         positions.forEach((position) => {
           const value = Number(counts[cellKey(shift.key, day, position)]) || 0;
           if (value > 0) requirements.push({ day, shift_key: shift.key, position, count: value });
@@ -365,31 +367,53 @@ export default function RosterSettingsDialog({ open, onOpenChange, branch, onSav
                           <th className="px-2 py-1.5 text-left text-xs font-medium text-muted-foreground">
                             {t('common.position')}
                           </th>
-                          {DAYS.map((day, dayIndex) => (
-                            <th
-                              key={day.key}
-                              className="px-1 py-1.5 text-center text-xs font-medium text-muted-foreground"
-                            >
-                              {dayLabel(dayIndex, t)}
-                            </th>
-                          ))}
+                          {DAYS.map((day, dayIndex) => {
+                            const isOpen = isBranchOpenOnDay(branch?.trading_hours, dayIndex);
+                            return (
+                              <th
+                                key={day.key}
+                                className={`px-1 py-1.5 text-center text-xs font-medium transition-colors ${
+                                  !isOpen ? 'bg-muted/30 text-muted-foreground/60 rounded-t' : 'text-muted-foreground'
+                                }`}
+                              >
+                                <div>{dayLabel(dayIndex, t)}</div>
+                                {!isOpen && (
+                                  <span className="text-[10px] text-muted-foreground/60 font-normal block">
+                                    (휴무)
+                                  </span>
+                                )}
+                              </th>
+                            );
+                          })}
                         </tr>
                       </thead>
                       <tbody>
                         {positions.map((position) => (
                           <tr key={position}>
                             <td className="whitespace-nowrap border-t px-2 py-1.5 text-xs font-medium">{position}</td>
-                            {DAYS.map((day, dayIndex) => (
-                              <td key={day.key} className="border-t px-1 py-1">
-                                <Input
-                                  type="number"
-                                  min="0"
-                                  className="h-8 w-14 text-center"
-                                  value={counts[cellKey(shift.key, dayIndex, position)] ?? ''}
-                                  onChange={(e) => setCount(shift.key, dayIndex, position, e.target.value)}
-                                />
-                              </td>
-                            ))}
+                            {DAYS.map((day, dayIndex) => {
+                              const isOpen = isBranchOpenOnDay(branch?.trading_hours, dayIndex);
+                              return (
+                                <td
+                                  key={day.key}
+                                  className={`border-t px-1 py-1 text-center transition-colors ${
+                                    !isOpen ? 'bg-muted/15' : ''
+                                  }`}
+                                >
+                                  {isOpen ? (
+                                    <Input
+                                      type="number"
+                                      min="0"
+                                      className="h-8 w-14 text-center"
+                                      value={counts[cellKey(shift.key, dayIndex, position)] ?? ''}
+                                      onChange={(e) => setCount(shift.key, dayIndex, position, e.target.value)}
+                                    />
+                                  ) : (
+                                    <span className="text-xs text-muted-foreground/40 font-mono select-none">—</span>
+                                  )}
+                                </td>
+                              );
+                            })}
                           </tr>
                         ))}
                       </tbody>
@@ -411,9 +435,23 @@ export default function RosterSettingsDialog({ open, onOpenChange, branch, onSav
                   {t('common.none')}
                 </p>
               ) : (
-                DAYS.map((day, dayIndex) => (
-                  <div key={day.key} className="rounded-xl border p-3">
-                    <p className="mb-2 text-xs font-medium text-muted-foreground">{dayLabel(dayIndex, t)}</p>
+                DAYS.map((day, dayIndex) => {
+                  const isOpen = isBranchOpenOnDay(branch?.trading_hours, dayIndex);
+                  return (
+                    <div
+                      key={day.key}
+                      className={`rounded-xl border p-3 transition-colors ${
+                        !isOpen ? 'bg-muted/20 opacity-75' : ''
+                      }`}
+                    >
+                      <p className="mb-2 text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+                        <span>{dayLabel(dayIndex, t)}</span>
+                        {!isOpen && (
+                          <span className="text-[10px] text-muted-foreground/70 font-normal">
+                            (휴무)
+                          </span>
+                        )}
+                      </p>
                     <div className="flex flex-wrap gap-1.5">
                       {staff.map((person) => {
                         const on = (fixed[dayIndex] || []).includes(person.user_email);
@@ -434,7 +472,8 @@ export default function RosterSettingsDialog({ open, onOpenChange, branch, onSav
                       })}
                     </div>
                   </div>
-                ))
+                );
+              })
               )}
             </div>
           </div>

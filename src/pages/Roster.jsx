@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CalendarPlus, ChevronLeft, ChevronRight, Loader2, Plus, Send, Settings2, Sparkles, Trash2 } from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
 import AiSpinner from '@/components/AiSpinner';
@@ -17,7 +17,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { useI18n } from '@/lib/i18n';
 import { useWorkspace } from '@/lib/WorkspaceContext';
 import { usePermissions } from '@/lib/permissions';
-import { addDaysIso, startOfWeekIso, todayIso, weekDates } from '@/lib/bh';
+import { addDaysIso, isBranchOpenOnDay, startOfWeekIso, todayIso, weekDates } from '@/lib/bh';
 import { base44 } from '@/api/base44Client';
 
 export default function Roster() {
@@ -64,7 +64,14 @@ export default function Roster() {
   const [editingShift, setEditingShift] = useState(null);
 
   const weekEnd = addDaysIso(weekStart, 6);
-  const days = weekDates(weekStart);
+  const days = useMemo(
+    () =>
+      weekDates(weekStart).map((d) => ({
+        ...d,
+        isOpen: isBranchOpenOnDay(activeBranch?.trading_hours, d.short)
+      })),
+    [weekStart, activeBranch?.trading_hours]
+  );
 
   // A day with approved leave is out of bounds: it shows as On leave and takes no shift.
   const onLeaveFor = (email, date) =>
@@ -238,8 +245,13 @@ export default function Roster() {
         toast({ title: data.error, variant: 'destructive' });
         return;
       }
-      setUnassigned(data.unassigned || []);
-      const unfilled = (data.unassigned || []).reduce((sum, item) => sum + (item.missing || 0), 0);
+      const rawUnassigned = data.unassigned || [];
+      const validUnassigned = rawUnassigned.filter((item) => {
+        const d = days.find((x) => x.date === item.date);
+        return !d || d.isOpen;
+      });
+      setUnassigned(validUnassigned);
+      const unfilled = validUnassigned.reduce((sum, item) => sum + (item.missing || 0), 0);
       toast({ title: t('roster.built').replace('{assigned}', data.assigned || 0).replace('{unfilled}', unfilled) });
       await load();
     } catch (error) {
@@ -398,6 +410,9 @@ export default function Roster() {
   // What the last build could not fill on one day, named by position, so the day itself says which
   // seat is open ("Manager unfilled 1") and the next build can be aimed at it.
   const unfilledByDay = (date) => {
+    const dayObj = days.find((d) => d.date === date);
+    if (dayObj && !dayObj.isOpen) return [];
+
     const totals = new Map();
     unassigned.
     filter((item) => item.date === date).
