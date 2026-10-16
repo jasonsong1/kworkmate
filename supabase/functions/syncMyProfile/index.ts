@@ -100,6 +100,9 @@ async function handler(req) {
         : (caller.profile_id
             ? profiles.find((p) => p.id === caller.profile_id)
             : null) ||
+          (current.branch_id
+            ? profiles.find((p) => p.branch_id === current.branch_id)
+            : null) ||
           profiles
             .filter((profile) => profile.company_id === current.company_id)
             .sort((first, second) =>
@@ -107,10 +110,9 @@ async function handler(req) {
             )[0] || null;
     let branchIds = Array.isArray(current.branch_ids) ? [...current.branch_ids] : [];
     if (mine) {
-      const registered = profiles
-        .filter((profile) => profile.company_id === mine.company_id)
-        .map((profile) => profile.branch_id);
-      branchIds = [...new Set([...(await branchIdsFor(base44, mine)), ...registered].filter(Boolean))];
+      // 일반 직원은 자신이 소속된 단일 브랜치만 접근하도록 격리합니다.
+      const allowed = await branchIdsFor(base44, mine);
+      branchIds = allowed.length > 0 ? allowed : (mine.branch_id ? [mine.branch_id] : []);
       // The answer is written back on whichever door the account signs in by, so the screens and
       // the server's own scope checks read the same list.
       if (!sameIds(branchIds, current.branch_ids)) {

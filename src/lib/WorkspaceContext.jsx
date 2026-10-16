@@ -172,22 +172,22 @@ export function WorkspaceProvider({ children }) {
 
     if (user && !superAdmin) {
       // [보안 패치]: 로그인한 계정의 고유 프로필 ID(user.id)를 최우선으로 일치시키고,
-      // 없을 경우 현재 회사(effectiveCompanyId)와 이메일이 일치하는 프로필을 특정합니다.
+      // 없을 경우 현재 브랜치(user.branch_id)와 일치하는 프로필을 특정하여 타 브랜치 데이터 유입을 차단합니다.
       let profile = null;
       if (user.id) {
         const byId = await base44.entities.EmployeeProfile.filter({ id: user.id }).catch(() => []);
         const byIdList = toArray(byId);
         if (byIdList.length > 0) profile = byIdList[0];
       }
+      if (!profile && user.branch_id) {
+        const byBranch = await base44.entities.EmployeeProfile.filter({ user_email: user.email, branch_id: user.branch_id }, { sort: '-created_date' }).catch(() => []);
+        const byBranchList = toArray(byBranch);
+        if (byBranchList.length > 0) profile = byBranchList[0];
+      }
       if (!profile && effectiveCompanyId) {
         const byComp = await base44.entities.EmployeeProfile.filter({ user_email: user.email, company_id: effectiveCompanyId }, { sort: '-created_date' }).catch(() => []);
         const byCompList = toArray(byComp);
         if (byCompList.length > 0) profile = byCompList[0];
-      }
-      if (!profile) {
-        const profilesRaw = await base44.entities.EmployeeProfile.filter({ user_email: user.email }, { sort: '-created_date' }).catch(() => []);
-        const profiles = toArray(profilesRaw);
-        profile = profiles[0] || null;
       }
       setEmployeeProfile(profile);
     } else {

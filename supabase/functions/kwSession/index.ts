@@ -23,13 +23,19 @@ function rowsOf(result: any) {
   return Array.isArray(result) ? result : (result && result.items) || [];
 }
 
-async function profileForEmail(base44: any, email: string, preferredCompanyId?: string) {
+async function profileForEmail(base44: any, email: string, preferredCompanyId?: string, preferredBranchId?: string) {
   const allProfiles = rowsOf(
     await base44.asServiceRole.entities.EmployeeProfile
-      .filter({ user_email: lower(email) }, { sort: '-created_date', limit: 10 })
+      .filter({ user_email: lower(email) }, { sort: '-created_date', limit: 20 })
       .catch(() => [])
   );
   if (allProfiles.length === 0) return null;
+  // 소속 브랜치가 명시된 경우 해당 브랜치의 프로필을 최우선 일치
+  if (preferredBranchId) {
+    const matchedBranch = allProfiles.find((p: any) => p.branch_id === preferredBranchId);
+    if (matchedBranch) return matchedBranch;
+  }
+  // 회사 ID가 명시된 경우 해당 회사의 프로필 일치
   if (preferredCompanyId) {
     const matched = allProfiles.find((p: any) => p.company_id === preferredCompanyId);
     if (matched) return matched;
@@ -96,7 +102,19 @@ async function handler(req: any) {
     const me = await resolveCaller(base44, req);
     if (!me) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const profile = await profileForEmail(base44, me.email, me.company_id);
+    // ==============================================================================
+    // [브랜치별 온보딩/프로필 완전 격리]:
+    // 로그인 세션(LoginSession)에 저장된 고유 profile_id를 최우선으로 직접 조회합니다.
+    // 이를 통해 동일한 이메일을 가진 직원이더라도 타 브랜치의 온보딩 정보나 서류가 절대 노출되지 않습니다.
+    // ==============================================================================
+    const targetProfileId = me.profile_id || me.id;
+    let profile = null;
+    if (targetProfileId) {
+      profile = await base44.asServiceRole.entities.EmployeeProfile.get(targetProfileId).catch(() => null);
+    }
+    if (!profile) {
+      profile = await profileForEmail(base44, me.email, me.company_id, me.branch_id);
+    }
     if (!profile) {
       return Response.json({
         ok: true,
@@ -296,7 +314,9 @@ async function handler(req: any) {
         app_role: me.app_role || (me.role === 'admin' ? 'super_admin' : 'staff'),
         company_id: companyId || '',
         branch_id: profile.branch_id || me.branch_id || '',
-        branch_ids: me.branch_ids || (profile.branch_id ? [profile.branch_id] : [])
+        branch_ids: (me.role === 'admin' || me.app_role === 'company_admin')
+          ? (me.branch_ids || [])
+          : (profile.branch_id ? [profile.branch_id] : [])
       }),
       profile: sealRecord(profile),
       branch: branch ? { id: branch.id, name: branch.name, brand_color: branch.brand_color } : null,
