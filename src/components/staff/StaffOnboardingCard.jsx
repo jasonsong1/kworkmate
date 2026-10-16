@@ -9,11 +9,10 @@ import {
   FolderOpen,
   Lock,
   Loader2,
-  ShieldAlert,
   ShieldCheck,
   Trash2,
-  Unlock,
-  UploadCloud
+  UploadCloud,
+  HelpCircle
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -26,27 +25,86 @@ import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/components/ui/use-toast';
 import { useI18n } from '@/lib/i18n';
 import { useWorkspace } from '@/lib/WorkspaceContext';
-import { DEFAULT_DOC_TYPES, checklistFor } from '@/lib/onboardingDocs';
+import { DEFAULT_DOC_TYPES, checklistFor, answerRows } from '@/lib/onboardingDocs';
 import { kwSessionAction } from '@/lib/kwAuthClient';
 import { base44 } from '@/api/base44Client';
 import SecureVerificationDialog from '@/components/auth/SecureVerificationDialog';
-import OnboardingDetails from '@/components/employee/OnboardingDetails';
 import { cn } from '@/lib/utils';
 
 /**
+ * 온보딩 질문 중 기본 폼(주소, 생일, TFN, Super, 은행 계좌)과 겹치는지 검사하는 함수
+ * 사용자 지침: 겹치는 항목(주소, 생일, TFN, Super, account detail)은 없애고 안 겹치는 질문만 유지합니다.
+ */
+function isOverlappingQuestion(questionId, questionLabel) {
+  const id = String(questionId || '').toLowerCase();
+  const label = String(questionLabel || '').toLowerCase();
+
+  // 1. 주소 관련 항목 (Address, Suburb, State, Postcode)
+  if (id.includes('address') || id.includes('suburb') || id.includes('state') || id.includes('postcode')) return true;
+  if (label.includes('address') || label.includes('주소') || label.includes('suburb') || label.includes('postcode')) return true;
+
+  // 2. 생년월일 관련 항목 (DOB, Birth)
+  if (id.includes('dob') || id.includes('birth')) return true;
+  if (label.includes('birth') || label.includes('생년월일') || label.includes('생일')) return true;
+
+  // 3. 세금 번호 (TFN) 관련 항목
+  if (id.includes('tfn') || id.includes('tax_file')) return true;
+  if (label.includes('tfn') || label.includes('세금 번호') || label.includes('tax file number')) return true;
+
+  // 4. 연금 (Superannuation) 관련 항목
+  if (id.includes('super')) return true;
+  if (label.includes('super') || label.includes('연금')) return true;
+
+  // 5. 은행 계좌 정보 (Account Details, BSB, Account Number, Account Name)
+  if (id.includes('bank') || id.includes('account') || id.includes('bsb')) return true;
+  if (label.includes('bank') || label.includes('계좌') || label.includes('bsb') || label.includes('account')) return true;
+
+  return false;
+}
+
+/**
+ * 사원의 온보딩 답변 목록에서 생년월일(DOB) 값을 안전하게 추출하는 함수
+ * 사용자 지침: "생일은 온보딩 정보에 있는거 가져다 써 밑에있는거"
+ */
+function extractDobFromOnboardingAnswers(answers) {
+  if (!Array.isArray(answers)) return '';
+  const found = answers.find((item) => {
+    if (!item) return false;
+    const id = String(item.id || '').toLowerCase();
+    const label = String(item.label || '').toLowerCase();
+    return (
+      id === 'default_dob' ||
+      id.includes('dob') ||
+      id.includes('birth') ||
+      label.includes('생년월일') ||
+      label.includes('birth') ||
+      label.includes('dob')
+    );
+  });
+  if (found && String(found.answer || '').trim()) {
+    return String(found.answer).trim();
+  }
+  return '';
+}
+
+/**
  * StaffOnboardingCard 컴포넌트
- * 내 공간 화면에서 온보딩 서류와 온보딩 개인정보를 하나의 통합 섹션에서 제공합니다.
- * 1. [숨기기 / 펼치기] 단일 토글로 서류 목록과 상세 정보가 함께 열리고 닫힙니다.
- * 2. 회사 설정(온보딩 서류 설정)에 정의된 제출 서류 기준(신분증, Right to Work 증빙, 계약서 등)으로 표시됩니다.
- * 3. 각 서류의 [파일 선택/업로드], [열기], [다시 올리기], [삭제] 기능 제공.
- * 4. 보안 설정된 서류나 질문 항목은 본인 인증(비밀번호 또는 모바일 얼굴/지문인식)을 통과해야 열람/블러 해제됩니다.
+ * 내 공간 화면에서 온보딩 서류와 온보딩 개인정보 및 계좌·세금 정보를 일원화하여 제공합니다.
+ * 
+ * 주요 개선 사항:
+ * 1. 은행 계좌 정보(BSB, 계좌번호, 예금주명) 및 연금, TFN 등 금융 정보는 기본적으로 강력 암호화 마스킹 처리(••••••••••••).
+ *    - 본인 인증(비밀번호 또는 생체인증)을 통과해야만 실제 번호가 보이고 수정할 수 있도록 이중 보안 적용.
+ * 2. 겹치는 온보딩 항목(주소, 생일, TFN, Super, account detail) 중복을 완전히 제거.
+ *    - 생일은 온보딩 정보 답변에서 추출한 값을 최우선으로 연동하여 폼에 자동 입력.
+ * 3. 안 겹치는 온보딩 질문(비자, 세법상 거주여부, 맞춤 질문 등)은 개인정보 카드 내부 하단 섹션으로 깔끔하게 통합.
+ * 4. 하단의 중복된 별도 OnboardingDetails 카드는 제거하여 단일 화면으로 최적화.
  */
 export default function StaffOnboardingCard({ onProfileUpdated }) {
   const { t, lang } = useI18n();
   const { me, company, employeeProfile } = useWorkspace();
   const { toast } = useToast();
 
-  // 통합 카드 펼침/접힘 상태 (기본적으로 펼쳐서 온보딩 서류 상태를 바로 볼 수 있게 함)
+  // 통합 카드 펼침/접힘 상태 관리 (기본값 펼침)
   const [isOpen, setIsOpen] = useState(() => {
     try {
       const stored = sessionStorage.getItem('kw_onboarding_open');
@@ -77,8 +135,8 @@ export default function StaffOnboardingCard({ onProfileUpdated }) {
 
   // 보안 인증(비밀번호/생체인증) 관련 상태
   const [authDialogOpen, setAuthDialogOpen] = useState(false);
-  const [authTarget, setAuthTarget] = useState(null); // { type: 'doc', file } or { type: 'field', fieldKey }
-  const [unlockedFields, setUnlockedFields] = useState(new Set()); // 인증 통과하여 블러 해제된 필드 목록
+  const [authTarget, setAuthTarget] = useState(null); // { type: 'doc', file } 또는 { type: 'field', fieldKey }
+  const [unlockedFields, setUnlockedFields] = useState(new Set()); // 본인 인증 통과하여 열람 해제된 필드 목록
 
   // 현재 활성 사원 프로필
   const profile = record || employeeProfile || (me ? {
@@ -89,12 +147,17 @@ export default function StaffOnboardingCard({ onProfileUpdated }) {
     onboarding_status: 'pending'
   } : null);
 
-  // 폼 필드 동기화
+  // 폼 필드 동기화 (생일은 온보딩 정보 답변을 최우선으로 연동)
   const syncForm = useCallback((row) => {
     if (!row) return;
+
+    // 온보딩 답변(onboarding_answers)에서 생년월일 우선 탐색, 없으면 row.date_of_birth
+    const dobFromAnswers = extractDobFromOnboardingAnswers(row.onboarding_answers);
+    const finalDob = dobFromAnswers || row.date_of_birth || '';
+
     setForm({
       address: row.address || '',
-      date_of_birth: row.date_of_birth || '',
+      date_of_birth: finalDob,
       emergency_contact_name: row.emergency_contact_name || '',
       emergency_contact_phone: row.emergency_contact_phone || '',
       tfn_number: row.tfn_number || '',
@@ -157,8 +220,28 @@ export default function StaffOnboardingCard({ onProfileUpdated }) {
   const isComplete = requiredDone >= requiredTotal;
   const percent = requiredTotal === 0 ? 100 : Math.round((requiredDone / requiredTotal) * 100);
 
-  // 회사에 설정된 개인정보 암호화 보안 필드 목록
-  const secureFields = (company && company.onboarding_secure_fields) || {};
+  /**
+   * [보안 강화 원칙]
+   * 은행 계좌 정보(bank), 세금 번호(tax), 연금 번호(super)는 금융 및 개인식별 정보이므로
+   * 회사 설정과 무관하게 기본적으로 항상 암호화 보안 잠금(true) 처리합니다.
+   */
+  const secureFields = {
+    bank: true,  // 급여 입금 계좌 정보(BSB, 계좌번호, 예금주명) 기본 암호화 잠금
+    tax: true,   // TFN 세금 번호 기본 암호화 잠금
+    super: true, // 연금 정보 기본 암호화 잠금
+    address: Boolean(company?.onboarding_secure_fields?.address),
+    date_of_birth: Boolean(company?.onboarding_secure_fields?.date_of_birth),
+    emergency_contact: Boolean(company?.onboarding_secure_fields?.emergency_contact),
+    ...(company?.onboarding_secure_fields || {})
+  };
+
+  // 각 필드의 본인 인증 완료 여부
+  const isBankUnlocked = unlockedFields.has('bank');
+  const isTaxUnlocked = !secureFields.tax || unlockedFields.has('tax');
+  const isSuperUnlocked = !secureFields.super || unlockedFields.has('super');
+  const isAddressUnlocked = !secureFields.address || unlockedFields.has('address');
+  const isDobUnlocked = !secureFields.date_of_birth || unlockedFields.has('date_of_birth');
+  const isEmergencyUnlocked = !secureFields.emergency_contact || unlockedFields.has('emergency_contact');
 
   const set = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
 
@@ -207,7 +290,7 @@ export default function StaffOnboardingCard({ onProfileUpdated }) {
     }
   };
 
-  // 파일 업로드 수행 (화면 깜빡임이나 리프레시 없이 부드럽게 저장)
+  // 파일 업로드 수행
   const upload = async (event) => {
     const file = event.target.files && event.target.files[0];
     event.target.value = '';
@@ -270,11 +353,9 @@ export default function StaffOnboardingCard({ onProfileUpdated }) {
     }
   };
 
-  // 서류 열기 클릭 시: 보안 서류인 경우 인증 다이얼로그 호출
+  // 서류 열기 클릭 시 보안 처리
   const handleOpenDocClick = (item) => {
     if (!item.file) return;
-
-    // 암호화 보안이 걸려있는 서류인 경우
     if (item.secure) {
       setAuthTarget({ type: 'doc', file: item.file });
       setAuthDialogOpen(true);
@@ -295,7 +376,7 @@ export default function StaffOnboardingCard({ onProfileUpdated }) {
     setAuthTarget(null);
   };
 
-  // 보안 필드 블러 해제 인증 요청
+  // 보안 필드 열람 인증 요청
   const requestUnlockField = (fieldKey) => {
     setAuthTarget({ type: 'field', fieldKey });
     setAuthDialogOpen(true);
@@ -319,6 +400,14 @@ export default function StaffOnboardingCard({ onProfileUpdated }) {
       setBusyUri('');
     }
   };
+
+  /**
+   * 온보딩 정보 중 겹치지 않는 순수 질문 항목 추출
+   * (주소, 생일, TFN, Super, 은행 계좌는 위 폼과 겹치므로 제거하고 남은 질문들만 표시)
+   */
+  const nonOverlappingQuestions = answerRows(profile, company, t).filter(
+    (row) => !isOverlappingQuestion(row.id, row.label)
+  );
 
   return (
     <Card>
@@ -348,7 +437,7 @@ export default function StaffOnboardingCard({ onProfileUpdated }) {
         </Button>
       </CardHeader>
 
-      {/* 펼쳐졌을 때 온보딩 서류 목록과 온보딩 상세 정보가 함께 보입니다 */}
+      {/* 펼쳐졌을 때 온보딩 서류 목록과 온보딩 상세 정보가 함께 표시됩니다 */}
       {isOpen && (
         <CardContent className="space-y-6 animate-in fade-in-50 duration-200">
           {/* 제출 현황 프로그레스 바 */}
@@ -503,24 +592,30 @@ export default function StaffOnboardingCard({ onProfileUpdated }) {
             />
           </div>
 
-          {/* 3. 온보딩 개인정보 및 계좌·세금 상세 입력 폼 */}
+          {/* 3. 온보딩 개인정보 및 계좌·세금 상세 입력 폼 (단일 통합 섹션) */}
           <div className="space-y-4 rounded-xl border p-4 bg-card">
-            <h3 className="text-sm font-semibold flex items-center gap-2">
-              <FileText className="h-4 w-4 text-primary" />
-              온보딩 개인정보 및 계좌·세금 정보
-            </h3>
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold flex items-center gap-2">
+                <FileText className="h-4 w-4 text-primary" />
+                온보딩 개인정보 및 계좌·세금 정보
+              </h3>
+              <span className="text-xs text-muted-foreground flex items-center gap-1">
+                <ShieldCheck className="h-3.5 w-3.5 text-emerald-500" />
+                금융·개인정보 암호화 보호 적용
+              </span>
+            </div>
 
             <div className="grid gap-4 sm:grid-cols-2">
               {/* 주소 필드 */}
               <div className="sm:col-span-2 space-y-1.5 relative">
                 <div className="flex items-center justify-between">
                   <Label>{t('ob.address') || '주소'}</Label>
-                  {secureFields.address && !unlockedFields.has('address') && (
+                  {secureFields.address && !isAddressUnlocked && (
                     <Button
                       type="button"
                       variant="ghost"
                       size="sm"
-                      className="h-6 text-xs text-amber-500 gap-1 px-2"
+                      className="h-6 text-xs text-amber-500 gap-1 px-2 hover:bg-amber-500/10"
                       onClick={() => requestUnlockField('address')}
                     >
                       <Lock className="h-3 w-3" />
@@ -528,25 +623,26 @@ export default function StaffOnboardingCard({ onProfileUpdated }) {
                     </Button>
                   )}
                 </div>
-                <div className={cn(secureFields.address && !unlockedFields.has('address') && 'filter blur-sm select-none pointer-events-none')}>
+                <div className={cn(secureFields.address && !isAddressUnlocked && 'filter blur-sm select-none pointer-events-none')}>
                   <Input
-                    value={form.address}
+                    value={isAddressUnlocked ? form.address : (form.address ? '••••••••••••••••••••' : '')}
+                    readOnly={!isAddressUnlocked}
                     onChange={(e) => set('address', e.target.value)}
                     placeholder={t('ob.addressPlaceholder') || '실제 거주 주소를 입력하세요'}
                   />
                 </div>
               </div>
 
-              {/* 생년월일 필드 */}
+              {/* 생년월일 필드 (온보딩 답변 정보 우선 자동 연동) */}
               <div className="space-y-1.5 relative">
                 <div className="flex items-center justify-between">
                   <Label>{t('ob.dob') || '생년월일'}</Label>
-                  {secureFields.date_of_birth && !unlockedFields.has('date_of_birth') && (
+                  {secureFields.date_of_birth && !isDobUnlocked && (
                     <Button
                       type="button"
                       variant="ghost"
                       size="sm"
-                      className="h-6 text-xs text-amber-500 gap-1 px-2"
+                      className="h-6 text-xs text-amber-500 gap-1 px-2 hover:bg-amber-500/10"
                       onClick={() => requestUnlockField('date_of_birth')}
                     >
                       <Lock className="h-3 w-3" />
@@ -554,10 +650,11 @@ export default function StaffOnboardingCard({ onProfileUpdated }) {
                     </Button>
                   )}
                 </div>
-                <div className={cn(secureFields.date_of_birth && !unlockedFields.has('date_of_birth') && 'filter blur-sm select-none pointer-events-none')}>
+                <div className={cn(secureFields.date_of_birth && !isDobUnlocked && 'filter blur-sm select-none pointer-events-none')}>
                   <Input
-                    type="date"
-                    value={form.date_of_birth}
+                    type={isDobUnlocked ? 'date' : 'password'}
+                    value={isDobUnlocked ? form.date_of_birth : (form.date_of_birth ? '••••••••' : '')}
+                    readOnly={!isDobUnlocked}
                     onChange={(e) => set('date_of_birth', e.target.value)}
                   />
                 </div>
@@ -567,12 +664,12 @@ export default function StaffOnboardingCard({ onProfileUpdated }) {
               <div className="space-y-1.5 relative">
                 <div className="flex items-center justify-between">
                   <Label>{t('ob.emergencyName') || '비상연락처 이름'}</Label>
-                  {secureFields.emergency_contact && !unlockedFields.has('emergency_contact') && (
+                  {secureFields.emergency_contact && !isEmergencyUnlocked && (
                     <Button
                       type="button"
                       variant="ghost"
                       size="sm"
-                      className="h-6 text-xs text-amber-500 gap-1 px-2"
+                      className="h-6 text-xs text-amber-500 gap-1 px-2 hover:bg-amber-500/10"
                       onClick={() => requestUnlockField('emergency_contact')}
                     >
                       <Lock className="h-3 w-3" />
@@ -580,9 +677,10 @@ export default function StaffOnboardingCard({ onProfileUpdated }) {
                     </Button>
                   )}
                 </div>
-                <div className={cn(secureFields.emergency_contact && !unlockedFields.has('emergency_contact') && 'filter blur-sm select-none pointer-events-none')}>
+                <div className={cn(secureFields.emergency_contact && !isEmergencyUnlocked && 'filter blur-sm select-none pointer-events-none')}>
                   <Input
-                    value={form.emergency_contact_name}
+                    value={isEmergencyUnlocked ? form.emergency_contact_name : (form.emergency_contact_name ? '••••••••' : '')}
+                    readOnly={!isEmergencyUnlocked}
                     onChange={(e) => set('emergency_contact_name', e.target.value)}
                     placeholder="예: 홍길동 (부모)"
                   />
@@ -592,35 +690,40 @@ export default function StaffOnboardingCard({ onProfileUpdated }) {
               {/* 비상연락처 전화 */}
               <div className="space-y-1.5">
                 <Label>{t('ob.emergencyPhone') || '비상연락처 전화'}</Label>
-                <div className={cn(secureFields.emergency_contact && !unlockedFields.has('emergency_contact') && 'filter blur-sm select-none pointer-events-none')}>
+                <div className={cn(secureFields.emergency_contact && !isEmergencyUnlocked && 'filter blur-sm select-none pointer-events-none')}>
                   <Input
-                    value={form.emergency_contact_phone}
+                    value={isEmergencyUnlocked ? form.emergency_contact_phone : (form.emergency_contact_phone ? '••••••••' : '')}
+                    readOnly={!isEmergencyUnlocked}
                     onChange={(e) => set('emergency_contact_phone', e.target.value)}
                     placeholder="0400 000 000"
                   />
                 </div>
               </div>
 
-              {/* 세금 번호 (TFN) */}
+              {/* 세금 번호 (TFN) - 금융/세무 정보 기본 암호화 잠금 */}
               <div className="space-y-1.5 relative">
                 <div className="flex items-center justify-between">
-                  <Label>{t('ob.tfn') || '세금 번호 (TFN)'}</Label>
-                  {secureFields.tax && !unlockedFields.has('tax') && (
+                  <div className="flex items-center gap-1.5">
+                    <Label>{t('ob.tfn') || '세금 번호 (TFN)'}</Label>
+                    <Lock className="h-3 w-3 text-amber-500" title="암호화 보안 처리됨" />
+                  </div>
+                  {!isTaxUnlocked && (
                     <Button
                       type="button"
                       variant="ghost"
                       size="sm"
-                      className="h-6 text-xs text-amber-500 gap-1 px-2"
+                      className="h-6 text-xs text-amber-500 gap-1 px-2 hover:bg-amber-500/10"
                       onClick={() => requestUnlockField('tax')}
                     >
                       <Lock className="h-3 w-3" />
-                      <span>인증 후 열람</span>
+                      <span>{t('security.unlock') || '인증 후 열람'}</span>
                     </Button>
                   )}
                 </div>
-                <div className={cn(secureFields.tax && !unlockedFields.has('tax') && 'filter blur-sm select-none pointer-events-none')}>
+                <div className={cn(!isTaxUnlocked && 'filter blur-sm select-none pointer-events-none')}>
                   <Input
-                    value={form.tfn_number}
+                    value={isTaxUnlocked ? form.tfn_number : (form.tfn_number ? '•••••••••' : '')}
+                    readOnly={!isTaxUnlocked}
                     disabled={form.tfn_pending}
                     onChange={(e) => set('tfn_number', e.target.value)}
                     placeholder={t('ob.tfnPlaceholder') || 'TFN 9자리'}
@@ -628,6 +731,7 @@ export default function StaffOnboardingCard({ onProfileUpdated }) {
                   <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
                     <Switch
                       checked={form.tfn_pending}
+                      disabled={!isTaxUnlocked}
                       onCheckedChange={(val) => set('tfn_pending', val)}
                     />
                     <span>{t('ob.tfnPending') || 'TFN 발급 신청 중 (28일 유예)'}</span>
@@ -635,16 +739,19 @@ export default function StaffOnboardingCard({ onProfileUpdated }) {
                 </div>
               </div>
 
-              {/* 연금(Super) 선택 */}
+              {/* 연금(Super) 운용사 선택 */}
               <div className="space-y-1.5 relative">
                 <div className="flex items-center justify-between">
-                  <Label>{t('ob.superChoice') || '연금(Super) 운용사 선택'}</Label>
-                  {secureFields.super && !unlockedFields.has('super') && (
+                  <div className="flex items-center gap-1.5">
+                    <Label>{t('ob.superChoice') || '연금(Super) 운용사 선택'}</Label>
+                    <Lock className="h-3 w-3 text-amber-500" title="암호화 보안 처리됨" />
+                  </div>
+                  {!isSuperUnlocked && (
                     <Button
                       type="button"
                       variant="ghost"
                       size="sm"
-                      className="h-6 text-xs text-amber-500 gap-1 px-2"
+                      className="h-6 text-xs text-amber-500 gap-1 px-2 hover:bg-amber-500/10"
                       onClick={() => requestUnlockField('super')}
                     >
                       <Lock className="h-3 w-3" />
@@ -652,8 +759,12 @@ export default function StaffOnboardingCard({ onProfileUpdated }) {
                     </Button>
                   )}
                 </div>
-                <div className={cn(secureFields.super && !unlockedFields.has('super') && 'filter blur-sm select-none pointer-events-none')}>
-                  <Select value={form.super_choice} onValueChange={(val) => set('super_choice', val)}>
+                <div className={cn(!isSuperUnlocked && 'filter blur-sm select-none pointer-events-none')}>
+                  <Select
+                    value={form.super_choice}
+                    disabled={!isSuperUnlocked}
+                    onValueChange={(val) => set('super_choice', val)}
+                  >
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
@@ -675,7 +786,8 @@ export default function StaffOnboardingCard({ onProfileUpdated }) {
                   <div className="space-y-1.5">
                     <Label>{t('ob.superFund') || '연금 회사명'}</Label>
                     <Input
-                      value={form.super_fund_name}
+                      value={isSuperUnlocked ? form.super_fund_name : (form.super_fund_name ? '••••••••••••' : '')}
+                      readOnly={!isSuperUnlocked}
                       onChange={(e) => set('super_fund_name', e.target.value)}
                       placeholder="예: AustralianSuper"
                     />
@@ -683,15 +795,25 @@ export default function StaffOnboardingCard({ onProfileUpdated }) {
                   <div className="space-y-1.5">
                     <Label>{t('ob.superUsi') || '고유 식별번호 (USI / ABN)'}</Label>
                     <Input
-                      value={form.super_usi}
+                      value={isSuperUnlocked ? form.super_usi : (form.super_usi ? '••••••••••••' : '')}
+                      readOnly={!isSuperUnlocked}
                       onChange={(e) => set('super_usi', e.target.value)}
                       placeholder="USI 또는 ABN"
                     />
                   </div>
-                  <div className="space-y-1.5 sm:col-span-2">
-                    <Label>{t('ob.superMember') || '연금 회원번호'}</Label>
+                  <div className="space-y-1.5 sm:col-span-2 relative">
+                    <div className="flex items-center justify-between">
+                      <Label>{t('ob.superMember') || '연금 회원번호 (Member Number)'}</Label>
+                      {!isSuperUnlocked && (
+                        <span className="text-[11px] text-amber-500 font-medium flex items-center gap-1">
+                          <Lock className="h-3 w-3" />
+                          암호화 보안 잠금
+                        </span>
+                      )}
+                    </div>
                     <Input
-                      value={form.super_member_number}
+                      value={isSuperUnlocked ? form.super_member_number : (form.super_member_number ? '••••••••••••' : '')}
+                      readOnly={!isSuperUnlocked}
                       onChange={(e) => set('super_member_number', e.target.value)}
                       placeholder="Member Number"
                     />
@@ -699,57 +821,144 @@ export default function StaffOnboardingCard({ onProfileUpdated }) {
                 </>
               )}
 
-              {/* 은행 계좌 정보 (BSB, 계좌번호, 예금주) */}
-              <div className="sm:col-span-2 border-t pt-3 mt-1 space-y-3 relative">
-                <div className="flex items-center justify-between">
-                  <Label className="text-sm font-semibold">급여 입금 계좌 정보</Label>
-                  {secureFields.bank && !unlockedFields.has('bank') && (
+              {/* 급여 입금 계좌 정보 (BSB, 계좌번호, 예금주) - 기본적으로 항상 강력 암호화 잠금 */}
+              <div className="sm:col-span-2 border-t pt-4 mt-2 space-y-3 relative">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <Label className="text-sm font-semibold">급여 입금 계좌 정보</Label>
+                    <span className="inline-flex items-center gap-1 rounded-md bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-500 border border-amber-500/20">
+                      <Lock className="h-3 w-3" />
+                      기본 암호화 보안 적용
+                    </span>
+                  </div>
+
+                  {!isBankUnlocked ? (
                     <Button
                       type="button"
-                      variant="ghost"
+                      variant="outline"
                       size="sm"
-                      className="h-6 text-xs text-amber-500 gap-1 px-2"
+                      className="h-7 text-xs border-amber-500/40 text-amber-600 dark:text-amber-400 bg-amber-500/10 hover:bg-amber-500/20 gap-1.5 font-medium"
                       onClick={() => requestUnlockField('bank')}
                     >
-                      <Lock className="h-3 w-3" />
-                      <span>{t('security.unlock') || '본인 인증 후 열람'}</span>
+                      <Lock className="h-3.5 w-3.5" />
+                      <span>{t('security.unlock') || '본인 인증 후 열람/수정'}</span>
                     </Button>
+                  ) : (
+                    <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 font-medium text-[11px] gap-1">
+                      <ShieldCheck className="h-3.5 w-3.5" />
+                      인증 완료 (열람 및 수정 가능)
+                    </Badge>
                   )}
                 </div>
 
+                {!isBankUnlocked && (
+                  <p className="text-xs text-muted-foreground">
+                    계좌 정보는 금융 보안 정책에 따라 암호화되어 마스킹 처리됩니다. 확인 및 수정하려면 본인 인증을 진행하세요.
+                  </p>
+                )}
+
                 <div className={cn(
-                  'grid gap-3 sm:grid-cols-3',
-                  secureFields.bank && !unlockedFields.has('bank') && 'filter blur-sm select-none pointer-events-none'
+                  'grid gap-3 sm:grid-cols-3 transition-all',
+                  !isBankUnlocked && 'opacity-70 select-none'
                 )}>
                   <div>
-                    <Label className="text-xs">{t('ob.bankBsb') || 'BSB (6자리)'}</Label>
+                    <Label className="text-xs">{t('ob.bankBsb') || 'BSB (은행 지점코드 6자리)'}</Label>
                     <Input
-                      value={form.bank_bsb}
+                      value={isBankUnlocked ? form.bank_bsb : (form.bank_bsb ? '••••••••' : '')}
+                      readOnly={!isBankUnlocked}
                       onChange={(e) => set('bank_bsb', e.target.value)}
                       placeholder="000-000"
                     />
                   </div>
                   <div>
-                    <Label className="text-xs">{t('ob.bankAccount') || '계좌번호'}</Label>
+                    <Label className="text-xs">{t('ob.bankAccount') || '계좌번호 (Account Number)'}</Label>
                     <Input
-                      value={form.bank_account_number}
+                      value={isBankUnlocked ? form.bank_account_number : (form.bank_account_number ? '••••••••••••' : '')}
+                      readOnly={!isBankUnlocked}
                       onChange={(e) => set('bank_account_number', e.target.value)}
                       placeholder="Account Number"
                     />
                   </div>
                   <div>
-                    <Label className="text-xs">{t('ob.bankHolder') || '예금주명'}</Label>
+                    <Label className="text-xs">{t('ob.bankHolder') || '예금주명 (Account Name)'}</Label>
                     <Input
-                      value={form.bank_account_name}
+                      value={isBankUnlocked ? form.bank_account_name : (form.bank_account_name ? '••••••••••••' : '')}
+                      readOnly={!isBankUnlocked}
                       onChange={(e) => set('bank_account_name', e.target.value)}
                       placeholder="Account Holder"
                     />
                   </div>
                 </div>
               </div>
+
+              {/* 4. 중복되지 않는 온보딩 확인 정보 섹션 (온보딩 질문 중 안 겹치는 항목들을 폼 내부로 통합) */}
+              {nonOverlappingQuestions.length > 0 && (
+                <div className="sm:col-span-2 border-t pt-4 mt-2 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <HelpCircle className="h-4 w-4 text-primary" />
+                    <Label className="text-sm font-semibold">추가 온보딩 확인 정보</Label>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    입사 시 제출한 맞춤 설문 및 세부 온보딩 확인 내역입니다.
+                  </p>
+
+                  <div className="divide-y rounded-lg border bg-muted/20">
+                    {nonOverlappingQuestions.map((row) => {
+                      const isSecure = Boolean(row.secure);
+                      const isUnlocked = unlockedFields.has(row.id);
+
+                      return (
+                        <div key={row.id} className="p-3">
+                          <div className="flex items-center justify-between mb-1">
+                            <div className="flex items-center gap-1.5">
+                              {isSecure && <Lock className="h-3.5 w-3.5 text-amber-500" title="암호화 보안 처리된 질문" />}
+                              <p className="text-xs font-medium text-muted-foreground">{row.label}</p>
+                            </div>
+                            {isSecure && !isUnlocked && (
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => requestUnlockField(row.id)}
+                                className="h-6 px-2 text-[11px] gap-1 border-amber-500/40 text-amber-700 dark:text-amber-300 bg-amber-500/10 hover:bg-amber-500/20"
+                              >
+                                <Lock className="h-3 w-3" />
+                                <span>인증 후 열람</span>
+                              </Button>
+                            )}
+                          </div>
+
+                          {/* 답변 표시 */}
+                          {isSecure && !isUnlocked ? (
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono text-sm tracking-widest text-muted-foreground">••••••••••••</span>
+                              <span className="text-[11px] text-amber-600/90 font-medium">
+                                (암호화 보안 처리됨)
+                              </span>
+                            </div>
+                          ) : (
+                            <p className="text-sm font-medium">{row.answer || t('ob.notProvided') || '미제출'}</p>
+                          )}
+
+                          {/* 후속 질문 상세 답변 */}
+                          {row.details && row.details.length > 0 && (!isSecure || isUnlocked) && (
+                            <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1">
+                              {row.details.map(([field, value]) => (
+                                <span key={field} className="text-xs text-muted-foreground">
+                                  {field}: <span className="text-foreground font-medium">{value}</span>
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
 
-            {/* 저장 버튼 */}
+            {/* 온보딩 정보 저장 버튼 */}
             <div className="flex justify-end pt-3">
               <Button type="button" onClick={save} disabled={saving} className="gap-2">
                 {saving && <Loader2 className="h-4 w-4 animate-spin" />}
@@ -757,13 +966,6 @@ export default function StaffOnboardingCard({ onProfileUpdated }) {
               </Button>
             </div>
           </div>
-
-          {/* 4. 회사 설정 온보딩 질문 및 답변 상세 (보안 질문 마스킹 및 본인 인증 후 열람 적용) */}
-          {profile && (
-            <div className="mt-4">
-              <OnboardingDetails profile={profile} company={company} />
-            </div>
-          )}
         </CardContent>
       )}
 
