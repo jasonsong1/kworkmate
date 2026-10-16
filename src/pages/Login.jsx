@@ -36,7 +36,6 @@ function GoogleIcon({ className }) {
 }
 
 export default function Login() {
-  const { lang } = useI18n();
   const [door, setDoor] = useState("employee");
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
@@ -114,7 +113,7 @@ export default function Login() {
       const me = await base44.auth.me().catch(() => null);
       window.location.href = resolveTargetUrl(me);
     } catch (err) {
-      setError(err.status === 401 || !err.message ? (lang === 'ko' ? '아이디 또는 비밀번호가 일치하지 않습니다.' : 'Invalid ID or password.') : err.message);
+      setError(err.status === 401 || !err.message ? 'Invalid ID or password.' : err.message);
     } finally {
       setLoading(false);
     }
@@ -128,7 +127,7 @@ export default function Login() {
       await kwLoginWithGoogle(returnTo);
     } catch (err) {
       console.error('Google Login error:', err);
-      setError(err.message || (lang === 'ko' ? 'Google 로그인을 시작하지 못했습니다.' : 'Failed to start Google sign in.'));
+      setError(err.message || 'Failed to start Google sign in.');
       setGoogleLoading(false);
     }
   };
@@ -143,16 +142,16 @@ export default function Login() {
   return (
     <AuthLayout
       icon={LogIn}
-      title={lang === 'ko' ? '로그인' : 'Sign in'}
+      title="Sign In"
       subtitle={
         employeeDoor
-          ? (lang === 'ko' ? '사원번호와 비밀번호로 로그인합니다.' : 'Sign in with your employee number and password.')
-          : (lang === 'ko' ? '회사 업무용 이메일로 로그인합니다.' : 'Sign in with your company email address.')
+          ? "Sign in with your employee number and password."
+          : "Sign in with your company email address."
       }
       footer={
         employeeDoor
-          ? (lang === 'ko' ? '사원번호 분실 시 매니저에게 문의하세요.' : 'Contact your manager if you forgot your employee ID.')
-          : (lang === 'ko' ? '회사 관리자 계정으로 로그인합니다.' : 'Sign in to access your company workspace.')
+          ? "Contact your manager if you forgot your employee ID."
+          : "Sign in to access your company workspace."
       }
     >
       {error && (
@@ -173,12 +172,12 @@ export default function Login() {
           {googleLoading ? (
             <>
               <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
-              <span>{lang === 'ko' ? 'Google 계정 연결 중...' : 'Connecting Google account...'}</span>
+              <span>Connecting Google account...</span>
             </>
           ) : (
             <>
               <GoogleIcon className="w-5 h-5" />
-              <span>{lang === 'ko' ? 'Google 계정으로 계속하기' : 'Continue with Google'}</span>
+              <span>Continue with Google</span>
             </>
           )}
         </Button>
@@ -190,7 +189,7 @@ export default function Login() {
           </div>
           <div className="relative flex justify-center text-xs uppercase">
             <span className="bg-background px-3 text-muted-foreground font-medium">
-              {lang === 'ko' ? '또는 기존 계정으로 로그인' : 'or sign in with credentials'}
+              or sign in with credentials
             </span>
           </div>
         </div>
@@ -205,7 +204,7 @@ export default function Login() {
                 employeeDoor ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"
               )}
             >
-              {lang === 'ko' ? '사원번호 로그인' : 'Employee ID'}
+              Employee ID
             </button>
             <button
               type="button"
@@ -215,15 +214,13 @@ export default function Login() {
                 !employeeDoor ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"
               )}
             >
-              {lang === 'ko' ? '업무 이메일' : 'Work Email'}
+              Work Email
             </button>
           </div>
 
           <div className="space-y-2">
             <Label htmlFor="identifier">
-              {employeeDoor
-                ? (lang === 'ko' ? '사원번호' : 'Employee ID')
-                : (lang === 'ko' ? '이메일 주소' : 'Email Address')}
+              {employeeDoor ? "Employee ID" : "Work Email Address"}
             </Label>
             <div className="relative">
               {employeeDoor ? (
@@ -235,7 +232,7 @@ export default function Login() {
                 id="identifier"
                 type={employeeDoor ? "text" : "email"}
                 autoComplete={employeeDoor ? "username" : "email"}
-                placeholder={employeeDoor ? "QAB-001" : "you@example.com"}
+                placeholder={employeeDoor ? "e.g. SMA-001" : "you@example.com"}
                 value={identifier}
                 onChange={(e) => setIdentifier(e.target.value)}
                 className="pl-10 h-12"
@@ -246,9 +243,9 @@ export default function Login() {
 
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <Label htmlFor="password">{lang === 'ko' ? '비밀번호' : 'Password'}</Label>
+              <Label htmlFor="password">Password</Label>
               <Link to="/password-reset" className="text-xs text-primary hover:underline">
-                {lang === 'ko' ? '비밀번호 재설정' : 'Forgot password?'}
+                Forgot password?
               </Link>
             </div>
             <div className="relative">
@@ -270,10 +267,10 @@ export default function Login() {
             {loading ? (
               <>
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                {lang === 'ko' ? '로그인 중...' : 'Signing in...'}
+                Signing in...
               </>
             ) : (
-              lang === 'ko' ? '로그인' : 'Sign In'
+              "Sign In"
             )}
           </Button>
         </form>

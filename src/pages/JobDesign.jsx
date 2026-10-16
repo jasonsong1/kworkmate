@@ -14,9 +14,12 @@ import { base44 } from '@/api/base44Client';
 export default function JobDesign() {
   const { t } = useI18n();
   const { toast } = useToast();
-  const { company, role, reload } = useWorkspace();
+  const { company, role, isManager, isCompanyAdmin, isPlatformAdmin, reload } = useWorkspace();
   const [design, setDesign] = useState({ logo_url: '', brand_color: '#4338ca' });
   const [saving, setSaving] = useState(false);
+
+  // 최고관리자, 회사관리자, 매니저 모두 공고설정 디자인을 수정/저장할 수 있도록 권한 활성화
+  const canSave = isPlatformAdmin || isCompanyAdmin || isManager || role === 'company_admin';
 
   useEffect(() => {
     if (!company) return;
@@ -44,7 +47,7 @@ export default function JobDesign() {
         title={t('jobdesign.title')}
         subtitle={t('jobdesign.subtitle')}
         actions={
-          <Button onClick={save} disabled={saving || role !== 'company_admin'}>
+          <Button onClick={save} disabled={saving || !canSave}>
             {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             {t('common.save')}
           </Button>

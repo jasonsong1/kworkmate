@@ -56,7 +56,25 @@ export default function Kiosk() {
       setInfo(data);
       setState('ready');
       const authed = await base44.auth.isAuthenticated().catch(() => false);
-      if (authed) setMe(await base44.auth.me().catch(() => null));
+      if (authed) {
+        const currentUser = await base44.auth.me().catch(() => null);
+        if (currentUser) {
+          // [브랜치별 계정 이름 완전 격리]:
+          // 타 브랜치의 이름이 섞이지 않도록, 현재 키오스크의 소속 브랜치(data.branch_id)에 등록된
+          // 직원의 이름을 최우선으로 확인하여 현재 브랜치의 계정 이름만 정확히 표시합니다.
+          let displayName = currentUser.full_name || currentUser.email;
+          if (data.branch_id && currentUser.email) {
+            const branchProfilesRaw = await base44.entities.EmployeeProfile
+              .filter({ user_email: currentUser.email, branch_id: data.branch_id })
+              .catch(() => []);
+            const branchProfiles = Array.isArray(branchProfilesRaw) ? branchProfilesRaw : branchProfilesRaw?.items || [];
+            if (branchProfiles.length > 0 && branchProfiles[0].full_name) {
+              displayName = branchProfiles[0].full_name;
+            }
+          }
+          setMe({ ...currentUser, full_name: displayName });
+        }
+      }
     };
     load();
   }, [token, dayRef]);

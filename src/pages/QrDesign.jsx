@@ -20,9 +20,12 @@ const DEFAULT_SIZE = 240;
 export default function QrDesign() {
   const { t } = useI18n();
   const { toast } = useToast();
-  const { company, role, reload } = useWorkspace();
+  const { company, role, isManager, isCompanyAdmin, isPlatformAdmin, reload } = useWorkspace();
   const [design, setDesign] = useState({ title: '', note: '', brand_color: '', size: DEFAULT_SIZE, logo_url: '' });
   const [saving, setSaving] = useState(false);
+
+  // 최고관리자, 회사관리자, 매니저 모두 출퇴근 QR코드 디자인을 수정/저장할 수 있도록 권한 활성화
+  const canSave = isPlatformAdmin || isCompanyAdmin || isManager || role === 'company_admin';
 
   useEffect(() => {
     if (!company) return;
@@ -60,7 +63,7 @@ export default function QrDesign() {
         title={t('qrdesign.title')}
         subtitle={t('qrdesign.subtitle')}
         actions={
-          <Button onClick={save} disabled={saving || role !== 'company_admin'}>
+          <Button onClick={save} disabled={saving || !canSave}>
             {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             {t('common.save')}
           </Button>
