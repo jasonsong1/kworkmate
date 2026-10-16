@@ -6,6 +6,7 @@ import { DATE_FORMATS } from '@/lib/onboardingDates';
 
 export const TYPE_KEYS = {
   text: 'onboardingQ.typeText',
+  phone: 'onboardingQ.typePhone',
   number: 'onboardingQ.typeNumber',
   date: 'onboardingQ.typeDate',
   yes_no: 'onboardingQ.typeYesNo',

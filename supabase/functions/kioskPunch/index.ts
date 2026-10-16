@@ -124,15 +124,15 @@ async function handler(req) {
         employee_email: person.user_email,
         employee_name: person.full_name || person.user_email,
         employee_number: canonical,
-        shift_id: shift ? shift.id : '',
+        shift_id: shift ? shift.id : null,
         clock_in_at: nowIso,
-        scheduled_start: shift ? shift.start_time : '',
-        scheduled_end: shift ? shift.end_time : '',
+        scheduled_start: shift ? shift.start_time : null,
+        scheduled_end: shift ? shift.end_time : null,
         geo_verified: false,
         status: 'active',
         source: 'manual',
         approval_status: approval,
-        approved_at: isManager ? nowIso : ''
+        approved_at: isManager ? nowIso : null
       });
 
       if (!isManager) await alertManagers(base44, company, branch, person, 'in').catch(() => null);
@@ -156,8 +156,8 @@ async function handler(req) {
       status: 'completed',
       source: 'manual',
       approval_status: approval,
-      approved_by_email: isManager ? person.user_email : '',
-      approved_at: isManager ? nowIso : ''
+      approved_by_email: isManager ? person.user_email : null,
+      approved_at: isManager ? nowIso : null
     });
 
     if (!isManager) await alertManagers(base44, company, branch, person, 'out').catch(() => null);

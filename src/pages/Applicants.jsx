@@ -75,7 +75,7 @@ export default function Applicants() {
   const [visaFilter, setVisaFilter] = useState('all'); // 'all' 또는 특정 비자 코드
   const [noticeFilter, setNoticeFilter] = useState('all'); // 'all' 또는 notice_period 값
   const [selectedDays, setSelectedDays] = useState([]); // 선택된 요일 키 목록 (예: ['mon', 'tue'])
-  const [dayMatchMode, setDayMatchMode] = useState('any'); // 'any' (선택 요일 중 하루라도 가능) 또는 'all' (선택 요일 모두 가능)
+  const [dayMatchMode, setDayMatchMode] = useState('all'); // 기본값 'all': 선택한 모든 요일에 근무 가능한 지원자만 필터링 (AND 조건)
 
   // 지점의 공고 목록 로드
   const loadJobs = useCallback(async () => {
@@ -137,7 +137,7 @@ export default function Applicants() {
     setVisaFilter('all');
     setNoticeFilter('all');
     setSelectedDays([]);
-    setDayMatchMode('any');
+    setDayMatchMode('all');
   };
 
   // 현재 필터 적용 여부 확인

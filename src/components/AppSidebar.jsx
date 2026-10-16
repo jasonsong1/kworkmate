@@ -54,13 +54,9 @@ const SUPER_ADMIN_ITEMS = [
   { to: '/leave', key: 'nav.leave', icon: CalendarPlus, module: 'leave' },
   { to: '/attendance', key: 'nav.attendance', icon: Timer, module: 'attendance' },
   { to: '/activity-logs', key: 'nav.activityLogs', icon: ScrollText, module: 'activity_logs' },
-  // 기존에 메뉴에서 누락되었거나 가려져 있던 고급 디자인 & 제어 도구들
   { to: '/interview-settings', key: 'nav.interview', icon: Mic, module: 'interview_settings' },
-  { to: '/email-templates', key: 'nav.emailTemplates', icon: Mail, module: 'templates' },
-  { to: '/job-design', key: 'nav.jobDesign', icon: Sparkles, module: 'templates' },
-  { to: '/qr-design', key: 'nav.qrDesign', icon: QrCode, module: 'attendance' },
-  { to: '/clock', key: 'nav.clock', icon: Clock, module: 'attendance' },
   { to: '/template-design', key: 'nav.templateDesign', icon: Palette, module: 'templates' },
+  { to: '/clock', key: 'nav.clock', icon: Clock, module: 'attendance' },
   { to: '/settings', key: 'nav.settings', icon: Settings, module: 'settings' }
 ];
 

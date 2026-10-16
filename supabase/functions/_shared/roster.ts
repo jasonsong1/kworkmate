@@ -309,9 +309,9 @@ export async function buildDraft(base44, branch, weekStart) {
     for (const person of staff) {
       const email = person.user_email;
       if (!email) continue;
-      // The person's own position, or the one they can cover as well: the second is how a hole
-      // is filled when nobody in the first position is free.
-      const positions = [person.position, person.secondary_position].filter(Boolean);
+      // 직원의 기본 포지션, 보조 포지션, 그리고 추가된 모든 포지션(extra_positions)을 종합하여 매칭합니다.
+      const extra = Array.isArray(person.extra_positions) ? person.extra_positions : [];
+      const positions = [person.position, person.secondary_position, ...extra].filter(Boolean);
       if (!positions.includes(req.position)) continue;
 
       if (onLeave(email, date)) {

@@ -86,7 +86,7 @@ export function answerRows(profile, company, t) {
     const details = Object.entries(given.follow_up || {})
       .map(([field, value]) => [field, String(value || '').trim()])
       .filter(([, value]) => value);
-    return { id: question.id, label: String(question.label).trim(), answer, details };
+    return { id: question.id, label: String(question.label).trim(), answer, details, secure: Boolean(question.secure) };
   });
 }
 

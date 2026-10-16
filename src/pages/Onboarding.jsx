@@ -380,6 +380,10 @@ export default function Onboarding() {
       if (!/^\d+$/.test(answer)) return false;
       if (limit > 0 && answer.length > limit) return false;
     }
+    if (answer && question.type === 'phone') {
+      const clean = answer.replace(/\D/g, '').replace(/^0+/, '');
+      if (clean.length !== 9) return false;
+    }
     if (answer && question.type === 'date' && !validDate(answer, dateFormatOf(question))) return false;
     if (question.type === 'yes_no' && question.follow_up && question.follow_up.when === val.answer) {
       const fields = question.follow_up.fields || [];
@@ -850,11 +854,33 @@ export default function Onboarding() {
                     />
                   )}
 
+                  {question.type === 'phone' && (
+                    <div className="flex items-center gap-2">
+                      <div className="flex h-10 items-center justify-center rounded-md border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-700 select-none">
+                        +61
+                      </div>
+                      <Input
+                        type="tel"
+                        inputMode="numeric"
+                        value={value.answer || ''}
+                        onChange={(e) => {
+                          const raw = e.target.value.replace(/\D/g, '');
+                          const trimmed = raw.replace(/^0+/, '').slice(0, 9);
+                          setAnswer(question.id, trimmed, question.label);
+                        }}
+                        placeholder="411 602 349 (9 digits)"
+                        maxLength={9}
+                        className="flex-1 font-mono tracking-wider"
+                      />
+                    </div>
+                  )}
+
                   {question.type !== 'yes_no' &&
                     question.type !== 'select' &&
                     question.type !== 'upload' &&
                     question.type !== 'number' &&
-                    question.type !== 'date' && (
+                    question.type !== 'date' &&
+                    question.type !== 'phone' && (
                       <Input
                         value={value.answer || ''}
                         onChange={(e) => setAnswer(question.id, e.target.value, question.label)}
