@@ -446,7 +446,8 @@ export async function buildDraft(base44, branch, weekStart) {
         a.used - b.used ||
         (b.primary ? 1 : 0) - (a.primary ? 1 : 0) ||
         b.overlapMin - a.overlapMin ||
-    );
+        a.email.localeCompare(b.email)
+      );
 
     let filled = 0;
     for (const pick of candidates) {
