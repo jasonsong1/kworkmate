@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Loader2, MapPin } from 'lucide-react';
+import { Building2, Check, Loader2, MapPin, MapPinOff, Search } from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
 import AccessMatrixEditor from '@/components/access/AccessMatrixEditor';
 import { MODULES, clampRoleMatrix, levelRank, normalizeCell, scopeRank } from '@/lib/access';
@@ -26,6 +26,8 @@ export default function PropertySetup() {
   const [form, setForm] = useState(null);
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false);
+  const [geoAddress, setGeoAddress] = useState('');
+  const [searchingGeo, setSearchingGeo] = useState(false);
 
   useEffect(() => {
     if (!branch) return;
@@ -51,15 +53,59 @@ export default function PropertySetup() {
       // the table now offers. The map is read role by role, so a saved answer survives a reload.
       role_permissions: clampRoleMatrix(branch.role_permissions || {})
     });
+
+    const defaultAddr = [branch.address, branch.suburb, branch.state, branch.postcode].filter(Boolean).join(', ');
+    setGeoAddress(defaultAddr);
   }, [branch]);
 
   const set = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
+
+  // 주소 텍스트 기반 위도/경도 Geocoding 자동 검색
+  const searchCoordsByAddress = async (targetAddr) => {
+    const query = String(targetAddr !== undefined ? targetAddr : geoAddress || '').trim();
+    if (!query) {
+      toast({ title: '검색할 주소를 입력해주세요.', variant: 'destructive' });
+      return;
+    }
+    setSearchingGeo(true);
+    try {
+      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`, {
+        headers: { 'Accept-Language': 'en' }
+      });
+      const data = await res.json();
+      if (Array.isArray(data) && data.length > 0) {
+        const lat = Number(parseFloat(data[0].lat).toFixed(6));
+        const lng = Number(parseFloat(data[0].lon).toFixed(6));
+        set('gps_lat', lat);
+        set('gps_lng', lng);
+        toast({ title: '출퇴근 인증 위치 좌표가 성공적으로 설정되었습니다.' });
+      } else {
+        toast({ title: '해당 주소의 위치 좌표를 찾을 수 없습니다. 도로명과 도시명을 자세히 입력해주세요.', variant: 'destructive' });
+      }
+    } catch {
+      toast({ title: '주소 위치 조회 중 오류가 발생했습니다.', variant: 'destructive' });
+    } finally {
+      setSearchingGeo(false);
+    }
+  };
+
+  // 상단 매장 주소 적용 버튼
+  const useStoreAddress = () => {
+    const storeAddr = [form?.address, form?.suburb, form?.state, form?.postcode].filter(Boolean).join(', ');
+    if (!storeAddr) {
+      toast({ title: '상단 매장 정보에 주소를 먼저 입력해주세요.', variant: 'destructive' });
+      return;
+    }
+    setGeoAddress(storeAddr);
+    searchCoordsByAddress(storeAddr);
+  };
 
   const useMyLocation = () => {
     navigator.geolocation?.getCurrentPosition(
       (pos) => {
         set('gps_lat', Number(pos.coords.latitude.toFixed(6)));
         set('gps_lng', Number(pos.coords.longitude.toFixed(6)));
+        toast({ title: '현재 위치로 출퇴근 인증 좌표가 설정되었습니다.' });
       },
       () => toast({ title: t('clock.denied'), variant: 'destructive' })
     );
@@ -268,29 +314,92 @@ export default function PropertySetup() {
 
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">{t('property.geo')}</CardTitle>
+              <CardTitle className="text-base">{t('property.geo') || '출퇴근 위치 인증 반경 설정'}</CardTitle>
             </CardHeader>
-            <CardContent className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <Label>Latitude</Label>
-                <Input value={form.gps_lat} onChange={(e) => set('gps_lat', e.target.value)} />
+            <CardContent className="space-y-4">
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                직원이 매장 근처에서만 출퇴근을 기록할 수 있도록 매장 위치와 인증 반경을 설정합니다.
+                주소를 입력하시면 위도·경도 좌표가 자동으로 계산됩니다.
+              </p>
+
+              {/* 주소 검색 입력창 */}
+              <div className="space-y-1.5">
+                <Label className="text-xs">인증 기준 매장 주소</Label>
+                <div className="flex gap-2">
+                  <Input
+                    value={geoAddress}
+                    onChange={(e) => setGeoAddress(e.target.value)}
+                    placeholder="예: 123 George St, Sydney NSW 2000"
+                    className="flex-1 text-sm"
+                  />
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => searchCoordsByAddress(geoAddress)}
+                    disabled={searchingGeo}
+                    className="gap-1 whitespace-nowrap text-xs"
+                  >
+                    {searchingGeo ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                    <span>주소로 좌표 찾기</span>
+                  </Button>
+                </div>
               </div>
-              <div>
-                <Label>Longitude</Label>
-                <Input value={form.gps_lng} onChange={(e) => set('gps_lng', e.target.value)} />
+
+              {/* 빠른 설정 버튼들 (매장 주소 적용, 현재 위치 사용) */}
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={useStoreAddress}
+                  disabled={searchingGeo}
+                  className="gap-1.5 text-xs h-9"
+                  title="상단 매장 정보에 입력된 주소를 사용하여 좌표를 자동 설정합니다"
+                >
+                  <Building2 className="h-3.5 w-3.5 text-primary" />
+                  <span>매장 주소 적용</span>
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={useMyLocation}
+                  className="gap-1.5 text-xs h-9"
+                  title="현재 있는 위치의 GPS 좌표로 바로 설정합니다"
+                >
+                  <MapPin className="h-3.5 w-3.5 text-emerald-600" />
+                  <span>{t('property.useLocation') || '현재 위치 사용'}</span>
+                </Button>
               </div>
-              <div>
-                <Label>{t('property.radius')}</Label>
+
+              {/* 좌표 설정 상태 안내 뱃지 */}
+              <div className="rounded-lg border px-3 py-2 bg-slate-50 dark:bg-slate-900/40 flex items-center justify-between text-xs">
+                <span className="text-muted-foreground">위치 인증 상태:</span>
+                {form.gps_lat && form.gps_lng ? (
+                  <span className="font-medium text-emerald-700 dark:text-emerald-400 flex items-center gap-1">
+                    <Check className="h-3.5 w-3.5" /> 인증 좌표 설정 완료
+                  </span>
+                ) : (
+                  <span className="text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                    <MapPinOff className="h-3.5 w-3.5" /> 좌표 미설정 (주소 검색 필요)
+                  </span>
+                )}
+              </div>
+
+              {/* 인증 반경 (미터) */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs">{t('property.radius') || '허용 반경 (미터)'}</Label>
+                  <span className="text-xs text-muted-foreground font-mono">{form.gps_radius_m || 100}m</span>
+                </div>
                 <Input
                   type="number"
-                  value={form.gps_radius_m}
+                  min={10}
+                  max={5000}
+                  value={form.gps_radius_m ?? ''}
                   onChange={(e) => set('gps_radius_m', e.target.value)}
+                  placeholder="100"
                 />
-              </div>
-              <div className="flex items-end">
-                <Button variant="outline" className="w-full" onClick={useMyLocation}>
-                  <MapPin className="mr-2 h-4 w-4" /> {t('property.useLocation')}
-                </Button>
               </div>
             </CardContent>
           </Card>

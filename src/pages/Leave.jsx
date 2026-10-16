@@ -21,7 +21,7 @@ import { base44 } from '@/api/base44Client';
 // 관리자(슈퍼어드민/회사관리자/지점매니저)는 대기 중인 승인 요청과 지점 소속 직원들의 휴가 잔액 목록을 조회하고 관리합니다.
 export default function Leave() {
   const { t, lang } = useI18n();
-  const { activeBranch, isManager, isPlatformAdmin, company } = useWorkspace();
+  const { activeBranch, isManager, isPlatformAdmin, company, presetKey, employeeProfile } = useWorkspace();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   // 관리자는 결재 대기 요청을 먼저 확인할 수 있도록 'approvals' 탭을 기본값으로 엽니다.
@@ -30,6 +30,14 @@ export default function Leave() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   // 플랫폼 관리자(슈퍼어드민)가 직원의 기존 누적 휴가 잔액을 일괄 설정할 수 있는 다이얼로그
   const [adminOpen, setAdminOpen] = useState(false);
+
+  // 휴가 설정 권한: 슈퍼바이저(Supervisor floor 등)를 엄격히 제외하고, 매니저(manager), pro director, 플랫폼 관리자만 접근 가능
+  const isSupervisor = String(presetKey || '').toLowerCase().includes('supervisor');
+  const isManagerOrDirector =
+    isPlatformAdmin ||
+    ['manager', 'pro_director', 'director'].includes(String(presetKey || '').toLowerCase()) ||
+    ['오너', 'owner', '대표', 'director'].includes(String(employeeProfile?.employment_type || '').toLowerCase());
+  const canConfigureLeave = Boolean(data && data.can_configure) && isManagerOrDirector && !isSupervisor;
 
   const load = useCallback(async () => {
     if (!activeBranch) {
@@ -135,7 +143,7 @@ export default function Leave() {
                 <Wallet className="mr-2 h-4 w-4" /> {t('leave.adminBalances')}
               </Button>
             ) : null}
-            {data && data.can_configure ? (
+            {canConfigureLeave ? (
               <Button variant="outline" onClick={() => setSettingsOpen(true)} disabled={allTypes.length === 0}>
                 <Settings2 className="mr-2 h-4 w-4" /> {t('leave.settings')}
               </Button>

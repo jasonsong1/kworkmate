@@ -94,12 +94,13 @@ async function handler(req) {
     const pinOk = await verifyPin(pin, person.pin_hash, person.pin_salt);
     if (!pinOk) return Response.json({ error: 'pin_wrong' });
 
+    // 이미 반려(rejected)된 출근 기록은 활성 출근으로 보지 않습니다.
     const active = rowsOf(
       await base44.asServiceRole.entities.TimeEntry.filter(
         { employee_email: person.user_email, status: 'active' },
-        { limit: 1 }
+        { limit: 5 }
       )
-    );
+    ).filter((entry) => entry && entry.approval_status !== 'rejected');
     const nowIso = new Date().toISOString();
 
     // A manager's own punch is recorded as it stands: there is nobody above them to accept it.
@@ -109,6 +110,17 @@ async function handler(req) {
 
     if (action === 'in') {
       if (active.length > 0) return Response.json({ error: 'already_clocked_in' });
+
+      // 이전에 반려되었으나 status가 여전히 'active'인 레코드가 있다면 'rejected'로 상태 동기화
+      const staleRejected = rowsOf(
+        await base44.asServiceRole.entities.TimeEntry.filter(
+          { employee_email: person.user_email, status: 'active' },
+          { limit: 10 }
+        )
+      ).filter((entry) => entry && entry.approval_status === 'rejected');
+      for (const stale of staleRejected) {
+        await base44.asServiceRole.entities.TimeEntry.update(stale.id, { status: 'rejected' }).catch(() => null);
+      }
 
       const shifts = rowsOf(
         await base44.asServiceRole.entities.Shift.filter(

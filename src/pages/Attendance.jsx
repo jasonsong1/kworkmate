@@ -114,6 +114,7 @@ export default function Attendance() {
   const decide = async (row, status, reason) => {
     await base44.entities.TimeEntry.update(row.id, {
       approval_status: status,
+      status: status === 'rejected' ? 'rejected' : row.status,
       approved_by_email: me ? me.email : '',
       approved_at: new Date().toISOString(),
       rejection_reason: status === 'rejected' ? reason || '' : ''

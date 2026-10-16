@@ -30,6 +30,7 @@ import { DEFAULT_DOC_TYPES, checklistFor } from '@/lib/onboardingDocs';
 import { kwSessionAction } from '@/lib/kwAuthClient';
 import { base44 } from '@/api/base44Client';
 import SecureVerificationDialog from '@/components/auth/SecureVerificationDialog';
+import OnboardingDetails from '@/components/employee/OnboardingDetails';
 import { cn } from '@/lib/utils';
 
 /**
@@ -756,6 +757,13 @@ export default function StaffOnboardingCard({ onProfileUpdated }) {
               </Button>
             </div>
           </div>
+
+          {/* 4. 회사 설정 온보딩 질문 및 답변 상세 (보안 질문 마스킹 및 본인 인증 후 열람 적용) */}
+          {profile && (
+            <div className="mt-4">
+              <OnboardingDetails profile={profile} company={company} />
+            </div>
+          )}
         </CardContent>
       )}
 

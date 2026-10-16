@@ -1,6 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.52';
 import { resolveCaller } from '../../shared/kwAuth.ts';
-import { holdsManagerPosition, managerPositionLabels } from '../../shared/access.ts';
+import { holdsManagerPosition, managerPositionLabels, positionsOf, resolvePresetKey } from '../../shared/access.ts';
 import {
   activeTypes,
   availableHours,
@@ -42,13 +42,29 @@ export default async function (req: Request) {
     const caller = rowsOf(
       await base44.asServiceRole.entities.EmployeeProfile.filter({ user_email: me.email }, { limit: 1 }).catch(() => [])
     )[0];
-    // Who may change the leave settings: the company admin, and any position the employer runs
-    // the store with — the same people who approve the requests.
+    // 휴가 정책 설정 변경 권한:
+    // 슈퍼바이저(Supervisor floor 등)나 일반 직원은 차단하고,
+    // 오직 매니저(manager), pro director(pro_director/director/대표), 플랫폼 관리자만 설정 가능
+    const isCompanyAdmin = me.role === 'admin' || me.app_role === 'company_admin' || me.app_role === 'super_admin';
+    const callerPositions = positionsOf(caller).map((p: any) => String(p).toLowerCase().trim());
+    const callerPreset = resolvePresetKey({
+      roleKey: caller?.role_key || me.app_role || 'staff',
+      customRoles: company && company.custom_roles,
+      isCompanyAdmin,
+      positions: positionsOf(caller)
+    });
+
+    const isManagerOrDirector =
+      callerPreset === 'manager' ||
+      callerPreset === 'pro_director' ||
+      callerPreset === 'director' ||
+      callerPositions.some((p: string) => p.includes('manager') || p.includes('매니저') || p.includes('director') || p.includes('대표') || p.includes('오너') || p.includes('owner')) ||
+      (caller && ['owner', '오너'].includes(String(caller.employment_type || '').toLowerCase()));
+
+    const isSupervisorOnly = callerPreset.includes('supervisor') && !isManagerOrDirector;
+
     const runsStore =
-      me.role === 'admin' ||
-      me.app_role === 'company_admin' ||
-      me.app_role === 'branch_manager' ||
-      holdsManagerPosition(caller, managerPositionLabels(company && company.custom_roles));
+      (isCompanyAdmin || me.role === 'admin' || isManagerOrDirector) && !isSupervisorOnly;
 
     let staff: any[] = [];
     if (teamView) {
