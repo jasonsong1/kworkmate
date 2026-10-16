@@ -150,16 +150,23 @@ function remainingMinutes(person, weekMinutes) {
 // - 주 N일 제한: "sumin 주 3일만", "최대 4일", "주 2일"
 export function parseCustomInstructions(instructions, staff) {
   const rules = {
-    employeeDayCaps: {},
+    employeeDayCaps: {},       // { email: number } 주당 최대 일수
+    employeeHourCaps: {},      // { email: number } 주당 최대 시간 (분 단위)
+    employeeMinHours: {},      // { email: number } 주당 최소 시간 (분 단위)
+    dailyHourCaps: {},         // { email: number } 하루 최대 시간 (분 단위)
     employeeExclude: new Set(),
     dayPriority: {},
-    dayExclude: {},          // { '0': Set<email> } 특정 요일 제외/오프
-    weekendStaff: new Set(), // 주말 우선 배정 대상자
-    weekdayStaff: new Set(), // 평일 우선 배정 대상자
-    minStaff: new Set(),     // 최소 시프트 배정 대상자 (다른 직원이 없을 때만 투입되는 최후 땜빵)
-    priorityStaff: new Set(),// 전체 시프트 최우선 몰아주기 대상자
+    dayExclude: {},            // { '0': Set<email> } 특정 요일 제외/오프
+    weekendStaff: new Set(),   // 주말 우선 배정 대상자
+    weekdayStaff: new Set(),   // 평일 우선 배정 대상자
+    minStaff: new Set(),       // 최소 시프트 배정 대상자 (다른 직원이 없을 때만 투입되는 최후 땜빵)
+    priorityStaff: new Set(),  // 전체 시프트 최우선 몰아주기 대상자
     singleShiftStaff: new Set(), // 하루 1시프트만 허용 (더블 시프트 방지)
-    shiftPref: {}            // { email: { preferOpen?: boolean, preferClose?: boolean, forbidOpen?: boolean, forbidClose?: boolean } }
+    shiftPref: {},             // { email: { preferOpen?, preferClose?, forbidOpen?, forbidClose?, preferPeak?, forbidPeak? } }
+    substitutePairs: {},       // { targetEmail: fallbackEmail } A가 못 나올 때 B로 대체
+    maxConsecutiveDays: {},    // { email: number } 연속 N일 이상 근무 금지
+    noConsecutiveClose: new Set(), // 연속 마감(디너) 금지
+    dayRoleFilters: {}         // { dayIndex: Set<roleLower> } 특정 요일 특정 직책만 투입
   };
   if (!instructions || !String(instructions).trim()) return rules;
 
@@ -194,7 +201,7 @@ export function parseCustomInstructions(instructions, staff) {
 
   const excludeKeywords = [
     '제외', '빼', '빼줘', '쉬게', '쉬어', '오프', 'off', '안 됨', '안됨', '불가',
-    '금지', 'x', '휴무', '안돼', '일하지마', '나오지마', 'no', 'not', 'day off', 'leave out'
+    '금지', 'x', '휴무', '안돼', '일하지마', '나오지마', 'no', 'not', 'day off', 'leave out', '넣지 마', '넣지마'
   ];
 
   const singleShiftKeywords = [
@@ -204,7 +211,8 @@ export function parseCustomInstructions(instructions, staff) {
   ];
 
   const openKeywords = ['오픈', '오전', '아침', '모닝', '모닝조', 'open', 'morning', 'early'];
-  const closeKeywords = ['마감', '오후', '저녁', '야간', '클로즈', '클로징', '밤', 'close', 'night', 'evening', 'late'];
+  const closeKeywords = ['마감', '오후', '저녁', '야간', '클로즈', '클로징', '밤', '디너', 'close', 'night', 'evening', 'late', 'dinner'];
+  const peakKeywords = ['피크타임', '피크', '점심', '런치', 'peak'];
 
   for (const line of lines) {
     const lowerLine = line.toLowerCase();
@@ -213,7 +221,61 @@ export function parseCustomInstructions(instructions, staff) {
     const isExReq = excludeKeywords.some((k) => lowerLine.includes(k));
     const isSingleReq = singleShiftKeywords.some((k) => lowerLine.includes(k));
 
-    // A. 직책 전체 키워드 매칭 (오너, 매니저, 슈퍼바이저, 바리스타, 알바)
+    // A. 대체/대타 조건 분석: "A가 빠지면 B로 대체해줘", "A가 못 나오면 B로 바꿔줘"
+    for (const p1 of staff || []) {
+      const n1 = String(p1.full_name || '').toLowerCase().trim();
+      const e1 = String(p1.user_email || '').toLowerCase().trim();
+      const n1NoSpace = n1.replace(/\s+/g, '');
+      const e1User = e1.split('@')[0] || '';
+      const matched1 = (n1 && lowerLine.includes(n1)) || (n1NoSpace && lowerLine.includes(n1NoSpace)) || (e1User && lowerLine.includes(e1User));
+      if (!matched1) continue;
+
+      for (const p2 of staff || []) {
+        if (p1.user_email === p2.user_email) continue;
+        const n2 = String(p2.full_name || '').toLowerCase().trim();
+        const e2 = String(p2.user_email || '').toLowerCase().trim();
+        const n2NoSpace = n2.replace(/\s+/g, '');
+        const e2User = e2.split('@')[0] || '';
+        const matched2 = (n2 && lowerLine.includes(n2)) || (n2NoSpace && lowerLine.includes(n2NoSpace)) || (e2User && lowerLine.includes(e2User));
+        if (matched2) {
+          if (lowerLine.includes('대체') || lowerLine.includes('바꿔') || lowerLine.includes('채워') || lowerLine.includes('대타') || lowerLine.includes('빠지면') || lowerLine.includes('못 나오') || lowerLine.includes('불가능하면') || lowerLine.includes('병가')) {
+            rules.substitutePairs[lower(p1.user_email)] = lower(p2.user_email);
+          }
+        }
+      }
+    }
+
+    // B. 학생 평일 위주 및 주말 제외 지침: "학생은 평일 위주로 넣어줘"
+    if (lowerLine.includes('학생') || lowerLine.includes('student')) {
+      for (const person of staff || []) {
+        const visa = lower(person.visa_type);
+        const name = lower(person.full_name);
+        if (visa.includes('student') || visa.includes('500') || name.includes('student')) {
+          rules.weekdayStaff.add(lower(person.user_email));
+          rules.dayExclude['5'] = rules.dayExclude['5'] || new Set();
+          rules.dayExclude['5'].add(lower(person.user_email));
+          rules.dayExclude['6'] = rules.dayExclude['6'] || new Set();
+          rules.dayExclude['6'].add(lower(person.user_email));
+        }
+      }
+    }
+
+    // C. 특정 요일 특정 직책만 투입: "일요일은 매니저, 슈퍼바이저만 넣어줘", "주말은 풀타임만 넣어줘"
+    for (const d of dayDefinitions) {
+      const hasDay = d.names.some((dn) => lowerLine.includes(dn));
+      if (hasDay && (lowerLine.includes('만 넣어') || lowerLine.includes('만 배정') || lowerLine.includes('만 투입') || lowerLine.includes('만 필요'))) {
+        const targetRoles = ['매니저', 'manager', '슈퍼바이저', 'supervisor', '바리스타', 'barista', '풀타임', 'fulltime', '정규직', 'permanent', '알바'].filter((r) => lowerLine.includes(r));
+        if (targetRoles.length > 0) {
+          for (const idx of d.indices) {
+            const k = String(idx);
+            rules.dayRoleFilters[k] = rules.dayRoleFilters[k] || new Set();
+            targetRoles.forEach((r) => rules.dayRoleFilters[k].add(r));
+          }
+        }
+      }
+    }
+
+    // D. 직책 전체 키워드 매칭 (오너, 매니저, 슈퍼바이저, 바리스타, 알바)
     const checkRoleMatch = (roleKeywords, callback) => {
       if (roleKeywords.some((rk) => lowerLine.includes(rk))) {
         for (const person of staff || []) {
@@ -241,7 +303,7 @@ export function parseCustomInstructions(instructions, staff) {
       });
     }
 
-    // B. 개별 직원 키워드 분석
+    // E. 개별 직원 키워드 분석
     for (const person of staff || []) {
       const name = String(person.full_name || '').toLowerCase().trim();
       const email = String(person.user_email || '').toLowerCase().trim();
@@ -271,19 +333,65 @@ export function parseCustomInstructions(instructions, staff) {
         }
       }
 
-      // 2. 전체 제외 / 전면 휴무: 예) "StudentA 이번 주 제외", "StudentA 쉬어" (특정 요일 언급이 없을 때)
+      // 2. 주당 최대 N시간 제한: 예) "F가 20시간 넘기면 더 이상 배정하지 마", "C는 최대 25시간까지만 배정해줘"
+      const matchMaxHours = lowerLine.match(/(?:최대|넘기면|까지만)?\s*(\d+)\s*(?:시간|hr|hours?)(?:까지만|넘기면|이하)?/);
+      if (matchMaxHours && (lowerLine.includes('넘기면') || lowerLine.includes('최대') || lowerLine.includes('까지만') || lowerLine.includes('이하'))) {
+        const h = parseInt(matchMaxHours[1], 10);
+        if (h > 0 && h <= 80) {
+          rules.employeeHourCaps[normEmail] = h * 60;
+          rules.employeeHourCaps[email] = h * 60;
+        }
+      }
+
+      // 3. 주당 최소 N시간 보장: 예) "B는 주당 최소 20시간 필요해", "A는 최소 3시간은 넣어줘"
+      const matchMinHours = lowerLine.match(/(?:최소|적어도)\s*(\d+)\s*(?:시간|hr|hours?)/);
+      if (matchMinHours) {
+        const h = parseInt(matchMinHours[1], 10);
+        if (h > 0 && h <= 80) {
+          rules.employeeMinHours[normEmail] = h * 60;
+          rules.employeeMinHours[email] = h * 60;
+        }
+      }
+
+      // 4. 하루 최대 N시간 제한: 예) "D는 하루 최대 8시간 넘기지 마"
+      const matchDailyHours = lowerLine.match(/하루\s*(?:최대)?\s*(\d+)\s*(?:시간|hr|hours?)/);
+      if (matchDailyHours) {
+        const h = parseInt(matchDailyHours[1], 10);
+        if (h > 0 && h <= 24) {
+          rules.dailyHourCaps[normEmail] = h * 60;
+          rules.dailyHourCaps[email] = h * 60;
+        }
+      }
+
+      // 5. 연속 N일 이상 근무 금지: 예) "A는 연속 3일 이상 넣지 마"
+      const matchConsec = lowerLine.match(/연속\s*(\d+)\s*일/);
+      if (matchConsec && (lowerLine.includes('넣지 마') || lowerLine.includes('금지') || lowerLine.includes('안 됨') || lowerLine.includes('제외') || lowerLine.includes('말아'))) {
+        const days = parseInt(matchConsec[1], 10);
+        if (days >= 2 && days <= 7) {
+          rules.maxConsecutiveDays[normEmail] = days;
+          rules.maxConsecutiveDays[email] = days;
+        }
+      }
+
+      // 6. 연속 마감(디너) 금지: 예) "C는 연속 마감 금지"
+      if (lowerLine.includes('연속 마감') || lowerLine.includes('연속마감')) {
+        rules.noConsecutiveClose.add(normEmail);
+        rules.noConsecutiveClose.add(email);
+      }
+
+      // 7. 전체 제외 / 전면 휴무: 예) "StudentA 이번 주 제외", "StudentA 쉬어" (특정 요일 언급이 없을 때)
       const hasSpecificDay = dayDefinitions.some((d) => d.names.some((dn) => lowerLine.includes(dn)));
       if (isExReq && !hasSpecificDay) {
         rules.employeeExclude.add(normEmail);
         rules.employeeExclude.add(email);
       }
 
-      // 3. 특정 요일 제외(휴무) vs 특정 요일 우선 배정
+      // 8. 특정 요일 제외(휴무) vs 특정 요일 우선 배정
       for (const d of dayDefinitions) {
         const mentionsDay = d.names.some((dn) => lowerLine.includes(dn));
         if (mentionsDay) {
           if (isExReq) {
-            // 특정 요일 제외: 예) "sumin은 주말 제외", "화요일 쉬어", "토요일 오프"
+            // 특정 요일 제외: 예) "sumin은 주말 제외", "화요일 쉬어", "토요일 오프", "A는 화요일 절대 넣지 마"
             for (const idx of d.indices) {
               const key = String(idx);
               rules.dayExclude[key] = rules.dayExclude[key] || new Set();
@@ -291,7 +399,7 @@ export function parseCustomInstructions(instructions, staff) {
               rules.dayExclude[key].add(email);
             }
           } else {
-            // 특정 요일 우선 배정: 예) "monoovatwo는 주말배정해줘", "평일에는 monoovafirst 우선"
+            // 특정 요일 우선 배정: 예) "monoovatwo는 주말배정해줘", "평일에는 monoovafirst 우선", "E는 최소 한 번은 주말에 넣어줘"
             for (const idx of d.indices) {
               const key = String(idx);
               rules.dayPriority[key] = rules.dayPriority[key] || new Set();
@@ -310,25 +418,25 @@ export function parseCustomInstructions(instructions, staff) {
         }
       }
 
-      // 4. 최소 배정 / 땜빵 지침: 예) "sumin에게 최소한의 시프트배정만해줘", "sumin 최소로", "sumin 적게"
+      // 9. 최소 배정 / 땜빵 지침: 예) "sumin에게 최소한의 시프트배정만해줘", "sumin 최소로", "sumin 적게", "A가 미배정일 때만 넣어줘"
       if (isMinReq) {
         rules.minStaff.add(normEmail);
         rules.minStaff.add(email);
       }
 
-      // 5. 우선 배정 / 몰아주기 지침: 예) "monoovatwo 더 배정해줘", "monoovatwo 우선", "monoovatwo 많이"
+      // 10. 우선 배정 / 몰아주기 지침: 예) "monoovatwo 더 배정해줘", "monoovatwo 우선", "가능하면 A를 먼저 넣어줘"
       if (isMaxReq && !hasSpecificDay) {
         rules.priorityStaff.add(normEmail);
         rules.priorityStaff.add(email);
       }
 
-      // 6. 하루 1시프트 제한: 예) "StudentA 하루 1시프트만", "더블 금지"
+      // 11. 하루 1시프트 제한: 예) "StudentA 하루 1시프트만", "더블 금지"
       if (isSingleReq) {
         rules.singleShiftStaff.add(normEmail);
         rules.singleShiftStaff.add(email);
       }
 
-      // 7. 오픈 / 마감 선호 및 금지
+      // 12. 오픈 / 마감 / 디너 선호 및 금지
       const hasOpen = openKeywords.some((k) => lowerLine.includes(k));
       const hasClose = closeKeywords.some((k) => lowerLine.includes(k));
       if (hasOpen || hasClose) {
@@ -341,6 +449,14 @@ export function parseCustomInstructions(instructions, staff) {
           if (isExReq) rules.shiftPref[normEmail].forbidClose = true;
           else rules.shiftPref[normEmail].preferClose = true;
         }
+      }
+
+      // 13. 피크타임(11:00~14:00) 선호 및 제외: 예) "피크타임에는 StudentA를 우선 배치해줘", "E는 피크타임 제외"
+      const hasPeak = peakKeywords.some((k) => lowerLine.includes(k));
+      if (hasPeak) {
+        rules.shiftPref[normEmail] = rules.shiftPref[normEmail] || {};
+        if (isExReq) rules.shiftPref[normEmail].forbidPeak = true;
+        else rules.shiftPref[normEmail].preferPeak = true;
       }
     }
   }
@@ -556,14 +672,17 @@ export async function buildDraft(base44, branch, weekStart) {
   }
 
   const assignedMinutes = {};
+  const minutesOnDay = {};
   const intervals = {};
   // The days each person is already planned for, kept as dates so two shifts on one day still
   // count as one working day.
   const daysPlaced = {};
-  const noteDay = (email, date) => {
+  const noteDay = (email, date, length = 0) => {
     if (!email) return;
     daysPlaced[email] = daysPlaced[email] || new Set();
     daysPlaced[email].add(date);
+    minutesOnDay[email] = minutesOnDay[email] || {};
+    minutesOnDay[email][date] = (minutesOnDay[email][date] || 0) + length;
   };
   // The shifts each person already holds on each day. A pinned or kept shift counts as one of them,
   // and that person's own limit for the day decides whether a second one can follow.
@@ -575,10 +694,11 @@ export async function buildDraft(base44, branch, weekStart) {
     const date = String(shift.date || '').slice(0, 10);
     const start = toMin(shift.start_time);
     const end = toMin(shift.end_time);
-    assignedMinutes[shift.employee_email] = (assignedMinutes[shift.employee_email] || 0) + lengthOf(shift);
+    const shiftLen = lengthOf(shift);
+    assignedMinutes[shift.employee_email] = (assignedMinutes[shift.employee_email] || 0) + shiftLen;
     const keptKey = `${shift.employee_email}|${date}`;
     shiftsOnDay[keptKey] = (shiftsOnDay[keptKey] || 0) + 1;
-    noteDay(shift.employee_email, date);
+    noteDay(shift.employee_email, date, shiftLen);
     if (start === null || end === null || end <= start) continue;
     intervals[shift.employee_email] = [
       ...(intervals[shift.employee_email] || []),
@@ -699,7 +819,7 @@ export async function buildDraft(base44, branch, weekStart) {
           break;
         }
       }
-      // 1. 특정 요일 제외(휴무/오프) 지침 검사 (예: "sumin 주말 제외", "화요일 쉬어")
+      // 1. 특정 요일 제외(휴무/오프) 지침 검사 (예: "sumin 주말 제외", "화요일 쉬어", "A는 화요일 절대 넣지 마")
       const isDayExcluded =
         customRules.dayExclude[String(dayIndex)] &&
         (customRules.dayExclude[String(dayIndex)].has(email) ||
@@ -717,16 +837,78 @@ export async function buildDraft(base44, branch, weekStart) {
         (customRules.singleShiftStaff.has(email) || customRules.singleShiftStaff.has(lower(email)));
       if (isSingleShiftOnly && shiftsToday >= 1) continue;
 
-      // 4. 시간대(오픈/마감) 금지 지침 검사 (720분 = 12:00 정오 기준)
       const normEmail = lower(email);
+
+      // 4. 주당 최대 N시간 제한 지침 검사 (예: "F가 20시간 넘기면 더 이상 배정하지 마", "C는 최대 25시간까지만")
+      const maxWeeklyMins = customRules.employeeHourCaps[normEmail] || customRules.employeeHourCaps[email];
+      if (maxWeeklyMins && (assignedMinutes[email] || 0) + lengthMin > maxWeeklyMins) continue;
+
+      // 5. 하루 최대 N시간 제한 지침 검사 (예: "D는 하루 최대 8시간 넘기지 마")
+      const maxDailyMins = customRules.dailyHourCaps[normEmail] || customRules.dailyHourCaps[email];
+      const curDailyMins = (minutesOnDay[email] && minutesOnDay[email][date]) || 0;
+      if (maxDailyMins && curDailyMins + lengthMin > maxDailyMins) continue;
+
+      // 6. 연속 N일 이상 근무 금지 지침 검사 (예: "A는 연속 3일 이상 넣지 마")
+      const maxConsec = customRules.maxConsecutiveDays[normEmail] || customRules.maxConsecutiveDays[email];
+      if (maxConsec && maxConsec >= 2) {
+        let streak = 0;
+        for (let b = 1; b < maxConsec; b++) {
+          const pDate = addDays(date, -b);
+          if (daysPlaced[email] && daysPlaced[email].has(pDate)) streak++;
+          else break;
+        }
+        if (streak >= maxConsec - 1) continue;
+      }
+
+      // 7. 연속 마감(디너) 금지 지침 검사 (예: "C는 연속 마감 금지")
+      const isCloseShift = start >= 1020; // 17:00 이후 시작 시프트
+      if (isCloseShift && (customRules.noConsecutiveClose.has(normEmail) || customRules.noConsecutiveClose.has(email))) {
+        const prevDate = addDays(date, -1);
+        const hadCloseYesterday = (intervals[email] || []).some(
+          (iv) => iv.date === prevDate && (iv.start % 1440) >= 1020
+        );
+        if (hadCloseYesterday) continue;
+      }
+
+      // 8. 요일별 특정 직책만 투입 지침 검사 (예: "일요일은 매니저, 슈퍼바이저만 넣어줘", "주말은 풀타임만")
+      const dayRoles = customRules.dayRoleFilters[String(dayIndex)];
+      if (dayRoles && dayRoles.size > 0) {
+        const pos = lower(person.position);
+        const sec = lower(person.secondary_position);
+        const emp = lower(person.employment_type);
+        const roleMatch = Array.from(dayRoles).some(
+          (r) => pos.includes(r) || sec.includes(r) || emp.includes(r)
+        );
+        if (!roleMatch) continue;
+      }
+
+      // 9. 시간대(오픈/마감/피크타임) 금지 지침 검사 (720분 = 12:00 정오 기준, 피크타임 = 11:00~14:00)
       const pref = customRules.shiftPref[normEmail] || customRules.shiftPref[email] || {};
       if (start < 720 && pref.forbidOpen) continue;
       if (start >= 720 && pref.forbidClose) continue;
+      const isPeak = Math.max(start, 660) < Math.min(end, 840);
+      if (isPeak && pref.forbidPeak) continue;
 
-      // 5. 시간대 선호 보너스 계산 (오픈 선호 직원이 아침 시프트이거나 마감 선호 직원이 저녁 시프트일 때)
+      // 10. 시간대(오픈/마감/피크타임) 선호 보너스 계산
       let prefShiftBonus = 0;
-      if (start < 720 && pref.preferOpen) prefShiftBonus = 1;
-      if (start >= 720 && pref.preferClose) prefShiftBonus = 1;
+      if (start < 720 && pref.preferOpen) prefShiftBonus += 1;
+      if (start >= 720 && pref.preferClose) prefShiftBonus += 1;
+      if (isPeak && pref.preferPeak) prefShiftBonus += 2;
+
+      // 11. 대체 조건 가산점 계산 (예: "A가 빠지면 B로 대체해줘" -> A가 오늘 배정되지 않았으면 B에게 우선권)
+      let substituteBonus = 0;
+      for (const [targetEmail, fallbackEmail] of Object.entries(customRules.substitutePairs)) {
+        if (
+          fallbackEmail === normEmail &&
+          (!daysPlaced[targetEmail] || !daysPlaced[targetEmail].has(date))
+        ) {
+          substituteBonus = 2;
+        }
+      }
+
+      // 12. 주당 최소 N시간 보장 가산점 계산 (예: "B는 주당 최소 20시간 필요해")
+      const minHoursNeeded = customRules.employeeMinHours[normEmail] || customRules.employeeMinHours[email];
+      const needHoursBonus = minHoursNeeded && (assignedMinutes[email] || 0) < minHoursNeeded ? 1 : 0;
 
       const isMinStaff =
         customRules.minStaff && (customRules.minStaff.has(email) || customRules.minStaff.has(lower(email)));
@@ -743,6 +925,8 @@ export async function buildDraft(base44, branch, weekStart) {
         fixed: fixedHere,
         minStaff: isMinStaff ? 1 : 0,
         priorityStaff: isPriorityStaff ? 1 : 0,
+        substituteBonus,
+        needHoursBonus,
         prefShiftBonus,
         shiftsToday,
         split: coversDay >= 2,
@@ -761,22 +945,26 @@ export async function buildDraft(base44, branch, weekStart) {
     // 후보자 우선순위 정렬:
     // 1. 관리자가 직접 고정한 요일(fixed)
     // 2. 고용주 맞춤 AI 지침 요일 우선 배정(customPriority: 주말, 특정 요일 우선 지정자)
-    // 3. ★ 고용주 맞춤 AI 지침 우선 배정 대상자(priorityStaff: 시프트 몰아주기/더 배정)
-    // 4. ★ 시간대(오픈/마감) 선호자 보너스(prefShiftBonus)
-    // 5. ★ 최소 배정 지침(minStaff) 적용: 최소 배정 대상자(오너/비상 땜빵용)는 맨 뒤 최후순위! (0이 앞, 1은 맨 뒤)
-    // 6. ★ 본직책(primary) 우선! (2번째, 3번째 직책은 땜빵용이므로 본직책 직원이 최우선)
-    // 7. ★★★ [고용 형태 최우선]: 정규직(0) > 풀타임(1) > 파트타임(2) > 캐주얼(3) (정규직 1등 순위 배정!)
-    // 8. ★ 오늘 아직 시프트가 없는 사람 우선(shiftsToday: 하루 2시프트 무리한 몰림 방지)
-    // 9. 근무 가능 시간 100% 완전 일치(fullMatch)
-    // 10. 오늘 이 시프트밖에 못 뛰는 사람 우선(onlyOption: 제약조건 최적화)
-    // 11. 하루 2시프트(오픈+마감) 모두 커버 가능한 분할 시프트 대상자(split)
-    // 12. 이번 주 배정된 근무시간 적은 순(used: 같은 고용형태 내 공평성)
+    // 3. ★ 대체/대타 조건 우선 투입(substituteBonus: A가 빠지면 B로 대체)
+    // 4. ★ 고용주 맞춤 AI 지침 우선 배정 대상자(priorityStaff: 시프트 몰아주기/더 배정)
+    // 5. ★ 시간대(오픈/마감/피크타임) 선호자 보너스(prefShiftBonus)
+    // 6. ★ 주당 최소 근무시간 미달자 우선 보장(needHoursBonus: 최소 N시간 채우기)
+    // 7. ★ 최소 배정 지침(minStaff) 적용: 최소 배정 대상자(오너/비상 땜빵용)는 맨 뒤 최후순위! (0이 앞, 1은 맨 뒤)
+    // 8. ★ 본직책(primary) 우선! (2번째, 3번째 직책은 땜빵용이므로 본직책 직원이 최우선)
+    // 9. ★★★ [고용 형태 최우선]: 정규직(0) > 풀타임(1) > 파트타임(2) > 캐주얼(3) (정규직 1등 순위 배정!)
+    // 10. ★ 오늘 아직 시프트가 없는 사람 우선(shiftsToday: 하루 2시프트 무리한 몰림 방지)
+    // 11. 근무 가능 시간 100% 완전 일치(fullMatch)
+    // 12. 오늘 이 시프트밖에 못 뛰는 사람 우선(onlyOption: 제약조건 최적화)
+    // 13. 하루 2시프트(오픈+마감) 모두 커버 가능한 분할 시프트 대상자(split)
+    // 14. 이번 주 배정된 근무시간 적은 순(used: 같은 고용형태 내 공평성)
     candidates.sort(
       (a, b) =>
         (b.fixed ? 1 : 0) - (a.fixed ? 1 : 0) ||
         (b.customPriority ? 1 : 0) - (a.customPriority ? 1 : 0) ||
+        b.substituteBonus - a.substituteBonus || // ★ 대체 조건 최우선 배정!
         b.priorityStaff - a.priorityStaff || // ★ 우선 배정 지시 대상자 최우선!
-        b.prefShiftBonus - a.prefShiftBonus || // ★ 오픈/마감 선호자 우선 배치!
+        b.prefShiftBonus - a.prefShiftBonus || // ★ 오픈/마감/피크타임 선호자 우선 배치!
+        b.needHoursBonus - a.needHoursBonus || // ★ 최소 보장 시간 채우기 우선!
         a.minStaff - b.minStaff || // ★ minStaff: 일반 직원(0) 먼저 배정, 최소 배정 대상자(1)는 맨 뒤 최후순위!
         (b.primary ? 1 : 0) - (a.primary ? 1 : 0) || // ★ 본직책 우선!
         a.rank - b.rank || // ★★★ 정규직(0) > 풀타임(1) > 파트타임(2) > 캐주얼(3) 최우선 배정!
@@ -806,7 +994,7 @@ export async function buildDraft(base44, branch, weekStart) {
         notes: ''
       });
       assignedMinutes[pick.email] = (assignedMinutes[pick.email] || 0) + lengthMin;
-      noteDay(pick.email, date);
+      noteDay(pick.email, date, lengthMin);
       intervals[pick.email] = [
         ...(intervals[pick.email] || []),
         { start: absMinutes(date, start), end: absMinutes(date, end), date }
