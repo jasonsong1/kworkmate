@@ -9,6 +9,7 @@ const TEXT = {
       interviews: '면접 일정',
       roster: '근무표',
       onboarding: '온보딩',
+      attendance: '출퇴근 키오스크',
     },
     top: {
       badge: '샘플 데모',
@@ -151,6 +152,7 @@ const TEXT = {
       interviews: 'Interviews',
       roster: 'Roster',
       onboarding: 'Onboarding',
+      attendance: 'Attendance Kiosk',
     },
     top: {
       badge: 'Sample demo',
