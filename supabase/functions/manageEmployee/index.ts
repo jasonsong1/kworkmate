@@ -11,19 +11,29 @@ import { employeeLanguage, onboardingMail, onboardingReminderMail } from '../_sh
 import { packageState, resolveLimit } from '../_shared/packages.ts';
 import { clean, lower, resolveCaller } from '../_shared/kwAuth.ts';
 
-// Applies a role chosen by a company admin to the person's app user record.
-async function applyRole(base44, company, branch, email, roleKey) {
-  const users = await base44.asServiceRole.entities.EmployeeProfile.filter({ user_email: email });
-  for (const user of users) {
-    const ids = Array.isArray(user.branch_ids) ? user.branch_ids : [];
+// 대상 직원 프로필 1개에만 권한을 적용하며, 동일 이메일을 가진 타 브랜치 직원을 절대 침범하지 않습니다.
+async function applyRole(base44, company, branch, email, roleKey, targetProfileId = null) {
+  if (targetProfileId) {
     const patch = { company_id: branch.company_id, app_role: roleKey };
     if (roleKey !== 'company_admin') {
       patch.branch_id = branch.id;
-
     }
-    await base44.asServiceRole.entities.EmployeeProfile.update(user.id, patch);
+    await base44.asServiceRole.entities.EmployeeProfile.update(targetProfileId, patch);
+  } else {
+    // targetProfileId가 없는 경우 해당 브랜치에 소속된 프로필만 한정하여 업데이트
+    const users = await base44.asServiceRole.entities.EmployeeProfile.filter({
+      user_email: email,
+      branch_id: branch.id
+    });
+    for (const user of users) {
+      const patch = { company_id: branch.company_id, app_role: roleKey };
+      if (roleKey !== 'company_admin') {
+        patch.branch_id = branch.id;
+      }
+      await base44.asServiceRole.entities.EmployeeProfile.update(user.id, patch);
+    }
   }
-  // Company admins manage the company itself, so they join the company member list.
+  // 회사 관리자(company_admin)일 경우 회사 멤버 목록에 추가
   if (roleKey === 'company_admin' && company) {
     const members = Array.isArray(company.member_emails) ? company.member_emails : [];
     if (!members.includes(email)) {
@@ -289,10 +299,10 @@ async function handler(req) {
       if (nextEmail && nextEmail !== lower(profile.user_email)) {
         const taken = await base44.asServiceRole.entities.EmployeeProfile.filter({
           user_email: nextEmail,
-          company_id: targetCompanyId
+          branch_id: profile.branch_id
         });
         if (taken.some((row) => row.id !== profile.id)) {
-          return Response.json({ error: 'This person is already an employee' }, { status: 400 });
+          return Response.json({ error: 'This person is already an employee in this branch' }, { status: 400 });
         }
         patch.user_email = nextEmail;
         if (!clean(profile.login_id) || lower(profile.login_id) === lower(profile.user_email)) {
@@ -324,7 +334,7 @@ async function handler(req) {
         ...pinPatch
       });
 
-      if (roleKey) await applyRole(base44, company, branch, patch.user_email || profile.user_email, roleKey);
+      if (roleKey) await applyRole(base44, company, branch, patch.user_email || profile.user_email, roleKey, profile.id);
 
       return Response.json({ ok: true, employee: updated });
     }
@@ -332,9 +342,10 @@ async function handler(req) {
     const email = String(input.user_email || '').trim().toLowerCase();
     if (!email) return Response.json({ error: 'Email is required' }, { status: 400 });
 
-    const dupe = await base44.asServiceRole.entities.EmployeeProfile.filter({ user_email: email, company_id: targetCompanyId });
+    // 브랜치 격리: 동일 브랜치 내에서만 중복을 검사하고 다른 브랜치에는 동일 이메일 등록을 허용합니다.
+    const dupe = await base44.asServiceRole.entities.EmployeeProfile.filter({ user_email: email, branch_id: branch.id });
     if (dupe.length > 0) {
-      return Response.json({ error: 'This person is already an employee' }, { status: 400 });
+      return Response.json({ error: 'This person is already an employee in this branch' }, { status: 400 });
     }
 
     // How many people the company's package covers.
@@ -387,7 +398,7 @@ async function handler(req) {
 
     await base44.asServiceRole.entities.Branch.update(branch.id, { employee_next_number: nextNumber + 1 });
 
-    if (roleKey) await applyRole(base44, company, branch, email, roleKey);
+    if (roleKey) await applyRole(base44, company, branch, email, roleKey, profile.id);
 
     // The record itself is what the employer is waiting for, so it answers before any mail goes
     // out. The account is opened in its own call, which may take as long as the provider needs.

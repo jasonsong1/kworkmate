@@ -86,6 +86,23 @@ async function handler(req) {
       return Response.json({ error: 'Enter your ID and password' }, { status: 400 });
     }
 
+    // 이메일로 로그인 시도 시, 여러 브랜치에 동일 이메일이 등록되어 있으면 직원번호 로그인을 강제합니다.
+    if (identifier.includes('@')) {
+      const emailProfiles = await base44.asServiceRole.entities.EmployeeProfile.filter({
+        user_email: lower(identifier),
+        status: 'active'
+      }).catch(() => []);
+      const emailRows = rowsOf(emailProfiles);
+      if (emailRows.length > 1) {
+        return Response.json(
+          {
+            error: '동일한 이메일로 등록된 브랜치 계정이 여러 개 존재합니다. 소속 브랜치의 직원 번호(Employee Number, 예: CRN-001)로 로그인해 주세요.'
+          },
+          { status: 409 }
+        );
+      }
+    }
+
     const found = await candidates(base44, identifier);
     const issued = found.filter((profile) => profile.password_hash && profile.password_set !== false);
     if (issued.length === 0) {
@@ -101,7 +118,9 @@ async function handler(req) {
     }
     if (issued.length > 1) {
       return Response.json(
-        { error: 'That ID belongs to more than one account. Sign in with your work email instead.' },
+        {
+          error: '동일한 식별자로 등록된 계정이 여러 개 존재합니다. 소속 브랜치의 고유한 직원 번호(Employee Number)로 로그인해 주세요.'
+        },
         { status: 409 }
       );
     }

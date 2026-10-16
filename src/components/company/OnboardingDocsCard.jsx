@@ -32,21 +32,25 @@ export default function OnboardingDocsCard() {
     event.target.value = '';
     if (files.length === 0 || !company) return;
     setBusy(true);
-    const added = [];
-    for (const file of files) {
-      const { file_url } = await base44.integrations.Core.UploadPublicFile({ file });
-      added.push({
-        name: file.name,
-        file_url,
-        size: file.size,
-        uploaded_at: new Date().toISOString()
-      });
-    }
     try {
+      const added = [];
+      for (const file of files) {
+        const { file_url } = await base44.integrations.Core.UploadPublicFile({ file });
+        added.push({
+          name: file.name,
+          file_url,
+          size: file.size,
+          uploaded_at: new Date().toISOString()
+        });
+      }
       await save([...docs, ...added]);
-      toast({ title: t('settings.docUploaded') });
+      toast({ title: t('settings.docUploaded') || '온보딩 서류가 성공적으로 업로드되었습니다.' });
     } catch (error) {
-      toast({ variant: 'destructive', title: error.message || t('ob.saveFailed') });
+      console.error('온보딩 서류 업로드 실패:', error);
+      toast({
+        variant: 'destructive',
+        title: error.message || t('ob.saveFailed') || '파일 업로드 중 오류가 발생했습니다.'
+      });
     } finally {
       setBusy(false);
     }
