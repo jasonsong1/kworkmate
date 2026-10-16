@@ -21,7 +21,23 @@ const DAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
 // A full working week in Australia, kept beside each visa's own weekly limit in visa.ts so the
 // builder and the screens that quote it can never disagree. A full-time contract is 38 hours; a
 // permanent (정규직) contract the employer agreed at 50 hours is planned up to that.
-const CONTRACT_WEEKLY_HOURS = { full_time: 38, permanent: 50 };
+const CONTRACT_WEEKLY_HOURS = {
+  full_time: 38,
+  fulltime: 38,
+  'full-time': 38,
+  permanent: 50
+};
+
+// 고용 형태를 일관된 키로 정규화합니다.
+export function normalizeEmploymentType(value) {
+  const s = String(value || '').trim().toLowerCase().replace(/[\s_-]+/g, '');
+  if (s === 'fulltime' || s === '풀타임') return 'full_time';
+  if (s === 'parttime' || s === '파트타임') return 'part_time';
+  if (s === 'casual' || s === '캐주얼') return 'casual';
+  if (s === 'permanent' || s === '정규직') return 'permanent';
+  if (s === 'owner' || s === '오너') return 'owner';
+  return String(value || '').trim().toLowerCase();
+}
 
 // How many days of one week a person is planned for, unless the store raised it for them.
 const DEFAULT_MAX_DAYS = 5;
@@ -37,7 +53,7 @@ const EMPLOYMENT_RANK = { full_time: 0, part_time: 1, casual: 2 };
 // The person who runs the store. None of the limits the store sets for its crew — the contract
 // and visa hours, the days a week and the shifts a day — are applied to an owner: whatever the
 // week needs is open to them.
-const UNLIMITED_EMPLOYMENT = ['owner'];
+const UNLIMITED_EMPLOYMENT = ['owner', '오너'];
 
 export function rowsOf(result) {
   return Array.isArray(result) ? result : (result && result.items) || [];
@@ -97,11 +113,13 @@ function lengthOf(shift) {
 // may not be planned past a 38 hour week, and a visa with a weekly limit of its own — a student
 // visa's 24 hours — is never planned past that, however the week is put together.
 function remainingMinutes(person, weekMinutes) {
-  if (UNLIMITED_EMPLOYMENT.includes(lower(person.employment_type))) return null;
-  const contractCap = CONTRACT_WEEKLY_HOURS[lower(person.employment_type)];
+  const normType = normalizeEmploymentType(person.employment_type);
+  if (UNLIMITED_EMPLOYMENT.includes(normType)) return null;
+  const contractCap = CONTRACT_WEEKLY_HOURS[normType];
+  const visaCap = weeklyHourCap(person.visa_type);
   const caps = [
     typeof contractCap === 'number' ? contractCap : null,
-    weeklyHourCap(person.visa_type)
+    typeof visaCap === 'number' ? visaCap : null
   ].filter((value) => typeof value === 'number');
   if (caps.length === 0) return null;
   return Math.min(...caps) * 60 - weekMinutes;
@@ -179,8 +197,18 @@ export async function buildDraft(base44, branch, weekStart) {
     if (!email || !(days > 0)) continue;
     daysOverrideByEmail[email] = days;
   }
-  const dayCapFor = (email) =>
-    unlimitedStaff.has(lower(email)) ? Infinity : daysOverrideByEmail[email] || maxDaysDefault;
+  const dayCapFor = (email, person) => {
+    const e = lower(email);
+    if (unlimitedStaff.has(e)) return Infinity;
+    if (daysOverrideByEmail[e]) return daysOverrideByEmail[e];
+    // 풀타임(38시간) 및 정규직(50시간) 직원은 주당 계약 시간을 충족할 수 있도록
+    // 매장 기본 설정(5일)에 제한되지 않고 최대 6일까지 유연하게 근무를 배정할 수 있습니다.
+    const empType = person ? normalizeEmploymentType(person.employment_type) : '';
+    if (empType === 'full_time' || empType === 'permanent') {
+      return Math.max(maxDaysDefault, 6);
+    }
+    return maxDaysDefault;
+  };
 
   // Two shifts a day is the store's standing answer; the people it agreed otherwise with carry
   // their own number and everybody else keeps the default.
@@ -320,7 +348,8 @@ export async function buildDraft(base44, branch, weekStart) {
       }
       // Nobody is planned past the shifts their own day holds, nor past their days in the week.
       if ((shiftsOnDay[`${email}|${date}`] || 0) >= shiftCapFor(email)) continue;
-      if ((daysPlaced[email] || new Set()).size >= dayCapFor(email)) continue;
+      const currentDays = daysPlaced[email] || new Set();
+      if (!currentDays.has(date) && currentDays.size >= dayCapFor(email, person)) continue;
 
       const fixedHere = Boolean(fixedByDay[dayIndex] && fixedByDay[dayIndex].has(lower(email)));
       const submitted = availByEmail[email] || null;
@@ -360,7 +389,7 @@ export async function buildDraft(base44, branch, weekStart) {
         email,
         name: person.full_name,
         used: assignedMinutes[email] || 0,
-        rank: EMPLOYMENT_RANK[lower(person.employment_type)] ?? EMPLOYMENT_RANK.casual,
+        rank: EMPLOYMENT_RANK[normalizeEmploymentType(person.employment_type)] ?? EMPLOYMENT_RANK.casual,
         primary: person.position === req.position,
         fixed: fixedHere,
         split: coversDay >= 2

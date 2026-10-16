@@ -868,7 +868,7 @@ export default function Onboarding() {
                           const trimmed = raw.replace(/^0+/, '').slice(0, 9);
                           setAnswer(question.id, trimmed, question.label);
                         }}
-                        placeholder="411 602 349 (9 digits)"
+                        placeholder="400 123 456 (9 digits)"
                         maxLength={9}
                         className="flex-1 font-mono tracking-wider"
                       />

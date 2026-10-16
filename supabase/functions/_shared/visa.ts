@@ -17,8 +17,13 @@ const LEGACY_VISA_KEYS = {
 };
 
 export function visaKey(value) {
-  const raw = String(value || '');
-  return LEGACY_VISA_KEYS[raw] || raw;
+  const raw = String(value || '').trim().toLowerCase();
+  if (LEGACY_VISA_KEYS[raw]) return LEGACY_VISA_KEYS[raw];
+  if (raw.includes('student') || raw.includes('학생') || raw === '500') return 'student';
+  if (raw.includes('holiday') || raw.includes('워홀') || raw.includes('417') || raw.includes('462')) return 'working_holiday';
+  if (raw.includes('graduate') || raw.includes('졸업') || raw.includes('485')) return 'graduate';
+  if (raw.includes('pr') || raw.includes('citizen') || raw.includes('영주') || raw.includes('시민')) return 'pr_citizen';
+  return raw;
 }
 
 export function weeklyHourCap(value) {
