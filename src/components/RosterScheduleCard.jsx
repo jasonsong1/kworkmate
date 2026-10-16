@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { CalendarClock, Clock, Loader2, Mail, Send, Sparkles } from 'lucide-react';
+import { Clock, Loader2, Mail } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -37,7 +37,7 @@ function getBranchZoneInfo(branch) {
   return STATE_TIMEZONES[st] || { zone: 'Australia/Sydney', city: '호주 동부 (시드니 기준)' };
 }
 
-// 12시간제 및 24시간제 친절한 시간 라벨 포맷터
+// 12시간제 및 24시간제 시간 라벨 포맷터
 function formatHourLabel(hour) {
   const period = hour >= 12 ? '오후' : '오전';
   const displayH = hour % 12 === 0 ? 12 : hour % 12;
@@ -54,37 +54,8 @@ export default function RosterScheduleCard({ branch }) {
   const [hour, setHour] = useState(20);
   const [minute, setMinute] = useState(0);
   const [saving, setSaving] = useState(false);
-  const [sendingNow, setSendingNow] = useState(false);
-  const [localCurrentTime, setLocalCurrentTime] = useState('');
 
   const zoneInfo = getBranchZoneInfo(branch);
-
-  // 지점 지역 기준 실시간 현재 시각 업데이트
-  useEffect(() => {
-    const updateTime = () => {
-      try {
-        const now = new Date();
-        const formatted = new Intl.DateTimeFormat('ko-KR', {
-          timeZone: zoneInfo.zone,
-          year: 'numeric',
-          month: '2-digit',
-          day: '2-digit',
-          weekday: 'short',
-          hour: '2-digit',
-          minute: '2-digit',
-          second: '2-digit',
-          hour12: false
-        }).format(now);
-        setLocalCurrentTime(formatted);
-      } catch (err) {
-        setLocalCurrentTime('');
-      }
-    };
-
-    updateTime();
-    const timer = setInterval(updateTime, 1000);
-    return () => clearInterval(timer);
-  }, [zoneInfo.zone]);
 
   // 지점의 저장된 설정 불러오기
   useEffect(() => {
@@ -123,45 +94,6 @@ export default function RosterScheduleCard({ branch }) {
     }
   };
 
-  // 즉시 이메일 발송 (수동 테스트 / 즉시 발송)
-  const handleSendNow = async () => {
-    if (!window.confirm(`[${branch?.name}] 지점 소속의 모든 활성 직원에게 근무 가능 시간 요청 이메일을 지금 즉시 발송하시겠습니까?`)) {
-      return;
-    }
-
-    setSendingNow(true);
-    try {
-      const res = await base44.functions.invoke('sendAvailabilityRequests', {
-        branch_id: branch.id,
-        force: true
-      });
-
-      const data = res.data || {};
-      if (data.error) {
-        toast({
-          variant: 'destructive',
-          title: '발송 실패',
-          description: data.error
-        });
-      } else {
-        const targetBranch = (data.results || []).find((r) => r.branch === branch?.name) || (data.results || [])[0];
-        const count = targetBranch ? targetBranch.sent : 0;
-        toast({
-          title: '이메일 발송 완료',
-          description: `총 ${count}명의 직원에게 근무 가능 시간 제출 요청 이메일을 성공적으로 발송했습니다.`
-        });
-      }
-    } catch (err) {
-      toast({
-        variant: 'destructive',
-        title: '발송 오류',
-        description: err.message || '이메일 발송 중 문제가 발생했습니다.'
-      });
-    } finally {
-      setSendingNow(false);
-    }
-  };
-
   const dayLabel = t(`day.${day}`);
   const formattedTime = `${hour >= 12 ? '오후' : '오전'} ${hour % 12 === 0 ? 12 : hour % 12}:${String(minute).padStart(2, '0')} (${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')})`;
 
@@ -184,18 +116,11 @@ export default function RosterScheduleCard({ branch }) {
 
       <CardContent className="space-y-4 pt-1">
         {/* 지점 지역 기준 시각 안내 배너 */}
-        <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-          <div className="flex items-center gap-2 text-xs">
-            <Clock className="h-4 w-4 text-primary shrink-0" />
-            <span>
-              <strong className="text-foreground">지점 지역 기준:</strong> {zoneInfo.city} ({zoneInfo.zone})
-            </span>
-          </div>
-          {localCurrentTime && (
-            <div className="text-xs font-mono text-primary font-semibold bg-background/80 px-2.5 py-1 rounded border shadow-sm">
-              현재 현지 시각: {localCurrentTime}
-            </div>
-          )}
+        <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 flex items-center gap-2 text-xs">
+          <Clock className="h-4 w-4 text-primary shrink-0" />
+          <span>
+            <strong className="text-foreground">지점 지역 기준:</strong> {zoneInfo.city} ({zoneInfo.zone})
+          </span>
         </div>
 
         {/* 자동 발송 활성화 토글 */}
@@ -209,7 +134,7 @@ export default function RosterScheduleCard({ branch }) {
           <Switch checked={enabled} onCheckedChange={setEnabled} disabled={!editable} />
         </div>
 
-        {/* 요일, 시간(시), 분 선택 그리드 */}
+        {/* 요일, 시, 분 선택 그리드 */}
         <div className="grid gap-3 sm:grid-cols-3">
           <div>
             <Label className="mb-1.5 block text-xs font-semibold">발송 요일</Label>
@@ -232,7 +157,7 @@ export default function RosterScheduleCard({ branch }) {
           </div>
 
           <div>
-            <Label className="mb-1.5 block text-xs font-semibold">발송 시간 (시)</Label>
+            <Label className="mb-1.5 block text-xs font-semibold">시</Label>
             <Select
               value={String(hour)}
               onValueChange={(value) => setHour(Number(value))}
@@ -252,7 +177,7 @@ export default function RosterScheduleCard({ branch }) {
           </div>
 
           <div>
-            <Label className="mb-1.5 block text-xs font-semibold">발송 분 (분)</Label>
+            <Label className="mb-1.5 block text-xs font-semibold">분</Label>
             <Select
               value={String(minute)}
               onValueChange={(value) => setMinute(Number(value))}
@@ -285,32 +210,16 @@ export default function RosterScheduleCard({ branch }) {
           )}
         </div>
 
-        {/* 저장 및 즉시 발송 버튼 그룹 */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 pt-2 border-t">
+        {/* 저장 버튼 */}
+        <div className="pt-2 border-t">
           <Button
             onClick={save}
             disabled={saving || !editable}
             size="sm"
-            className="font-semibold text-xs h-9"
+            className="font-semibold text-xs h-9 px-6"
           >
             {saving && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
-            설정 저장하기
-          </Button>
-
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={handleSendNow}
-            disabled={sendingNow || !editable}
-            className="text-xs h-9 gap-1.5 border-primary/30 hover:bg-primary/5 text-primary"
-          >
-            {sendingNow ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <Send className="h-3.5 w-3.5" />
-            )}
-            지금 즉시 발송 (테스트)
+            저장
           </Button>
         </div>
       </CardContent>

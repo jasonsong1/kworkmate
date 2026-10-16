@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { CalendarClock, Clock, Loader2, Sparkles } from 'lucide-react';
+import { CalendarClock, Clock, Loader2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -47,35 +47,8 @@ export default function RosterAutomationCard({ branch }) {
   const [hour, setHour] = useState(20);
   const [minute, setMinute] = useState(0);
   const [saving, setSaving] = useState(false);
-  const [localCurrentTime, setLocalCurrentTime] = useState('');
 
   const zoneInfo = getBranchZoneInfo(branch);
-
-  useEffect(() => {
-    const updateTime = () => {
-      try {
-        const now = new Date();
-        const formatted = new Intl.DateTimeFormat('ko-KR', {
-          timeZone: zoneInfo.zone,
-          year: 'numeric',
-          month: '2-digit',
-          day: '2-digit',
-          weekday: 'short',
-          hour: '2-digit',
-          minute: '2-digit',
-          second: '2-digit',
-          hour12: false
-        }).format(now);
-        setLocalCurrentTime(formatted);
-      } catch (err) {
-        setLocalCurrentTime('');
-      }
-    };
-
-    updateTime();
-    const timer = setInterval(updateTime, 1000);
-    return () => clearInterval(timer);
-  }, [zoneInfo.zone]);
 
   useEffect(() => {
     if (!branch) return;
@@ -133,18 +106,11 @@ export default function RosterAutomationCard({ branch }) {
 
       <CardContent className="space-y-4 pt-1">
         {/* 지점 지역 기준 안내 배너 */}
-        <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-          <div className="flex items-center gap-2 text-xs">
-            <Clock className="h-4 w-4 text-primary shrink-0" />
-            <span>
-              <strong className="text-foreground">지점 지역 기준:</strong> {zoneInfo.city} ({zoneInfo.zone})
-            </span>
-          </div>
-          {localCurrentTime && (
-            <div className="text-xs font-mono text-primary font-semibold bg-background/80 px-2.5 py-1 rounded border shadow-sm">
-              현재 현지 시각: {localCurrentTime}
-            </div>
-          )}
+        <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 flex items-center gap-2 text-xs">
+          <Clock className="h-4 w-4 text-primary shrink-0" />
+          <span>
+            <strong className="text-foreground">지점 지역 기준:</strong> {zoneInfo.city} ({zoneInfo.zone})
+          </span>
         </div>
 
         {/* 자동 생성 토글 */}
@@ -158,7 +124,7 @@ export default function RosterAutomationCard({ branch }) {
           <Switch checked={enabled} onCheckedChange={setEnabled} disabled={!editable} />
         </div>
 
-        {/* 요일, 시간(시), 분 선택 그리드 */}
+        {/* 요일, 시, 분 선택 그리드 */}
         <div className="grid gap-3 sm:grid-cols-3">
           <div>
             <Label className="mb-1.5 block text-xs font-semibold">생성 요일</Label>
@@ -181,7 +147,7 @@ export default function RosterAutomationCard({ branch }) {
           </div>
 
           <div>
-            <Label className="mb-1.5 block text-xs font-semibold">생성 시간 (시)</Label>
+            <Label className="mb-1.5 block text-xs font-semibold">시</Label>
             <Select
               value={String(hour)}
               onValueChange={(value) => setHour(Number(value))}
@@ -201,7 +167,7 @@ export default function RosterAutomationCard({ branch }) {
           </div>
 
           <div>
-            <Label className="mb-1.5 block text-xs font-semibold">생성 분 (분)</Label>
+            <Label className="mb-1.5 block text-xs font-semibold">분</Label>
             <Select
               value={String(minute)}
               onValueChange={(value) => setMinute(Number(value))}
@@ -239,10 +205,10 @@ export default function RosterAutomationCard({ branch }) {
             onClick={save}
             disabled={saving || !editable}
             size="sm"
-            className="font-semibold text-xs h-9"
+            className="font-semibold text-xs h-9 px-6"
           >
             {saving && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
-            설정 저장하기
+            저장
           </Button>
         </div>
       </CardContent>
