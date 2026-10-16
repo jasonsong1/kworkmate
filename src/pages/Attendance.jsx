@@ -253,14 +253,28 @@ export default function Attendance() {
               <Input
                 type="date"
                 value={fromDate}
-                onChange={(e) => setFromDate(e.target.value)}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setFromDate(val);
+                  // 시작날짜가 끝날짜보다 크면 끝날짜도 자동으로 시작날짜와 같아집니다.
+                  if (val && toDate && val > toDate) {
+                    setToDate(val);
+                  }
+                }}
                 className="flex-1 sm:w-36 h-9 text-xs"
               />
               <span className="text-muted-foreground text-xs shrink-0">→</span>
               <Input
                 type="date"
                 value={toDate}
-                onChange={(e) => setToDate(e.target.value)}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setToDate(val);
+                  // 끝날짜가 시작날짜보다 작으면 시작날짜도 자동으로 끝날짜와 같아집니다.
+                  if (val && fromDate && val < fromDate) {
+                    setFromDate(val);
+                  }
+                }}
                 className="flex-1 sm:w-36 h-9 text-xs"
               />
             </div>

@@ -581,7 +581,21 @@ export default function EmployeeDialog({ open, onOpenChange, branch, employee, o
             {canViewHourlyRate && (
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
-                  <Label>{t('employees.fields.rate') || '시급'}</Label>
+                  <div className="flex items-center gap-2.5">
+                    <Label>{t('employees.fields.rate') || '시급'}</Label>
+                    <div className="flex items-center gap-1.5 border-l pl-2.5 border-muted">
+                      <Label htmlFor="penalty-toggle" className="text-xs font-normal text-muted-foreground cursor-pointer">
+                        패널티 적용
+                      </Label>
+                      <Switch
+                        id="penalty-toggle"
+                        checked={form.penalty_rates_enabled}
+                        onCheckedChange={(checked) => set('penalty_rates_enabled', checked)}
+                        disabled={!canEditEmployees}
+                        className="scale-75 origin-left"
+                      />
+                    </div>
+                  </div>
                   {rateUnlocked ? (
                     <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
                       <Unlock className="h-3 w-3 text-emerald-600 dark:text-emerald-400" /> 잠금 해제됨
@@ -632,36 +646,6 @@ export default function EmployeeDialog({ open, onOpenChange, branch, employee, o
                 )}
               </div>
             )}
-
-            {/* 패널티 시급 적용 여부 토글 스위치 (기본값: false / 미적용) */}
-            <div className="sm:col-span-2 rounded-xl border border-muted bg-muted/20 p-3.5 space-y-1">
-              <div className="flex items-center justify-between gap-3">
-                <div className="space-y-0.5">
-                  <div className="flex items-center gap-2">
-                    <Label className="text-sm font-medium cursor-pointer">
-                      주말·공휴일 패널티 시급 적용
-                    </Label>
-                    {form.penalty_rates_enabled ? (
-                      <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">
-                        적용 중
-                      </span>
-                    ) : (
-                      <span className="text-[11px] font-normal px-2 py-0.5 rounded-full bg-muted text-muted-foreground border">
-                        미적용 (기본)
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-xs text-muted-foreground leading-relaxed">
-                    토요일, 일요일 및 공휴일 근무 시 회사 설정에 정의된 패널티 시급(할증 배율)을 적용합니다. (기본: 미적용)
-                  </p>
-                </div>
-                <Switch
-                  checked={form.penalty_rates_enabled}
-                  onCheckedChange={(checked) => set('penalty_rates_enabled', checked)}
-                  disabled={!canEditEmployees}
-                />
-              </div>
-            </div>
 
             <div>
               <Label>{t('employees.startDate')}</Label>
