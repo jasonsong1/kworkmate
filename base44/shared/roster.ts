@@ -354,7 +354,27 @@ export async function buildDraft(base44, branch, weekStart) {
       const fixedHere = Boolean(fixedByDay[dayIndex] && fixedByDay[dayIndex].has(lower(email)));
       const submitted = availByEmail[email] || null;
       const window = availableWindow(submitted, dayKey);
-      const freeForShift = Boolean(window && window.from <= start && window.to >= end);
+      
+      // 1. 전체 시프트 시간(start~end)을 100% 커버하는 완전 매칭
+      const fullMatch = Boolean(window && window.from <= start && window.to >= end);
+
+      // 2. 직원의 가능 시간과 시프트 시간의 겹치는 구간(overlap) 계산
+      let overlapMin = 0;
+      if (window) {
+        const oStart = Math.max(window.from, start);
+        const oEnd = Math.min(window.to, end);
+        overlapMin = Math.max(0, oEnd - oStart);
+      }
+
+      // 3. 유연 매칭: 시작 시간 오차가 2시간 이내이면서 시프트 시간의 50% 이상(또는 3시간 이상) 겹치면 후보로 인정
+      // (예: 매장 08:00~15:00 시프트에 직원 09:00~17:00 제출 시 6시간 겹치므로 후보로 허용)
+      const partialMatch = Boolean(
+        window &&
+        overlapMin >= Math.min(180, lengthMin * 0.5) &&
+        Math.abs(window.from - start) <= 120
+      );
+
+      const freeForShift = fullMatch || partialMatch;
       // How many of that day's own shifts this person's submitted hours cover: two or more makes
       // them the person the day is built on, so both the morning and the afternoon go to them.
       const coversDay = (dayDemand[dayIndex] || []).filter(
@@ -392,21 +412,22 @@ export async function buildDraft(base44, branch, weekStart) {
         rank: EMPLOYMENT_RANK[normalizeEmploymentType(person.employment_type)] ?? EMPLOYMENT_RANK.casual,
         primary: person.position === req.position,
         fixed: fixedHere,
-        split: coversDay >= 2
+        split: coversDay >= 2,
+        fullMatch: fullMatch ? 1 : 0,
+        overlapMin
       });
     }
 
-    // The pinned people come first, then the people whose submitted hours take both of the day's
-    // shifts — the split-shift person the day is built on — then a full-time contract before a
-    // part-time one and a part-time one before casual hours, then fairness — fewest hours so far —
-    // then main position.
+    // The pinned people come first, then 100% full match, then split shifts, then contracts, then fairness
     candidates.sort(
       (a, b) =>
         (b.fixed ? 1 : 0) - (a.fixed ? 1 : 0) ||
+        b.fullMatch - a.fullMatch ||
         (b.split ? 1 : 0) - (a.split ? 1 : 0) ||
         a.rank - b.rank ||
         a.used - b.used ||
         (b.primary ? 1 : 0) - (a.primary ? 1 : 0) ||
+        b.overlapMin - a.overlapMin ||
         a.email.localeCompare(b.email)
     );
 
