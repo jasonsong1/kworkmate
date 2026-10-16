@@ -7,13 +7,10 @@ import {
   FileCheck2,
   Timer,
   Store,
-  Sparkles,
-  ArrowRight,
   LogOut,
   Globe,
   Menu,
   ShieldCheck,
-  CheckCircle2,
   Building2,
   Lock
 } from 'lucide-react';
@@ -25,7 +22,8 @@ import { cn } from '@/lib/utils';
 /**
  * DemoShell 컴포넌트
  * 실제 KWorkMate 백오피스 관리자 화면(좌측 사이드바 + 상단 헤더)과 동일한 구조와 프리미엄 디자인을 제공합니다.
- * 사용자 피드백에 따라 너무 복잡한 전체 메뉴 대신 가장 중요한 5대 코어 기능만 직관적으로 체험할 수 있도록 구성했습니다.
+ * 사용자 요청에 따라 불필요한 가입/로그인 유도 요소(실제 매장에 도입하기, 무료가입, 로그인)는 제거하고
+ * 핵심 5대 코어 기능 체험에만 집중하도록 구성했습니다.
  */
 export default function DemoShell({ activeTab, onSelectTab, c, children }) {
   const { lang, toggle } = useI18n();
@@ -174,36 +172,26 @@ export default function DemoShell({ activeTab, onSelectTab, c, children }) {
         </div>
       </div>
 
-      {/* 4. 하단 CTA 카드 (실제 프로덕트 가입 유도) */}
+      {/* 4. 하단 샌드박스 상태 안내 및 종료 링크 */}
       <div className="p-4 border-t border-border/60">
-        <div className="rounded-xl border border-primary/20 bg-gradient-to-br from-primary/10 via-primary/5 to-transparent p-3.5 shadow-sm">
-          <div className="flex items-center gap-1.5 text-xs font-bold text-primary mb-1">
-            <Sparkles className="h-3.5 w-3.5" />
-            <span>{lang === 'ko' ? '실제 매장에 도입하기' : 'Ready for your store?'}</span>
+        <div className="rounded-xl border border-border/80 bg-muted/40 p-3">
+          <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground mb-1">
+            <Lock className="h-3.5 w-3.5 text-primary" />
+            <span>{c.top.virtual || (lang === 'ko' ? '가상 체험 모드' : 'Virtual Mode')}</span>
           </div>
-          <p className="text-[11px] text-muted-foreground leading-snug mb-3">
+          <p className="text-[11px] text-muted-foreground leading-snug">
             {lang === 'ko'
-              ? '카드 등록 없이 즉시 시작하세요. 14일 무료 체험을 제공합니다.'
-              : 'Get started immediately. Free 14-day trial with no credit card.'}
+              ? '실제 데이터베이스에 저장되지 않는 안전한 가상 샌드박스 환경입니다.'
+              : 'Safe sandbox environment with simulated store data.'}
           </p>
-          <div className="flex items-center gap-2">
-            <Button size="sm" className="w-full text-xs font-semibold h-8 shadow-sm" asChild>
-              <Link to="/login">
-                {lang === 'ko' ? '무료 가입 / 로그인' : 'Sign Up Free'}
-                <ArrowRight className="ml-1 h-3 w-3" />
-              </Link>
-            </Button>
-          </div>
         </div>
 
-        <div className="mt-3 flex items-center justify-between text-[11px] text-muted-foreground px-1">
-          <span className="flex items-center gap-1">
-            <Lock className="h-3 w-3 text-muted-foreground/70" />
-            {c.top.virtual || '가상 모드'}
-          </span>
-          <Link to="/welcome" className="hover:text-foreground hover:underline">
-            {c.top.exit || '데모 종료'}
+        <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground px-1">
+          <Link to="/welcome" className="flex items-center gap-1.5 hover:text-foreground hover:underline">
+            <LogOut className="h-3.5 w-3.5" />
+            <span>{c.top.exit || '데모 종료'}</span>
           </Link>
+          <span className="text-[10px] text-muted-foreground/60">K-Workmate</span>
         </div>
       </div>
     </div>
@@ -247,7 +235,7 @@ export default function DemoShell({ activeTab, onSelectTab, c, children }) {
           </div>
         </div>
 
-        {/* 상단 우측 액션 버튼들 */}
+        {/* 상단 우측 액션 버튼들 (로그인/가입 버튼 제외하고 순수 데모 도구만 유지) */}
         <div className="flex items-center gap-2">
           {/* 언어 전환 버튼 */}
           <Button
@@ -258,11 +246,6 @@ export default function DemoShell({ activeTab, onSelectTab, c, children }) {
           >
             <Globe className="h-3.5 w-3.5 text-muted-foreground" />
             <span>{lang === 'ko' ? 'EN' : '한국어'}</span>
-          </Button>
-
-          {/* 로그인 버튼 */}
-          <Button variant="ghost" size="sm" asChild className="hidden sm:inline-flex h-8 text-xs font-medium">
-            <Link to="/login">{c.top.login || '로그인'}</Link>
           </Button>
 
           {/* 데모 종료 버튼 */}
