@@ -130,19 +130,21 @@ export function parseCustomInstructions(instructions, staff) {
   const rules = {
     employeeDayCaps: {},
     employeeExclude: new Set(),
-    dayPriority: {}
+    dayPriority: {},
+    weekendStaff: new Set() // 주말 우선 배정 대상자
   };
   if (!instructions || !String(instructions).trim()) return rules;
 
   const lines = String(instructions).split(/\r?\n|•|,|;/).map((s) => s.trim()).filter(Boolean);
   const dayNames = [
-    { names: ['월요일', '월', 'mon', 'monday'], index: 0 },
-    { names: ['화요일', '화', 'tue', 'tuesday'], index: 1 },
-    { names: ['수요일', '수', 'wed', 'wednesday'], index: 2 },
-    { names: ['목요일', '목', 'thu', 'thursday'], index: 3 },
-    { names: ['금요일', '금', 'fri', 'friday'], index: 4 },
-    { names: ['토요일', '토', 'sat', 'saturday'], index: 5 },
-    { names: ['일요일', '일', 'sun', 'sunday'], index: 6 }
+    { names: ['월요일', '월', 'mon', 'monday'], indices: [0] },
+    { names: ['화요일', '화', 'tue', 'tuesday'], indices: [1] },
+    { names: ['수요일', '수', 'wed', 'wednesday'], indices: [2] },
+    { names: ['목요일', '목', 'thu', 'thursday'], indices: [3] },
+    { names: ['금요일', '금', 'fri', 'friday'], indices: [4] },
+    { names: ['토요일', '토', 'sat', 'saturday'], indices: [5] },
+    { names: ['일요일', '일', 'sun', 'sunday'], indices: [6] },
+    { names: ['주말', 'weekend', 'weekends'], indices: [5, 6] } // 토, 일 모두 포함
   ];
 
   for (const line of lines) {
@@ -168,9 +170,14 @@ export function parseCustomInstructions(instructions, staff) {
       if (lowerLine.includes('제외') || lowerLine.includes('빼') || lowerLine.includes('쉬게') || lowerLine.includes('오프') || lowerLine.includes('off')) {
         rules.employeeExclude.add(email);
       }
+
+      // 3. 주말 배정 지침 감지: 예) "monoovatwo는 주말배정해줘", "monoovatwo 주말 근무"
+      if (lowerLine.includes('주말') || lowerLine.includes('weekend')) {
+        rules.weekendStaff.add(email);
+      }
     }
 
-    // 3. 특정 요일 특정 직원 우선 투입: 예) "금요일에는 Tester 우선", "금요일에 Tester"
+    // 4. 특정 요일 또는 주말에 특정 직원 우선 투입
     for (const d of dayNames) {
       const hasDay = d.names.some((dn) => lowerLine.includes(dn));
       if (hasDay) {
@@ -180,9 +187,11 @@ export function parseCustomInstructions(instructions, staff) {
           const nameKey = name ? name.split(' ')[0] : '';
           const matched = (name && lowerLine.includes(name)) || (nameKey && lowerLine.includes(nameKey)) || lowerLine.includes(email);
           if (matched) {
-            const key = String(d.index);
-            rules.dayPriority[key] = rules.dayPriority[key] || new Set();
-            rules.dayPriority[key].add(email);
+            for (const idx of d.indices) {
+              const key = String(idx);
+              rules.dayPriority[key] = rules.dayPriority[key] || new Set();
+              rules.dayPriority[key].add(email);
+            }
           }
         }
       }
@@ -461,6 +470,17 @@ export async function buildDraft(base44, branch, weekStart) {
       const currentDays = daysPlaced[email] || new Set();
       if (!currentDays.has(date) && currentDays.size >= dayCapFor(email, person)) continue;
 
+      // 평일(0~4) 배정 시, 주말 필수/우선 배정자(weekendStaff)가 평일에 주당 최대 일수(5일)를 모두 소진하여 주말에 제외되는 것을 방지합니다.
+      const isWeekday = dayIndex >= 0 && dayIndex <= 4;
+      const isWeekendMust =
+        customRules.weekendStaff &&
+        (customRules.weekendStaff.has(email) || customRules.weekendStaff.has(lower(email)));
+      if (isWeekday && isWeekendMust && !currentDays.has(date)) {
+        // 주말(토, 일) 2일을 뛸 수 있도록 평일에는 최대 (한도 - 2)일까지만 배정하여 슬롯을 남겨둡니다.
+        const reservedWeekdayCap = Math.max(1, dayCapFor(email, person) - 2);
+        if (currentDays.size >= reservedWeekdayCap) continue;
+      }
+
       const fixedHere = Boolean(fixedByDay[dayIndex] && fixedByDay[dayIndex].has(lower(email)));
       const submitted = availByEmail[email] || null;
       const window = availableWindow(submitted, dayKey);
@@ -523,13 +543,16 @@ export async function buildDraft(base44, branch, weekStart) {
       const isExcluded = customRules.employeeExclude.has(email) || customRules.employeeExclude.has(lower(email));
       if (isExcluded) continue;
 
+      const shiftsToday = shiftsOnDay[`${email}|${date}`] || 0;
+
       candidates.push({
         email,
         name: person.full_name,
         used: assignedMinutes[email] || 0,
         rank: EMPLOYMENT_RANK[normalizeEmploymentType(person.employment_type)] ?? EMPLOYMENT_RANK.casual,
-        primary: person.position === req.position,
+        primary: person.position === req.position, // 해당 포지션이 본직책인지 여부
         fixed: fixedHere,
+        shiftsToday,
         split: coversDay >= 2,
         fullMatch: fullMatch ? 1 : 0,
         onlyOption: onlyOption ? 1 : 0,
@@ -543,17 +566,27 @@ export async function buildDraft(base44, branch, weekStart) {
       });
     }
 
-    // The pinned people come first, then custom priority, then 100% full match, then onlyOption (제약조건 최우선), then split shifts, then contracts, then fairness
+    // 후보자 우선순위 정렬:
+    // 1. 관리자가 직접 고정한 요일(fixed)
+    // 2. 고용주 맞춤 AI 지침 우선 배정(customPriority: 주말, 특정 요일 우선 지정자)
+    // 3. ★ 본직책(primary) 우선! (2번째, 3번째 직책은 땜빵용이므로 본직책 직원이 최우선)
+    // 4. ★ 오늘 아직 시프트가 없는 사람 우선(shiftsToday: 하루 2시프트 무리한 몰림 방지)
+    // 5. 근무 가능 시간 100% 완전 일치(fullMatch)
+    // 6. 오늘 이 시프트밖에 못 뛰는 사람 우선(onlyOption: 제약조건 최적화)
+    // 7. 하루 2시프트(오픈+마감) 모두 커버 가능한 분할 시프트 대상자(split)
+    // 8. 풀타임/정규직 우선(rank)
+    // 9. 이번 주 배정된 근무시간 적은 순(used: 공평성)
     candidates.sort(
       (a, b) =>
         (b.fixed ? 1 : 0) - (a.fixed ? 1 : 0) ||
-        (b.customPriority ? 1 : 0) - (a.customPriority ? 1 : 0) || // 고용주 맞춤 지침 우선 배정
+        (b.customPriority ? 1 : 0) - (a.customPriority ? 1 : 0) ||
+        (b.primary ? 1 : 0) - (a.primary ? 1 : 0) ||
+        a.shiftsToday - b.shiftsToday ||
         b.fullMatch - a.fullMatch ||
-        b.onlyOption - a.onlyOption || // 이 시프트밖에 못 뛰는 사람에게 먼저 시프트를 주고 다재다능한 사람은 양보
+        b.onlyOption - a.onlyOption ||
         (b.split ? 1 : 0) - (a.split ? 1 : 0) ||
         a.rank - b.rank ||
         a.used - b.used ||
-        (b.primary ? 1 : 0) - (a.primary ? 1 : 0) ||
         b.overlapMin - a.overlapMin ||
         a.email.localeCompare(b.email)
     );
