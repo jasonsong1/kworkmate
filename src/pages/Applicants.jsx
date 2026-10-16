@@ -44,6 +44,7 @@ import {
 } from '@/lib/bh';
 import { cn } from '@/lib/utils';
 import { base44 } from '@/api/base44Client';
+import { useRealtimeSync } from '@/lib/useRealtimeSync';
 
 // 한 페이지당 표시할 지원자 수
 const PAGE_SIZE = 10;
@@ -119,6 +120,9 @@ export default function Applicants() {
   useEffect(() => {
     loadApplicants();
   }, [loadApplicants]);
+
+  // 실시간 동기화: 새로운 지원자 접수 또는 상태 변경 시 새로고침 없이 즉시 목록 갱신
+  useRealtimeSync('job_application', loadApplicants);
 
   // 탭, 공고, 필터 조건이 변경되면 1페이지로 자동 리셋
   useEffect(() => {

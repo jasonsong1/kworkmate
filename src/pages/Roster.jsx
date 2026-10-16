@@ -19,6 +19,7 @@ import { useWorkspace } from '@/lib/WorkspaceContext';
 import { usePermissions } from '@/lib/permissions';
 import { addDaysIso, isBranchOpenOnDay, startOfWeekIso, todayIso, weekDates } from '@/lib/bh';
 import { base44 } from '@/api/base44Client';
+import { useRealtimeSync } from '@/lib/useRealtimeSync';
 
 export default function Roster() {
   const { t } = useI18n();
@@ -150,6 +151,9 @@ export default function Roster() {
   useEffect(() => {
     load();
   }, [load]);
+
+  // 실시간 동기화: 시프트 변경/추가, 근무가능시간 제출, 휴가 승인 시 새로고침 없이 즉시 로스터 화면 갱신
+  useRealtimeSync(['shift', 'availability_submission', 'leave_request'], load);
 
   const saveWeek = async () => {
     await base44.entities.Shift.updateMany(

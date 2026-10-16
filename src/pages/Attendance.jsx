@@ -19,6 +19,7 @@ import { dayRangeForState, formatTimeInZone, stateFromBranch } from '@/lib/holid
 import { kioskUrl, todayFor } from '@/lib/kioskLink';
 import { base44 } from '@/api/base44Client';
 import { logActivity } from '@/lib/activityLogger';
+import { useRealtimeSync } from '@/lib/useRealtimeSync';
 
 const ALL = 'all';
 
@@ -111,6 +112,9 @@ export default function Attendance() {
     load();
   }, [load]);
 
+  // 실시간 동기화: 직원이 QR 출퇴근을 하거나 타임시트 수정/승인/거절 시 무새로고침 즉시 반영
+  useRealtimeSync(['time_entry', 'attendance_record'], load);
+
   const decide = async (row, status, reason) => {
     await base44.entities.TimeEntry.update(row.id, {
       approval_status: status,
@@ -120,11 +124,11 @@ export default function Attendance() {
       rejection_reason: status === 'rejected' ? reason || '' : ''
     });
 
-    // 근태 승인/반려 로그 기록
+    // 타임시트 승인/거절 로그 기록
     logActivity({
       module: 'attendance',
       action: status === 'rejected' ? 'reject' : 'approve',
-      summary: `${row.employee_name || row.employee_email} 직원의 근태 기록 ${status === 'rejected' ? '반려' : '승인'}`,
+      summary: `${row.employee_name || row.employee_email} 직원의 타임시트 기록 ${status === 'rejected' ? '거절' : '승인'}`,
       details: {
         before: { approval_status: row.approval_status },
         after: { approval_status: status, rejection_reason: reason || '' },
@@ -138,22 +142,22 @@ export default function Attendance() {
     await load();
   };
 
-  // 근태 기록 삭제 함수
+  // 타임시트 기록 삭제 함수
   const handleDeleteEntry = async (row) => {
     const empName = row.employee_name || row.employee_email;
-    if (!window.confirm(`${empName}의 출퇴근 근태기록을 정말 삭제하시겠습니까?`)) {
+    if (!window.confirm(`${empName}의 출퇴근 타임시트 기록을 정말 삭제하시겠습니까?`)) {
       return;
     }
     setDeletingId(row.id);
     try {
       await base44.entities.TimeEntry.delete(row.id);
-      toast({ title: '근태기록이 성공적으로 삭제되었습니다.' });
+      toast({ title: '타임시트 기록이 성공적으로 삭제되었습니다.' });
 
-      // 근태 삭제 디테일 로그 기록
+      // 타임시트 삭제 디테일 로그 기록
       logActivity({
         module: 'attendance',
         action: 'delete',
-        summary: `${empName} 직원의 출퇴근 근태기록 삭제 (${row.clock_in_at ? row.clock_in_at.slice(0, 16) : ''}, ${row.minutes || 0}분)`,
+        summary: `${empName} 직원의 출퇴근 타임시트 기록 삭제 (${row.clock_in_at ? row.clock_in_at.slice(0, 16) : ''}, ${row.minutes || 0}분)`,
         details: {
           before: {
             employee_email: row.employee_email,

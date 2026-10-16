@@ -15,6 +15,7 @@ import { useI18n } from '@/lib/i18n';
 import { useWorkspace } from '@/lib/WorkspaceContext';
 import { hoursLabel, joinTypes, typeName } from '@/lib/leave';
 import { base44 } from '@/api/base44Client';
+import { useRealtimeSync } from '@/lib/useRealtimeSync';
 
 // 휴가 관리 페이지 컴포넌트:
 // 일반 직원은 본인의 휴가 잔액 확인 및 신청을 진행하고,
@@ -55,6 +56,9 @@ export default function Leave() {
   useEffect(() => {
     load();
   }, [load]);
+
+  // 실시간 동기화: 직원이 휴가를 신청하거나 관리자가 승인/거절할 때 새로고침 없이 즉시 자동 갱신
+  useRealtimeSync('leave_request', load);
 
   const balances = joinTypes(data && data.balances, data && data.types);
   const requests = (data && data.requests) || [];

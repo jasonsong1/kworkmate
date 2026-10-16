@@ -50,7 +50,7 @@ const ALL = 'all';
 
 // 모듈별 뱃지 및 아이콘 헬퍼
 const MODULE_CONFIG = {
-  attendance: { label: '근태기록', icon: Timer, color: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300' },
+  attendance: { label: '타임시트', icon: Timer, color: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300' },
   leave: { label: '휴가관리', icon: CalendarDays, color: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300' },
   employees: { label: '직원관리', icon: Users, color: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300' },
   settings: { label: '회사설정', icon: Settings, color: 'bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-300' },
@@ -67,7 +67,7 @@ const ACTION_LABELS = {
   update: { label: '수정', variant: 'secondary' },
   delete: { label: '삭제', variant: 'destructive' },
   approve: { label: '승인', variant: 'outline', className: 'border-emerald-500 text-emerald-700 dark:text-emerald-400' },
-  reject: { label: '반려', variant: 'outline', className: 'border-rose-500 text-rose-700 dark:text-rose-400' },
+  reject: { label: '거절', variant: 'outline', className: 'border-rose-500 text-rose-700 dark:text-rose-400' },
   clock_in: { label: '출근', variant: 'secondary' },
   clock_out: { label: '퇴근', variant: 'secondary' },
 };

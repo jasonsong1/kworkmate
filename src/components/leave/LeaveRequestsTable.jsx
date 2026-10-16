@@ -39,7 +39,7 @@ export default function LeaveRequestsTable({ requests, canManage, showEmployee, 
     logActivity({
       module: 'leave',
       action: decision === 'approved' ? 'approve' : 'reject',
-      summary: `${request.employee_name || request.employee_email} 직원의 휴가 신청 ${decision === 'approved' ? '승인' : '반려'} (${request.start_date} ~ ${request.end_date}, ${request.hours}시간)`,
+      summary: `${request.employee_name || request.employee_email} 직원의 휴가 신청 ${decision === 'approved' ? '승인' : '거절'} (${request.start_date} ~ ${request.end_date}, ${request.hours}시간)`,
       details: {
         before: { status: request.status },
         after: { status: decision, reason: text || '' },
