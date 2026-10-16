@@ -40,8 +40,21 @@ export default function Login() {
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [idleNotice, setIdleNotice] = useState(false);
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+
+  // 30분 유휴로 인한 자동 로그아웃 여부 확인
+  useEffect(() => {
+    const search = window.location.search || '';
+    const wasIdle = search.includes('reason=idle') || sessionStorage.getItem('kw_idle_logout') === 'true';
+    if (wasIdle) {
+      setIdleNotice(true);
+      try {
+        sessionStorage.removeItem('kw_idle_logout');
+      } catch (_) {}
+    }
+  }, []);
 
   // 로그인 후 이동할 목적지 경로 (안전한 상대 경로만 허용)
   const returnTo = safeReturnTo();
@@ -154,6 +167,13 @@ export default function Login() {
           : "Sign in to access your company workspace."
       }
     >
+      {idleNotice && (
+        <div className="mb-4 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-400 text-sm font-medium flex items-center gap-2">
+          <Lock className="w-4 h-4 shrink-0 text-amber-600 dark:text-amber-400" />
+          <span>30분 동안 활동이 없어 보안을 위해 자동 로그아웃되었습니다.</span>
+        </div>
+      )}
+
       {error && (
         <div className="mb-4 p-3 rounded-lg bg-destructive/10 text-destructive text-sm font-medium">
           {error}

@@ -104,7 +104,7 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const logout = async (shouldRedirect = true) => {
+  const logout = async (shouldRedirect = true, reason = '') => {
     setUser(null);
     setIsAuthenticated(false);
     setIsKwSession(false);
@@ -114,7 +114,8 @@ export const AuthProvider = ({ children }) => {
     } catch (_) {}
 
     if (shouldRedirect) {
-      window.location.href = '/login';
+      const redirectUrl = reason === 'idle' ? '/login?reason=idle' : '/login';
+      window.location.href = redirectUrl;
     }
   };
 
@@ -126,9 +127,12 @@ export const AuthProvider = ({ children }) => {
       onAuthPage || here === '/' ? '/login' : `/login?returnTo=${encodeURIComponent(here)}`;
   };
 
-  // 30분간 활동이 없으면 자동 로그아웃
+  // 30분간 움직임(활동)이 없으면 해당 브라우저에서 자동 로그아웃 실행
   useIdleLogout(isAuthenticated, () => {
-    logout(true);
+    try {
+      sessionStorage.setItem('kw_idle_logout', 'true');
+    } catch (_) {}
+    logout(true, 'idle');
   });
 
   return (
