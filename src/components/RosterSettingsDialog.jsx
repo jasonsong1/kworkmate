@@ -508,19 +508,16 @@ export default function RosterSettingsDialog({ open, onOpenChange, branch, onSav
 
             {/* 5. 고용주 맞춤 AI 로스터 지침 (Custom AI Instructions) */}
             <div className="space-y-2 rounded-xl border border-indigo-200/80 bg-gradient-to-br from-indigo-50/50 via-card to-card p-4 dark:border-indigo-500/20 dark:from-indigo-950/20">
-              <div className="flex items-center gap-2">
-                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-500/10 text-indigo-600 dark:text-indigo-400">
+              <div className="flex items-start gap-2">
+                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 mt-0.5">
                   <Sparkles className="h-4 w-4" />
                 </div>
                 <div>
-                  <Label className="text-sm font-semibold text-foreground flex items-center gap-1.5">
+                  <Label className="text-sm font-semibold text-foreground">
                     고용주 맞춤 AI 로스터 지침
-                    <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-medium text-indigo-700 dark:bg-indigo-900/60 dark:text-indigo-300">
-                      Smart AI Prompt
-                    </span>
                   </Label>
-                  <p className="text-xs text-muted-foreground">
-                    기본 배정 알고리즘을 유지하면서, 고용주님이 원하는 특별 규칙이나 요청사항을 자유롭게 자연어로 입력하시면 AI가 로스터 생성 시 최우선 반영합니다.
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    팁: 직원 이름, 특정 요일, 포지션 등에 대해 원하는 조건을 구체적으로 작성해주시면 더욱 똑똑하게 맞춰줍니다.
                   </p>
                 </div>
               </div>
@@ -531,9 +528,6 @@ export default function RosterSettingsDialog({ open, onOpenChange, branch, onSav
                 placeholder="예시:&#10;• sumin은 주 4일까지만 배정해줘&#10;• 금요일 오전에는 Tester를 우선 투입해줘&#10;• 오픈 시프트에는 경험이 많은 직원을 우선 배치해줘"
                 className="mt-2 border-indigo-100 bg-card/80 text-sm focus-visible:ring-indigo-500/40 dark:border-indigo-950/40"
               />
-              <p className="text-[11px] text-muted-foreground/80">
-                💡 팁: 직원 이름, 특정 요일, 포지션 등에 대해 원하는 조건을 구체적으로 작성해주시면 더욱 똑똑하게 맞춰줍니다.
-              </p>
             </div>
           </div>
         )}

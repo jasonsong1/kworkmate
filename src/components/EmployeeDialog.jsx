@@ -575,21 +575,15 @@ export default function EmployeeDialog({ open, onOpenChange, branch, employee, o
 
             {/* 시급 (Hourly Rate) 비밀번호 보안 잠금 필드 */}
             {canViewHourlyRate && (
-              <div className="rounded-lg border border-slate-200/80 bg-slate-50/60 p-3 dark:border-slate-800 dark:bg-slate-900/40">
-                <div className="flex items-center justify-between mb-1.5">
-                  <Label className="text-xs font-semibold flex items-center gap-1.5 text-foreground">
-                    <DollarSign className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
-                    시급 (Hourly Rate)
-                    <span className="text-[10px] text-muted-foreground font-normal">
-                      [매니저/디렉터 전용]
-                    </span>
-                  </Label>
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <Label>{t('employees.fields.rate')}</Label>
                   {rateUnlocked ? (
-                    <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
-                      <Unlock className="h-3 w-3" /> 잠금 해제됨
+                    <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                      <Unlock className="h-3 w-3 text-emerald-600 dark:text-emerald-400" /> 잠금 해제됨
                     </span>
                   ) : (
-                    <span className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-600 dark:text-amber-400">
+                    <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
                       <Lock className="h-3 w-3" /> 보안 잠금
                     </span>
                   )}
@@ -607,7 +601,7 @@ export default function EmployeeDialog({ open, onOpenChange, branch, employee, o
                       value={form.hourly_rate}
                       onChange={(e) => set('hourly_rate', e.target.value)}
                       placeholder="0.00"
-                      className="pl-7 pr-12 text-sm font-mono font-medium"
+                      className="pl-7 pr-12 text-sm"
                     />
                     <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
                       /hr
@@ -624,18 +618,14 @@ export default function EmployeeDialog({ open, onOpenChange, branch, employee, o
                     <Button
                       type="button"
                       variant="outline"
-                      size="sm"
                       onClick={() => setAuthModalOpen(true)}
-                      className="shrink-0 h-9 border-amber-300 bg-amber-50/80 text-amber-800 hover:bg-amber-100 hover:text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300"
+                      className="shrink-0 gap-1.5"
                     >
-                      <KeyRound className="mr-1.5 h-3.5 w-3.5" />
-                      비밀번호 확인 후 조회
+                      <KeyRound className="h-3.5 w-3.5" />
+                      비밀번호 확인
                     </Button>
                   </div>
                 )}
-                <p className="mt-1 text-[11px] text-muted-foreground">
-                  직원의 급여 정보는 관리자 본인 인증 후에만 확인 및 수정할 수 있습니다.
-                </p>
               </div>
             )}
 

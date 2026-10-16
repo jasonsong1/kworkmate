@@ -270,12 +270,12 @@ export default function ShiftDialog({
 
           {/* 시프트 프리셋 빠른 선택 버튼 옵션 */}
           {shiftTemplates.length > 0 && (
-            <div className="sm:col-span-2 space-y-2">
+            <div className="sm:col-span-2 space-y-1.5">
               <div className="flex items-center justify-between">
-                <Label className="text-sm font-medium">시프트 프리셋</Label>
+                <Label>시프트 프리셋</Label>
                 <span className="text-xs text-muted-foreground">버튼 클릭 시 시간 자동 입력</span>
               </div>
-              <div className="flex flex-wrap gap-2">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                 {shiftTemplates.map((tmpl) => {
                   const isSelected = form.start_time === tmpl.start_time && form.end_time === tmpl.end_time;
                   return (
@@ -283,13 +283,12 @@ export default function ShiftDialog({
                       key={tmpl.key || tmpl.label}
                       type="button"
                       variant={isSelected ? 'default' : 'outline'}
-                      size="sm"
                       onClick={() => applyShiftTemplate(tmpl)}
-                      className="h-9 px-3.5 text-xs font-medium"
+                      className="h-9 px-3 text-xs font-medium justify-center gap-1.5"
                     >
-                      <span>{tmpl.label || tmpl.key}</span>
-                      <span className="ml-1.5 opacity-80">
-                        ({tmpl.start_time} - {tmpl.end_time})
+                      <span className="font-semibold">{tmpl.label || tmpl.key}</span>
+                      <span className="text-[11px] opacity-75">
+                        {tmpl.start_time}-{tmpl.end_time}
                       </span>
                     </Button>
                   );
