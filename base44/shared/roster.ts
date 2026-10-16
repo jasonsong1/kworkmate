@@ -47,8 +47,22 @@ const DEFAULT_MAX_DAYS = 5;
 // one shift is never planned for that day's second shift — it goes to another person or stays open.
 const DEFAULT_MAX_SHIFTS_PER_DAY = 2;
 
-// A contract is served before spare hours are handed out.
-const EMPLOYMENT_RANK = { full_time: 0, part_time: 1, casual: 2 };
+// 고용 형태별 시프트 배정 우선순위:
+// 1등: 정규직(permanent, 주 50시간 계약)
+// 2등: 풀타임(full_time, 주 38시간 계약)
+// 3등: 파트타임(part_time)
+// 4등: 캐주얼(casual)
+const EMPLOYMENT_RANK = {
+  permanent: 0,
+  full_time: 1,
+  fulltime: 1,
+  'full-time': 1,
+  part_time: 2,
+  parttime: 2,
+  'part-time': 2,
+  casual: 3,
+  owner: 99
+};
 
 // The person who runs the store. None of the limits the store sets for its crew — the contract
 // and visa hours, the days a week and the shifts a day — are applied to an owner: whatever the
@@ -749,12 +763,12 @@ export async function buildDraft(base44, branch, weekStart) {
     // 4. ★ 시간대(오픈/마감) 선호자 보너스(prefShiftBonus)
     // 5. ★ 최소 배정 지침(minStaff) 적용: 최소 배정 대상자(오너/비상 땜빵용)는 맨 뒤 최후순위! (0이 앞, 1은 맨 뒤)
     // 6. ★ 본직책(primary) 우선! (2번째, 3번째 직책은 땜빵용이므로 본직책 직원이 최우선)
-    // 7. ★ 오늘 아직 시프트가 없는 사람 우선(shiftsToday: 하루 2시프트 무리한 몰림 방지)
-    // 8. 근무 가능 시간 100% 완전 일치(fullMatch)
-    // 9. 오늘 이 시프트밖에 못 뛰는 사람 우선(onlyOption: 제약조건 최적화)
-    // 10. 하루 2시프트(오픈+마감) 모두 커버 가능한 분할 시프트 대상자(split)
-    // 11. 풀타임/정규직 우선(rank)
-    // 12. 이번 주 배정된 근무시간 적은 순(used: 공평성)
+    // 7. ★★★ [고용 형태 최우선]: 정규직(0) > 풀타임(1) > 파트타임(2) > 캐주얼(3) (정규직 1등 순위 배정!)
+    // 8. ★ 오늘 아직 시프트가 없는 사람 우선(shiftsToday: 하루 2시프트 무리한 몰림 방지)
+    // 9. 근무 가능 시간 100% 완전 일치(fullMatch)
+    // 10. 오늘 이 시프트밖에 못 뛰는 사람 우선(onlyOption: 제약조건 최적화)
+    // 11. 하루 2시프트(오픈+마감) 모두 커버 가능한 분할 시프트 대상자(split)
+    // 12. 이번 주 배정된 근무시간 적은 순(used: 같은 고용형태 내 공평성)
     candidates.sort(
       (a, b) =>
         (b.fixed ? 1 : 0) - (a.fixed ? 1 : 0) ||
@@ -763,11 +777,11 @@ export async function buildDraft(base44, branch, weekStart) {
         b.prefShiftBonus - a.prefShiftBonus || // ★ 오픈/마감 선호자 우선 배치!
         a.minStaff - b.minStaff || // ★ minStaff: 일반 직원(0) 먼저 배정, 최소 배정 대상자(1)는 맨 뒤 최후순위!
         (b.primary ? 1 : 0) - (a.primary ? 1 : 0) || // ★ 본직책 우선!
+        a.rank - b.rank || // ★★★ 정규직(0) > 풀타임(1) > 파트타임(2) > 캐주얼(3) 최우선 배정!
         a.shiftsToday - b.shiftsToday ||
         b.fullMatch - a.fullMatch ||
         b.onlyOption - a.onlyOption ||
         (b.split ? 1 : 0) - (a.split ? 1 : 0) ||
-        a.rank - b.rank ||
         a.used - b.used ||
         b.overlapMin - a.overlapMin ||
         a.email.localeCompare(b.email)
