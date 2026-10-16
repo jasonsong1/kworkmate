@@ -131,7 +131,8 @@ export function parseCustomInstructions(instructions, staff) {
     employeeDayCaps: {},
     employeeExclude: new Set(),
     dayPriority: {},
-    weekendStaff: new Set() // 주말 우선 배정 대상자
+    weekendStaff: new Set(), // 주말 우선 배정 대상자
+    minStaff: new Set()      // 최소 시프트 배정 대상자 (다른 직원이 없을 때만 투입되는 최후 땜빵)
   };
   if (!instructions || !String(instructions).trim()) return rules;
 
@@ -147,9 +148,26 @@ export function parseCustomInstructions(instructions, staff) {
     { names: ['주말', 'weekend', 'weekends'], indices: [5, 6] } // 토, 일 모두 포함
   ];
 
+  const minKeywords = ['최소', '적게', '덜', '최소한', '가장 적게', 'least', 'min', 'minimum', '땜빵'];
+
   for (const line of lines) {
     const lowerLine = line.toLowerCase();
+    const isMinReq = minKeywords.some((k) => lowerLine.includes(k));
 
+    // A. 특정 직책(오너/점주 등) 전체에 대한 최소 배정 지침
+    // 예: "오너직책에게 최소한의 시프트배정만해줘", "오너는 최소로"
+    if (isMinReq && (lowerLine.includes('오너') || lowerLine.includes('owner') || lowerLine.includes('점주'))) {
+      for (const person of staff || []) {
+        const pos = lower(person.position);
+        const emp = lower(person.employment_type);
+        if (pos.includes('오너') || pos.includes('owner') || emp.includes('owner') || emp.includes('오너')) {
+          rules.minStaff.add(person.user_email);
+          rules.minStaff.add(lower(person.user_email));
+        }
+      }
+    }
+
+    // B. 개별 직원에 대한 지침 분석
     for (const person of staff || []) {
       const name = String(person.full_name || '').toLowerCase();
       const email = String(person.user_email || '').toLowerCase();
@@ -175,9 +193,15 @@ export function parseCustomInstructions(instructions, staff) {
       if (lowerLine.includes('주말') || lowerLine.includes('weekend')) {
         rules.weekendStaff.add(email);
       }
+
+      // 4. 최소 시프트 배정 지침 감지: 예) "sumin에게 최소한의 시프트배정만해줘", "sumin 최소"
+      if (isMinReq) {
+        rules.minStaff.add(email);
+        rules.minStaff.add(lower(email));
+      }
     }
 
-    // 4. 특정 요일 또는 주말에 특정 직원 우선 투입
+    // 5. 특정 요일 또는 주말에 특정 직원 우선 투입
     for (const d of dayNames) {
       const hasDay = d.names.some((dn) => lowerLine.includes(dn));
       if (hasDay) {
@@ -309,6 +333,10 @@ export async function buildDraft(base44, branch, weekStart) {
     if (typeof customRules.employeeDayCaps[e] === 'number') {
       return customRules.employeeDayCaps[e];
     }
+    // 최소 배정 대상자(minStaff: 오너/최소 배정 지시자)는 주당 최대 2일로 철저히 제한
+    if (customRules.minStaff && (customRules.minStaff.has(e) || customRules.minStaff.has(email))) {
+      return 2;
+    }
     // 1순위: 관리자가 직접 개별 직원에게 설정한 주당 근무일수 오버라이드 (오너 포함 철저 적용)
     if (typeof daysOverrideByEmail[e] === 'number' && daysOverrideByEmail[e] > 0) {
       return daysOverrideByEmail[e];
@@ -335,6 +363,10 @@ export async function buildDraft(base44, branch, weekStart) {
   }
   const shiftCapFor = (email) => {
     const e = lower(email);
+    // 고용주 맞춤 지침에서 '최소 배정'으로 지정된 직원은 하루 1시프트로 철저히 제한
+    if (customRules.minStaff && (customRules.minStaff.has(e) || customRules.minStaff.has(email))) {
+      return 1;
+    }
     // 관리자가 특정 직원에게 하루 시프트 수를 지정한 경우 오너라도 우선 적용
     if (typeof shiftsOverrideByEmail[e] === 'number' && shiftsOverrideByEmail[e] > 0) {
       return shiftsOverrideByEmail[e];
@@ -357,6 +389,10 @@ export async function buildDraft(base44, branch, weekStart) {
     const day = Number(row && row.day);
     const email = lower(row && row.email);
     if (!Number.isInteger(day) || day < 0 || day > 6 || !email) continue;
+    // 고용주 맞춤 지침에서 '최소 배정'으로 지정된 직원은 고정 직원(fixed) 우선권에서 제외
+    if (customRules.minStaff && (customRules.minStaff.has(email) || customRules.minStaff.has(lower(email)))) {
+      continue;
+    }
     fixedByDay[day] = fixedByDay[day] || new Set();
     fixedByDay[day].add(email);
   }
@@ -545,6 +581,8 @@ export async function buildDraft(base44, branch, weekStart) {
       if (isExcluded) continue;
 
       const shiftsToday = shiftsOnDay[`${email}|${date}`] || 0;
+      const isMinStaff =
+        customRules.minStaff && (customRules.minStaff.has(email) || customRules.minStaff.has(lower(email)));
 
       candidates.push({
         email,
@@ -553,6 +591,7 @@ export async function buildDraft(base44, branch, weekStart) {
         rank: EMPLOYMENT_RANK[normalizeEmploymentType(person.employment_type)] ?? EMPLOYMENT_RANK.casual,
         primary: person.position === req.position, // 해당 포지션이 본직책인지 여부
         fixed: fixedHere,
+        minStaff: isMinStaff ? 1 : 0,
         shiftsToday,
         split: coversDay >= 2,
         fullMatch: fullMatch ? 1 : 0,
@@ -570,17 +609,19 @@ export async function buildDraft(base44, branch, weekStart) {
     // 후보자 우선순위 정렬:
     // 1. 관리자가 직접 고정한 요일(fixed)
     // 2. 고용주 맞춤 AI 지침 우선 배정(customPriority: 주말, 특정 요일 우선 지정자)
-    // 3. ★ 본직책(primary) 우선! (2번째, 3번째 직책은 땜빵용이므로 본직책 직원이 최우선)
-    // 4. ★ 오늘 아직 시프트가 없는 사람 우선(shiftsToday: 하루 2시프트 무리한 몰림 방지)
-    // 5. 근무 가능 시간 100% 완전 일치(fullMatch)
-    // 6. 오늘 이 시프트밖에 못 뛰는 사람 우선(onlyOption: 제약조건 최적화)
-    // 7. 하루 2시프트(오픈+마감) 모두 커버 가능한 분할 시프트 대상자(split)
-    // 8. 풀타임/정규직 우선(rank)
-    // 9. 이번 주 배정된 근무시간 적은 순(used: 공평성)
+    // 3. ★ 최소 배정 지침(minStaff) 적용: 최소 배정 대상자는 다른 적격 직원이 없을 때만 들어가는 최후순위! (0이 앞, 1은 맨 뒤)
+    // 4. ★ 본직책(primary) 우선! (2번째, 3번째 직책은 땜빵용이므로 본직책 직원이 최우선)
+    // 5. ★ 오늘 아직 시프트가 없는 사람 우선(shiftsToday: 하루 2시프트 무리한 몰림 방지)
+    // 6. 근무 가능 시간 100% 완전 일치(fullMatch)
+    // 7. 오늘 이 시프트밖에 못 뛰는 사람 우선(onlyOption: 제약조건 최적화)
+    // 8. 하루 2시프트(오픈+마감) 모두 커버 가능한 분할 시프트 대상자(split)
+    // 9. 풀타임/정규직 우선(rank)
+    // 10. 이번 주 배정된 근무시간 적은 순(used: 공평성)
     candidates.sort(
       (a, b) =>
         (b.fixed ? 1 : 0) - (a.fixed ? 1 : 0) ||
         (b.customPriority ? 1 : 0) - (a.customPriority ? 1 : 0) ||
+        a.minStaff - b.minStaff || // ★ minStaff: 일반 직원(0) 먼저 배정, 최소 배정 대상자(1)는 맨 뒤 최후순위!
         (b.primary ? 1 : 0) - (a.primary ? 1 : 0) ||
         a.shiftsToday - b.shiftsToday ||
         b.fullMatch - a.fullMatch ||
