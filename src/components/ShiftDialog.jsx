@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Loader2, Trash2 } from 'lucide-react';
+import { Clock, Loader2, Sparkles, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -10,9 +10,8 @@ import { useI18n } from '@/lib/i18n';
 import { useWorkspace } from '@/lib/WorkspaceContext';
 import { base44 } from '@/api/base44Client';
 
-// One shift: added for a day that has none, or opened from the roster to change its hours or take
-// it off the week. A shift that has already gone to staff carries the change to that person by
-// email, because what they were told no longer matches the roster.
+// 하나의 시프트를 추가하거나 수정하는 다이얼로그 모달입니다.
+// 매장의 시프트 설정(Open, Close 등)을 불러와 원클릭 퀵 버튼으로 시간을 자동 입력할 수 있습니다.
 export default function ShiftDialog({
   open,
   onOpenChange,
@@ -28,7 +27,8 @@ export default function ShiftDialog({
   const { toast } = useToast();
   const [saving, setSaving] = useState(false);
   const editing = Boolean(shift);
-  // Job titles always come from the company's own list, so the roster uses the same names everywhere.
+
+  // 회사의 등록된 직책 목록을 가져옵니다.
   const roles = ((company && company.custom_roles) || []).map((role) => role.label).filter(Boolean);
   const held = [defaultEmployee && defaultEmployee.position, shift && shift.position].filter(
     (label) => label && !roles.includes(label)
@@ -37,6 +37,10 @@ export default function ShiftDialog({
   const person = editing
     ? { user_email: shift.employee_email, full_name: shift.employee_name || shift.employee_email }
     : defaultEmployee;
+
+  // 매장의 시프트 템플릿 목록 (예: Open, Close 등)
+  const [shiftTemplates, setShiftTemplates] = useState([]);
+
   const [form, setForm] = useState({
     employee_email: '',
     date: '',
@@ -47,6 +51,7 @@ export default function ShiftDialog({
     notes: ''
   });
 
+  // 다이얼로그가 열릴 때 폼 초기화 및 매장의 시프트 템플릿(RosterSetting) 로드
   useEffect(() => {
     if (!open) return;
     setForm({
@@ -58,9 +63,32 @@ export default function ShiftDialog({
       break_min: shift ? Number(shift.break_min) || 0 : 30,
       notes: (shift && shift.notes) || ''
     });
-  }, [open, defaultDate, defaultEmployee, shift]);
 
-  // The person on a sent shift is told the new hours; a draft or a saved one stays quiet.
+    // 매장 시프트 설정(Open, Close 등) 가져오기
+    if (branch && branch.id) {
+      base44.entities.RosterSetting.filter({ branch_id: branch.id }, { limit: 1 })
+        .then((page) => {
+          const found = (page && page.items ? page.items : [])[0];
+          if (found && Array.isArray(found.shifts) && found.shifts.length > 0) {
+            setShiftTemplates(found.shifts);
+          } else {
+            setShiftTemplates([]);
+          }
+        })
+        .catch(() => setShiftTemplates([]));
+    }
+  }, [open, defaultDate, defaultEmployee, shift, branch]);
+
+  // 시프트 템플릿 버튼을 눌렀을 때 시작/종료 시간을 즉시 자동 입력하는 핸들러
+  const applyShiftTemplate = (tmpl) => {
+    setForm((prev) => ({
+      ...prev,
+      start_time: tmpl.start_time || prev.start_time,
+      end_time: tmpl.end_time || prev.end_time
+    }));
+  };
+
+  // 이미 배정/발송된 시프트가 변경되면 직원에게 안내 알림 전송
   const tellThem = async (change, details) => {
     if (!editing || shift.status !== 'published') return;
     await base44.functions
@@ -79,7 +107,7 @@ export default function ShiftDialog({
 
   const submit = async () => {
     if (!branch || !form.employee_email || !form.date) {
-      toast({ title: 'Choose a staff member and a date', variant: 'destructive' });
+      toast({ title: '직원과 날짜를 선택해주세요', variant: 'destructive' });
       return;
     }
     const toMinutes = (value) => {
@@ -89,7 +117,7 @@ export default function ShiftDialog({
     const start = toMinutes(form.start_time);
     const end = toMinutes(form.end_time);
     if (end <= start) {
-      toast({ title: 'End time must be after the start time', variant: 'destructive' });
+      toast({ title: '종료 시간은 시작 시간보다 늦어야 합니다', variant: 'destructive' });
       return;
     }
     const sameDayPage = await base44.entities.Shift
@@ -100,10 +128,10 @@ export default function ShiftDialog({
     );
     const clash = sameDay.some((row) => start < toMinutes(row.end_time) && toMinutes(row.start_time) < end);
     if (clash) {
-      toast({ title: 'This staff member already has an overlapping shift', variant: 'destructive' });
+      toast({ title: '해당 직원의 근무 시간이 겹치는 기존 시프트가 있습니다', variant: 'destructive' });
       return;
     }
-    // Approved leave takes the day out of the roster, so a shift cannot be placed on it.
+    // 승인된 휴가가 있는 날에는 시프트 배정 불가
     const approvedLeave = await base44.entities.LeaveRequest
       .filter({
         employee_email: form.employee_email,
@@ -117,66 +145,78 @@ export default function ShiftDialog({
       return;
     }
     setSaving(true);
-    if (editing) {
-      await base44.entities.Shift.update(shift.id, {
-        date: form.date,
-        start_time: form.start_time,
-        end_time: form.end_time,
-        position: form.position,
-        break_min: Number(form.break_min) || 0,
-        notes: form.notes
-      });
-      await tellThem('updated', {
-        email: shift.employee_email,
-        date: form.date,
-        start_time: form.start_time,
-        end_time: form.end_time,
-        position: form.position
-      });
-      toast({ title: t('roster.shiftUpdated') });
-    } else {
-      const employee = employees.find((e) => e.user_email === form.employee_email);
-      await base44.entities.Shift.create({
-        company_id: branch.company_id,
-        branch_id: branch.id,
-        employee_email: form.employee_email,
-        employee_name: employee ? employee.full_name : form.employee_email,
-        date: form.date,
-        start_time: form.start_time,
-        end_time: form.end_time,
-        position: form.position,
-        break_min: Number(form.break_min) || 0,
-        notes: form.notes,
-        status: 'draft'
-      });
-      toast({ title: t('roster.shiftAdded') });
+    try {
+      if (editing) {
+        await base44.entities.Shift.update(shift.id, {
+          date: form.date,
+          start_time: form.start_time,
+          end_time: form.end_time,
+          position: form.position,
+          break_min: Number(form.break_min) || 0,
+          notes: form.notes
+        });
+        await tellThem('updated', {
+          email: shift.employee_email,
+          date: form.date,
+          start_time: form.start_time,
+          end_time: form.end_time,
+          position: form.position
+        });
+        toast({ title: t('roster.shiftUpdated') });
+      } else {
+        const employee = employees.find((e) => e.user_email === form.employee_email);
+        await base44.entities.Shift.create({
+          company_id: branch.company_id,
+          branch_id: branch.id,
+          employee_email: form.employee_email,
+          employee_name: employee ? employee.full_name : form.employee_email,
+          date: form.date,
+          start_time: form.start_time,
+          end_time: form.end_time,
+          position: form.position,
+          break_min: Number(form.break_min) || 0,
+          status: 'draft',
+          notes: form.notes
+        });
+        await tellThem('created', {
+          email: form.employee_email,
+          date: form.date,
+          start_time: form.start_time,
+          end_time: form.end_time,
+          position: form.position
+        });
+        toast({ title: t('roster.shiftAdded') });
+      }
+      onOpenChange(false);
+      onSaved && onSaved({ date: form.date, position: form.position });
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
-    onOpenChange(false);
-    // The day and the position the shift was placed in, so the roster can take that day's open
-    // seat off the screen.
-    onSaved && onSaved({ date: form.date, position: form.position });
   };
 
   const cancelShift = async () => {
+    if (!editing) return;
     setSaving(true);
-    await base44.entities.Shift.delete(shift.id);
-    await tellThem('cancelled', {
-      email: shift.employee_email,
-      date: shift.date,
-      start_time: shift.start_time,
-      end_time: shift.end_time,
-      position: shift.position
-    });
-    setSaving(false);
-    toast({ title: t('roster.shiftCancelled') });
-    onOpenChange(false);
-    onSaved && onSaved();
+    try {
+      await base44.entities.Shift.delete(shift.id);
+      await tellThem('cancelled', {
+        email: shift.employee_email,
+        date: shift.date,
+        start_time: shift.start_time,
+        end_time: shift.end_time,
+        position: shift.position
+      });
+      toast({ title: t('roster.shiftCancelled') });
+      onOpenChange(false);
+      onSaved && onSaved();
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>{editing ? t('roster.editShiftTitle') : t('roster.addShiftTitle')}</DialogTitle>
         </DialogHeader>
@@ -188,10 +228,10 @@ export default function ShiftDialog({
             </div>
           ) : (
             <div className="sm:col-span-2">
-              <Label>Staff member</Label>
+              <Label>직원 선택</Label>
               <Select value={form.employee_email} onValueChange={(v) => setForm({ ...form, employee_email: v })}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Select staff" />
+                  <SelectValue placeholder="직원을 선택하세요" />
                 </SelectTrigger>
                 <SelectContent>
                   {employees.map((e) => (
@@ -204,7 +244,7 @@ export default function ShiftDialog({
             </div>
           )}
           <div>
-            <Label>Date</Label>
+            <Label>날짜</Label>
             <Input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />
           </div>
           <div>
@@ -227,16 +267,65 @@ export default function ShiftDialog({
             </Select>
             {positions.length === 0 && <p className="mt-1 text-xs text-muted-foreground">{t('roster.noPositions')}</p>}
           </div>
+
+          {/* 시프트 프리셋 빠른 선택 버튼 옵션 */}
+          {shiftTemplates.length > 0 && (
+            <div className="sm:col-span-2 space-y-1.5 rounded-lg border border-dashed border-border/80 bg-muted/20 p-2.5">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-medium text-foreground flex items-center gap-1.5">
+                  <Clock className="h-3.5 w-3.5 text-primary" />
+                  시프트 프리셋 선택
+                </span>
+                <span className="text-[11px] text-muted-foreground">버튼을 누르면 시간이 자동 입력됩니다</span>
+              </div>
+              <div className="flex flex-wrap gap-2 pt-1">
+                {shiftTemplates.map((tmpl) => {
+                  const isSelected = form.start_time === tmpl.start_time && form.end_time === tmpl.end_time;
+                  return (
+                    <button
+                      key={tmpl.key || tmpl.label}
+                      type="button"
+                      onClick={() => applyShiftTemplate(tmpl)}
+                      className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-all ${
+                        isSelected
+                          ? 'bg-primary text-primary-foreground shadow-sm ring-2 ring-primary/30'
+                          : 'bg-card border border-border/80 text-foreground hover:bg-muted hover:border-primary/50'
+                      }`}
+                    >
+                      <Sparkles className="h-3 w-3 opacity-70" />
+                      <span>{tmpl.label || tmpl.key}</span>
+                      <span
+                        className={`text-[10px] ${
+                          isSelected ? 'text-primary-foreground/90' : 'text-muted-foreground font-mono'
+                        }`}
+                      >
+                        ({tmpl.start_time}–{tmpl.end_time})
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           <div>
-            <Label>Start</Label>
-            <Input type="time" value={form.start_time} onChange={(e) => setForm({ ...form, start_time: e.target.value })} />
+            <Label>시작 시간 (Start)</Label>
+            <Input
+              type="time"
+              value={form.start_time}
+              onChange={(e) => setForm({ ...form, start_time: e.target.value })}
+            />
           </div>
           <div>
-            <Label>End</Label>
-            <Input type="time" value={form.end_time} onChange={(e) => setForm({ ...form, end_time: e.target.value })} />
+            <Label>종료 시간 (End)</Label>
+            <Input
+              type="time"
+              value={form.end_time}
+              onChange={(e) => setForm({ ...form, end_time: e.target.value })}
+            />
           </div>
           <div>
-            <Label>Break (min)</Label>
+            <Label>휴게시간 (분)</Label>
             <Input
               type="number"
               value={form.break_min}
@@ -244,7 +333,7 @@ export default function ShiftDialog({
             />
           </div>
           <div className="sm:col-span-2">
-            <Label>Notes</Label>
+            <Label>메모 (Notes)</Label>
             <Input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
           </div>
           {editing && shift.status === 'published' ? (
