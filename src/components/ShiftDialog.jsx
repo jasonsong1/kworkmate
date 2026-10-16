@@ -282,9 +282,13 @@ export default function ShiftDialog({
                     <Button
                       key={tmpl.key || tmpl.label}
                       type="button"
-                      variant={isSelected ? 'default' : 'outline'}
+                      variant="outline"
                       onClick={() => applyShiftTemplate(tmpl)}
-                      className="h-9 px-3 text-xs font-medium justify-center gap-1.5"
+                      className={`h-9 px-3 text-xs font-medium justify-center gap-1.5 transition-colors ${
+                        isSelected
+                          ? 'border-primary bg-primary/10 text-primary font-semibold ring-1 ring-primary'
+                          : 'text-foreground hover:bg-muted'
+                      }`}
                     >
                       <span className="font-semibold">{tmpl.label || tmpl.key}</span>
                       <span className="text-[11px] opacity-75">

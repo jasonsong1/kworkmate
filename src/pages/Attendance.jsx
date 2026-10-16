@@ -89,21 +89,24 @@ export default function Attendance() {
     };
     if (selfOnly) query.employee_email = (me && me.email) || '__none__';
     else if (employeeFilter !== ALL) query.employee_email = employeeFilter;
-    const [list, grouped] = await Promise.all([
-    base44.entities.TimeEntry.filter(query, { sort: '-clock_in_at', limit: 200 }).then((page) => page.items || []),
-    base44.entities.TimeEntry.
-    aggregate({ query, groupBy: 'approval_status', sum: 'minutes' }).
-    catch(() => ({ rows: [] }))]
-    );
+    const list = await base44.entities.TimeEntry
+      .filter(query, { sort: '-clock_in_at', limit: 200 })
+      .then((page) => page.items || page || [])
+      .catch(() => []);
+
     setRows(list);
-    const buckets = grouped.rows || [];
+
+    // 테이블에 표시되는 실제 출퇴근 목록(list)으로부터 총 건수, 승인된 근무 시간, 승인 대기 건수를 실시간 정확히 계산합니다.
+    const totalCount = list.length;
+    const approvedMinutes = list
+      .filter((row) => row.approval_status !== 'pending' && row.approval_status !== 'rejected')
+      .reduce((sum, row) => sum + (Number(row.minutes) || 0), 0);
+    const pendingCount = list.filter((row) => row.approval_status === 'pending').length;
+
     setStats({
-      count: buckets.reduce((sum, bucket) => sum + (bucket.count || 0), 0),
-      // Only what a manager has accepted counts as worked time.
-      minutes: buckets.
-      filter((bucket) => bucket.approval_status !== 'pending' && bucket.approval_status !== 'rejected').
-      reduce((sum, bucket) => sum + (bucket.sum_minutes || 0), 0),
-      pending: (buckets.find((bucket) => bucket.approval_status === 'pending') || {}).count || 0
+      count: totalCount,
+      minutes: approvedMinutes,
+      pending: pendingCount
     });
     setLoading(false);
   }, [activeBranch, branchState, fromDate, toDate, employeeFilter, selfOnly, me]);

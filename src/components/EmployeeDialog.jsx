@@ -373,7 +373,7 @@ export default function EmployeeDialog({ open, onOpenChange, branch, employee, o
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
           <DialogHeader>
-            <DialogTitle>{employee ? t('employees.edit') : t('employees.add')}</DialogTitle>
+            <DialogTitle>{employee ? (t('employees.edit') || '프로필 수정') : (t('employees.add') || '직원 추가')}</DialogTitle>
           </DialogHeader>
 
           {error &&
@@ -459,7 +459,7 @@ export default function EmployeeDialog({ open, onOpenChange, branch, employee, o
                 value={form.user_email}
                 onChange={(e) => set('user_email', e.target.value)}
                 placeholder="user@example.com"
-                disabled={Boolean(employee) || !canEditEmployees} />
+                disabled={!canEditEmployees} />
             </div>
 
             <div>
@@ -577,7 +577,7 @@ export default function EmployeeDialog({ open, onOpenChange, branch, employee, o
             {canViewHourlyRate && (
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
-                  <Label>{t('employees.fields.rate')}</Label>
+                  <Label>{t('employees.fields.rate') || '시급'}</Label>
                   {rateUnlocked ? (
                     <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
                       <Unlock className="h-3 w-3 text-emerald-600 dark:text-emerald-400" /> 잠금 해제됨
@@ -671,9 +671,9 @@ export default function EmployeeDialog({ open, onOpenChange, branch, employee, o
               <Label>{t('employees.pin')}</Label>
               <Input
                 value={form.pin}
-                onChange={(e) => set('pin', e.target.value.replace(/\D/g, '').slice(0, 4))}
-                placeholder={employee ? t('employees.pinKeepPlaceholder') : '4자리 숫자'}
-                maxLength={4} />
+                onChange={(e) => set('pin', e.target.value.replace(/\D/g, '').slice(0, 6))}
+                placeholder="4~6자리"
+                maxLength={6} />
 
               <p className="mt-1 text-xs text-muted-foreground">
                 {employee ? t('employees.pinHintEdit') : t('employees.pinHintNew')}
@@ -681,7 +681,7 @@ export default function EmployeeDialog({ open, onOpenChange, branch, employee, o
             </div>
 
             <div>
-              <Label>{t('employees.onboardingStatus')}</Label>
+              <Label>{t('employees.onboardingStatus') || '온보딩 상태'}</Label>
               <Select
                 value={form.onboarding_status}
                 onValueChange={(v) => set('onboarding_status', v)}
@@ -696,22 +696,6 @@ export default function EmployeeDialog({ open, onOpenChange, branch, employee, o
                 </SelectContent>
               </Select>
             </div>
-
-            {canAssignRole &&
-              <div className="sm:col-span-2">
-                <Label>{t('employees.appRole')}</Label>
-                <Select value={form.app_role} onValueChange={(v) => set('app_role', v)}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="staff">{t('employees.roleStaff')}</SelectItem>
-                    <SelectItem value="manager">{t('employees.roleManager')}</SelectItem>
-                  </SelectContent>
-                </Select>
-                <p className="mt-1 text-xs text-muted-foreground">{t('employees.appRoleHint')}</p>
-              </div>
-            }
 
             {!employee &&
               <div className="sm:col-span-2 space-y-3 pt-2 border-t">

@@ -89,6 +89,10 @@
       "type": "number",
       "default": 20
     },
+    "roster_email_minute": {
+      "type": "number",
+      "default": 0
+    },
     "roster_email_origin": {
       "type": "string"
     },
@@ -106,6 +110,10 @@
     "roster_auto_hour": {
       "type": "number",
       "default": 20
+    },
+    "roster_auto_minute": {
+      "type": "number",
+      "default": 0
     },
     "roster_auto_last_at": {
       "type": "string"

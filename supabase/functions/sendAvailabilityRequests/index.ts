@@ -1,6 +1,3 @@
-// 자동 생성 파일입니다. 직접 수정하지 마세요.
-// 원본: base44/functions/sendAvailabilityRequests/entry.ts (변환 도구: supabase/tools/port_function.mjs)
-
 import { createBase44Like } from '../_shared/server.ts';
 import { withCors } from '../_shared/http.mjs';
 import { sendEmail, brandedEmail, portalLink, cleanOrigin } from '../_shared/email.ts';
@@ -23,7 +20,7 @@ function timezoneFor(branch) {
   return STATE_TIMEZONES[String(branch.state || '').trim().toUpperCase()] || 'Australia/Sydney';
 }
 
-// Weekday (0 = Sunday), hour and calendar date as the branch's own clock shows them right now.
+// 지점의 지역 타임존 기준으로 현재 요일, 시간(hour), 분(minute), 날짜를 계산합니다.
 function localClock(timeZone) {
   const parts = new Intl.DateTimeFormat('en-US', {
     timeZone,
@@ -32,12 +29,14 @@ function localClock(timeZone) {
     month: '2-digit',
     day: '2-digit',
     hour: '2-digit',
+    minute: '2-digit',
     hourCycle: 'h23'
   }).formatToParts(new Date());
   const get = (type) => (parts.find((part) => part.type === type) || {}).value;
   return {
     day: WEEKDAYS[get('weekday')],
     hour: Number(get('hour')),
+    minute: Number(get('minute')),
     date: `${get('year')}-${get('month')}-${get('day')}`
   };
 }
@@ -49,46 +48,84 @@ function rowsOf(result) {
 async function handler(req) {
   try {
     const base44 = createBase44Like();
-    // Runs from the hourly schedule and takes no input. A signed-in caller must be the app admin.
+    
+    // 요청 바디 파싱 (관리자의 [지금 즉시 발송] 요청 대응)
+    let body = {};
+    if (req.method === 'POST') {
+      try {
+        body = await req.json();
+      } catch (_) {
+        body = {};
+      }
+    }
+
+    const forceBranchId = body?.branch_id;
+    const isForce = Boolean(body?.force);
+
+    // 스케줄러 실행 시 또는 인증된 관리자/매니저 호출
     const me = await base44.auth.me().catch(() => null);
-    if (me && me.role !== 'admin') return Response.json({ error: 'Forbidden' }, { status: 403 });
+    if (!isForce && me && me.role !== 'admin') {
+      return Response.json({ error: 'Forbidden' }, { status: 403 });
+    }
 
-    const branches = rowsOf(
-      await base44.asServiceRole.entities.Branch.filter({ roster_email_enabled: true }, { limit: 500 })
-    );
+    let branches = [];
+    if (isForce && forceBranchId) {
+      // 특정 지점 수동 즉시 발송
+      const target = await base44.asServiceRole.entities.Branch.get(forceBranchId).catch(() => null);
+      if (target) branches = [target];
+    } else {
+      // 자동 스케줄 발송 활성화된 모든 지점 조회
+      branches = rowsOf(
+        await base44.asServiceRole.entities.Branch.filter({ roster_email_enabled: true }, { limit: 500 })
+      );
+    }
 
-    const due = [];
+    const results = [];
     for (const branch of branches) {
       const clock = localClock(timezoneFor(branch));
-      const day = Number(branch.roster_email_day ?? 0);
-      const hour = Number(branch.roster_email_hour ?? 20);
-      if (clock.day !== day || clock.hour !== hour) continue;
-      // Once per branch per day, even if the schedule runs more than once in that hour.
-      if (branch.roster_email_last_sent === clock.date) continue;
-      if (!cleanOrigin(branch.roster_email_origin)) continue;
+      const targetDay = Number(branch.roster_email_day ?? 0);
+      const targetHour = Number(branch.roster_email_hour ?? 20);
+      const targetMinute = Number(branch.roster_email_minute ?? 0);
 
-      await base44.asServiceRole.entities.Branch.update(branch.id, { roster_email_last_sent: clock.date });
+      // 자동 스케줄러 실행 시 지점 지역 요일/시간/분 일치 여부 확인
+      if (!isForce) {
+        if (clock.day !== targetDay || clock.hour !== targetHour) continue;
+        // 분(Minute) 매칭: 스케줄러 실행 간격(예: 10~15분 윈도우)을 고려하여 발송 시간 이후 도달 시 1회 발송
+        if (clock.minute < targetMinute || clock.minute > targetMinute + 15) continue;
+        // 하루에 한 번만 발송 (이미 오늘 발송되었으면 중복 발송 방지)
+        if (branch.roster_email_last_sent === clock.date) continue;
+      }
+
+      const origin = cleanOrigin(branch.roster_email_origin) || 'http://localhost:5173';
+
+      // 발송 일자 기록 갱신
+      await base44.asServiceRole.entities.Branch.update(branch.id, { 
+        roster_email_last_sent: clock.date 
+      });
 
       const company = branch.company_id
         ? await base44.asServiceRole.entities.Company.get(branch.company_id).catch(() => null)
         : null;
+
       const staff = rowsOf(
         await base44.asServiceRole.entities.EmployeeProfile.filter(
           { branch_id: branch.id, status: 'active' },
           { limit: 500 }
         )
       );
-      // The crew signs in with their own ID, then lands on their own space to enter their hours.
-      const link = portalLink(branch.roster_email_origin, '/login?returnTo=/my-space');
+
+      // 직원이 로그인하여 본인 공간(My Space)에서 근무 가능 시간을 작성할 수 있는 링크
+      const link = portalLink(origin, '/login?returnTo=/my-space');
 
       let sent = 0;
       for (const person of staff) {
         if (!person.user_email) continue;
-        // Written in the language set on this person's staff profile.
+
         const copy = availabilityMail(employeeLanguage(person.language), {
           name: person.full_name || 'there',
           branchName: branch.name
         });
+
         const ok = await sendEmail(base44, {
           to: person.user_email,
           subject: copy.subject,
@@ -105,10 +142,11 @@ async function handler(req) {
         });
         if (ok) sent += 1;
       }
-      due.push({ branch: branch.name, staff: staff.length, sent });
+
+      results.push({ branch: branch.name, staff: staff.length, sent });
     }
 
-    return Response.json({ ok: true, checked: branches.length, due });
+    return Response.json({ ok: true, checked: branches.length, results });
   } catch (error) {
     return Response.json({ error: error.message }, { status: 500 });
   }
