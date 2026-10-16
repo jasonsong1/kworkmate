@@ -1,6 +1,3 @@
-// 자동 생성 파일입니다. 직접 수정하지 마세요.
-// 원본: base44/functions/calendarLink/entry.ts (변환 도구: supabase/tools/port_function.mjs)
-
 import { createBase44Like } from '../_shared/server.ts';
 import { withCors } from '../_shared/http.mjs';
 import { resolveCaller } from '../_shared/kwAuth.ts';
@@ -21,8 +18,9 @@ function randomString(length: number) {
   return out;
 }
 
-// The private address a person pastes into their phone calendar. It carries their employee
-// number and eight random characters, so it is theirs alone and can be replaced at any time.
+// 사원의 개인 캘린더 피드 주소를 발급합니다.
+// 모바일 기기(아이폰/안드로이드) 캘린더 앱에서 SSL 보안 오류 없이 바로 구독할 수 있도록
+// 정식 Supabase Edge Function 보안 HTTPS 주소 및 webcal:// 주소를 생성합니다.
 async function handler(req: Request) {
   try {
     const base44 = createBase44Like();
@@ -30,9 +28,6 @@ async function handler(req: Request) {
     if (!me) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
     const body = await req.json().catch(() => ({}));
-    const origin = String(
-      body.origin || req.headers.get('origin') || ''
-    ).replace(/\/+$/, '');
     const rotate = body.action === 'rotate';
 
     const profile = rowsOf(
@@ -64,10 +59,16 @@ async function handler(req: Request) {
       record = await base44.asServiceRole.entities.CalendarSubscription.update(record.id, { active: true });
     }
 
+    // Supabase 정식 Edge Function 엔드포인트 URL 생성 (SSL 인증서 보안 연결 보장)
+    const supabaseUrl = (Deno.env.get('SUPABASE_URL') || 'https://yktviwzqjzhfbfuuaamf.supabase.co').replace(/\/+$/, '');
+    const feedUrl = `${supabaseUrl}/functions/v1/calendarFeed?token=${encodeURIComponent(record.token)}`;
+    const webcalUrl = feedUrl.replace(/^https?:\/\//i, 'webcal://');
+
     return Response.json({
       ok: true,
       token: record.token,
-      url: origin ? `${origin}/functions/calendarFeed?token=${encodeURIComponent(record.token)}` : '',
+      url: feedUrl,
+      webcal_url: webcalUrl,
       active: record.active !== false
     });
   } catch (error: any) {

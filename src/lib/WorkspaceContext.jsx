@@ -253,13 +253,29 @@ export function WorkspaceProvider({ children }) {
   const presetsList = toArray(permissions.presets);
   const preset = presetsList.find((item) => item.key === permissions.presetKey) || null;
 
+  // 오너/대표/점주 직책 여부 확인 (position, employment_type, app_role 등)
+  const isOwner = Boolean(
+    me && (
+      role === 'company_admin' ||
+      role === 'owner' ||
+      me.position === '오너' ||
+      me.position === '대표' ||
+      me.position === '점주' ||
+      me.employment_type === 'owner' ||
+      String(me.position || '').toLowerCase().includes('owner') ||
+      String(me.app_role || '').toLowerCase().includes('owner')
+    )
+  );
+
+  const isCompanyAdmin = isPlatformAdmin || role === 'company_admin' || isOwner;
+
   const isManager =
     isPlatformAdmin ||
+    isCompanyAdmin ||
     role === 'company_admin' ||
     role === 'branch_manager' ||
     ['manager', 'supervisor_manager'].includes(permissions.presetKey) ||
     coversEveryBranch(preset);
-  const isCompanyAdmin = isPlatformAdmin || role === 'company_admin';
   const access = permissions.access;
 
   const hasModule = (module) => (isPlatformAdmin ? true : access ? Boolean(access[module] && access[module].level !== 'none') : true);
