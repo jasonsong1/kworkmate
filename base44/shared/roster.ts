@@ -199,14 +199,16 @@ export async function buildDraft(base44, branch, weekStart) {
   }
   const dayCapFor = (email, person) => {
     const e = lower(email);
-    if (unlimitedStaff.has(e)) return Infinity;
-    if (daysOverrideByEmail[e]) return daysOverrideByEmail[e];
-    // 풀타임(38시간) 및 정규직(50시간) 직원은 주당 계약 시간을 충족할 수 있도록
-    // 매장 기본 설정(5일)에 제한되지 않고 최대 6일까지 유연하게 근무를 배정할 수 있습니다.
+    // 1순위: 관리자가 직접 개별 직원에게 설정한 주당 근무일수 오버라이드 (오너 포함 철저 적용)
+    if (typeof daysOverrideByEmail[e] === 'number' && daysOverrideByEmail[e] > 0) {
+      return daysOverrideByEmail[e];
+    }
+    // 2순위: 풀타임(38시간) 및 정규직(50시간) 직원은 주당 계약 시간을 충족할 수 있도록 최대 6일까지 유연하게 배정
     const empType = person ? normalizeEmploymentType(person.employment_type) : '';
     if (empType === 'full_time' || empType === 'permanent') {
       return Math.max(maxDaysDefault, 6);
     }
+    // 3순위: 기본 매장 설정 일수 (기본 5일, 오너라 하더라도 설정된 한도 내에서만 근무)
     return maxDaysDefault;
   };
 
@@ -221,8 +223,14 @@ export async function buildDraft(base44, branch, weekStart) {
     if (!email || !(shifts > 0)) continue;
     shiftsOverrideByEmail[email] = shifts;
   }
-  const shiftCapFor = (email) =>
-    unlimitedStaff.has(lower(email)) ? Infinity : shiftsOverrideByEmail[email] || maxShiftsDefault;
+  const shiftCapFor = (email) => {
+    const e = lower(email);
+    // 관리자가 특정 직원에게 하루 시프트 수를 지정한 경우 오너라도 우선 적용
+    if (typeof shiftsOverrideByEmail[e] === 'number' && shiftsOverrideByEmail[e] > 0) {
+      return shiftsOverrideByEmail[e];
+    }
+    return maxShiftsDefault;
+  };
 
   // What the week already holds, counted per day and position.
   const keptShifts = rowsOf(weekPage).filter((shift) => shift && shift.employee_email);
@@ -381,6 +389,13 @@ export async function buildDraft(base44, branch, weekStart) {
         (item) =>
           positions.includes(item.position) && window && window.from <= item.start && window.to >= item.end
       ).length;
+
+      // [스마트 제약조건 최적화]:
+      // 만약 이 직원이 오늘 뛸 수 있는 시프트가 오직 1개뿐이라면(예: Tester는 오픈만 가능, 마감 불가),
+      // 다른 시프트로 갈 수 없으므로 이 시프트에 최우선 배정해야 전체 시프트가 채워집니다.
+      // (오픈/마감 둘 다 가능한 직원은 다른 시프트를 위해 양보)
+      const onlyOption = coversDay === 1;
+
       // A fixed placement is the employer's own instruction, so it stands when the person has not
       // said anything about that day. Once they have told us they cannot work those hours, the
       // shift goes to somebody who can instead of being planned on top of them.
@@ -414,15 +429,17 @@ export async function buildDraft(base44, branch, weekStart) {
         fixed: fixedHere,
         split: coversDay >= 2,
         fullMatch: fullMatch ? 1 : 0,
+        onlyOption: onlyOption ? 1 : 0,
         overlapMin
       });
     }
 
-    // The pinned people come first, then 100% full match, then split shifts, then contracts, then fairness
+    // The pinned people come first, then 100% full match, then onlyOption (제약조건 최우선), then split shifts, then contracts, then fairness
     candidates.sort(
       (a, b) =>
         (b.fixed ? 1 : 0) - (a.fixed ? 1 : 0) ||
         b.fullMatch - a.fullMatch ||
+        b.onlyOption - a.onlyOption || // 이 시프트밖에 못 뛰는 사람에게 먼저 시프트를 주고 다재다능한 사람은 양보
         (b.split ? 1 : 0) - (a.split ? 1 : 0) ||
         a.rank - b.rank ||
         a.used - b.used ||

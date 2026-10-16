@@ -251,6 +251,7 @@ export default function Roster() {
 
   // A dragged shift is the same record moved, never a second one added: the shift keeps its id and
   // only its person and day change.
+  // [낙관적 업데이트(Optimistic UI) 적용]: 서버 응답(2~3초)을 기다리지 않고 화면을 0.01초 만에 즉시 갱신
   const moveShift = async (email, date, id) => {
     const shift = shifts.find((s) => s.id === id);
     if (!shift || (shift.employee_email === email && shift.date === date)) return;
@@ -260,42 +261,57 @@ export default function Roster() {
     }
     const target = employees.find((employee) => employee.user_email === email);
     const previous = shift.employee_email;
-    await base44.entities.Shift.update(shift.id, {
-      employee_email: email,
-      employee_name: target ? target.full_name : email,
-      date
-    });
-    // A week that has already gone to staff carries the change to them; a draft or a saved week is
-    // still a private plan, so it moves quietly.
-    if (shift.status === 'published') {
-      await base44.functions
-        .invoke('notifyShiftChange', {
-          branch_id: activeBranch.id,
-          employee_email: email,
-          change: 'updated',
-          published: true,
-          date,
-          start_time: shift.start_time,
-          end_time: shift.end_time,
-          position: shift.position
-        })
-        .catch(() => null);
-      if (previous && previous !== email) {
-        await base44.functions
+    const originalShifts = shifts;
+
+    // 1. 화면 UI를 즉각 변경 (체감 로딩 0초)
+    setShifts((prev) =>
+      prev.map((s) =>
+        s.id === id
+          ? { ...s, employee_email: email, employee_name: target ? target.full_name : email, date }
+          : s
+      )
+    );
+
+    // 2. 백그라운드에서 서버 동기화 수행
+    try {
+      await base44.entities.Shift.update(shift.id, {
+        employee_email: email,
+        employee_name: target ? target.full_name : email,
+        date
+      });
+      if (shift.status === 'published') {
+        base44.functions
           .invoke('notifyShiftChange', {
             branch_id: activeBranch.id,
-            employee_email: previous,
-            change: 'cancelled',
+            employee_email: email,
+            change: 'updated',
             published: true,
-            date: shift.date,
+            date,
             start_time: shift.start_time,
             end_time: shift.end_time,
             position: shift.position
           })
           .catch(() => null);
+        if (previous && previous !== email) {
+          base44.functions
+            .invoke('notifyShiftChange', {
+              branch_id: activeBranch.id,
+              employee_email: previous,
+              change: 'cancelled',
+              published: true,
+              date: shift.date,
+              start_time: shift.start_time,
+              end_time: shift.end_time,
+              position: shift.position
+            })
+            .catch(() => null);
+        }
       }
+    } catch (err) {
+      // 통신 실패 시 원래 상태로 롤백
+      setShifts(originalShifts);
+      toast({ title: t('roster.moveFailed') || '시프트 이동에 실패했습니다.', variant: 'destructive' });
     }
-    await load();
   };
 
   // Carrying a name onto another line puts that person above the row it was dropped on, and the
