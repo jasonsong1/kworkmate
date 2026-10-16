@@ -181,7 +181,9 @@ export function parseCustomInstructions(instructions, staff) {
     '최소', '적게', '덜', '최소한', '가장 적게', '최소화', '조금만', '조금',
     'least', 'min', 'minimum', '땜빵', '땜빵용', '후순위', '대체용', '비상용',
     '스페어', '필요할때만', '사람 없을때만', '사람 부족할때만', '급할때만',
-    '마지막에', '제일 마지막', 'backup', 'spare', 'substitute', 'as needed', 'emergency only'
+    '마지막에', '제일 마지막', 'backup', 'spare', 'substitute', 'as needed', 'emergency only',
+    '미배정일때만', '미배정일때', '미배정시', '미배정 시', '미배정', '공석일때', '공석시',
+    '비었을때만', '비었을때', '사람없을때만', '부족할때만', '안될때만', '대타', '대타용', 'fallback'
   ];
 
   const maxKeywords = [
@@ -455,11 +457,7 @@ export async function buildDraft(base44, branch, weekStart) {
     if (typeof customRules.employeeDayCaps[e] === 'number') {
       return customRules.employeeDayCaps[e];
     }
-    // 최소 배정 대상자(minStaff: 오너/최소 배정 지시자)는 주당 최대 2일로 철저히 제한
-    if (customRules.minStaff && (customRules.minStaff.has(e) || customRules.minStaff.has(email))) {
-      return 2;
-    }
-    // 1순위: 관리자가 직접 개별 직원에게 설정한 주당 근무일수 오버라이드 (오너 포함 철저 적용)
+    // 1순위: 관리자가 직접 개별 직원에게 설정한 주당 근무일수 오버라이드
     if (typeof daysOverrideByEmail[e] === 'number' && daysOverrideByEmail[e] > 0) {
       return daysOverrideByEmail[e];
     }
@@ -468,7 +466,11 @@ export async function buildDraft(base44, branch, weekStart) {
     if (empType === 'full_time' || empType === 'permanent') {
       return Math.max(maxDaysDefault, 6);
     }
-    // 3순위: 기본 매장 설정 일수 (기본 5일, 오너라 하더라도 설정된 한도 내에서만 근무)
+    // 3순위: 오너는 미배정 공석이 생길 때 메울 수 있도록 7일 허용
+    if (UNLIMITED_EMPLOYMENT.includes(empType)) {
+      return 7;
+    }
+    // 4순위: 기본 매장 설정 일수 (기본 5일)
     return maxDaysDefault;
   };
 
@@ -485,13 +487,13 @@ export async function buildDraft(base44, branch, weekStart) {
   }
   const shiftCapFor = (email) => {
     const e = lower(email);
-    // 고용주 맞춤 지침에서 '최소 배정'으로 지정된 직원은 하루 1시프트로 철저히 제한
-    if (customRules.minStaff && (customRules.minStaff.has(e) || customRules.minStaff.has(email))) {
-      return 1;
-    }
-    // 관리자가 특정 직원에게 하루 시프트 수를 지정한 경우 오너라도 우선 적용
+    // 1순위: 관리자가 특정 직원에게 하루 시프트 수를 지정한 경우 우선 적용
     if (typeof shiftsOverrideByEmail[e] === 'number' && shiftsOverrideByEmail[e] > 0) {
       return shiftsOverrideByEmail[e];
+    }
+    // 2순위: 지침에서 '하루 1시프트', '더블 금지'로 명시된 직원은 하루 1시프트로 제한
+    if (customRules.singleShiftStaff && (customRules.singleShiftStaff.has(e) || customRules.singleShiftStaff.has(email))) {
+      return 1;
     }
     return maxShiftsDefault;
   };
