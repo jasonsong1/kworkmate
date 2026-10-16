@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { Loader2, Plus, Trash2 } from 'lucide-react';
+import { Loader2, Plus, Sparkles, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/components/ui/use-toast';
 import { useI18n } from '@/lib/i18n';
@@ -11,11 +12,10 @@ import { useWorkspace } from '@/lib/WorkspaceContext';
 import { DAYS, isBranchOpenOnDay } from '@/lib/bh';
 import { base44 } from '@/api/base44Client';
 
-// A week everyone gets, and the numbers a person can be raised to.
+// 주당 근무 가능 일수 옵션
 const DAYS_PER_WEEK_OPTIONS = [5, 6, 7];
 
-// Two shifts a day is the default, so one person can take a morning and an afternoon. Whoever is
-// set to one shift is never planned for a second shift on the same day.
+// 하루 최대 시프트 수 기본값 및 옵션
 const DEFAULT_SHIFTS_PER_DAY = 2;
 const SHIFTS_PER_DAY_OPTIONS = [1, 2];
 
@@ -25,11 +25,10 @@ const DEFAULT_SHIFTS = [
 ];
 
 const cellKey = (shiftKey, day, position) => `${shiftKey}::${day}::${position}`;
-// Monday is day 0 in the saved requirements, which is where the day keys start.
+// 월요일이 0번 인덱스입니다.
 const dayLabel = (dayIndex, t) => t(`day.${(dayIndex + 1) % 7}`);
 
-// The store's shift patterns, how many people it needs for each position day by day, and the
-// people the employer always wants on a given day. The auto-builder reads all of it.
+// 매장의 시프트 패턴, 요일/직책별 필요 인원, 고정 근무자, 그리고 고용주 맞춤 AI 지침을 설정하는 대화상자입니다.
 export default function RosterSettingsDialog({ open, onOpenChange, branch, onSaved }) {
   const { t } = useI18n();
   const { company } = useWorkspace();
@@ -40,12 +39,14 @@ export default function RosterSettingsDialog({ open, onOpenChange, branch, onSav
   const [fixed, setFixed] = useState({});
   const [staff, setStaff] = useState([]);
   const [minRest, setMinRest] = useState(10);
-  // Five days is what a week means for everyone; the people who want six or seven carry their
-  // own number here.
   const [maxDays, setMaxDays] = useState(5);
   const [dayOverrides, setDayOverrides] = useState({});
   const [maxShifts, setMaxShifts] = useState(DEFAULT_SHIFTS_PER_DAY);
   const [shiftOverrides, setShiftOverrides] = useState({});
+  
+  // 고용주 맞춤 AI 지침 상태 관리
+  const [customInstructions, setCustomInstructions] = useState('');
+
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -70,6 +71,10 @@ export default function RosterSettingsDialog({ open, onOpenChange, branch, onSav
         setShifts(Array.isArray(found.shifts) && found.shifts.length > 0 ? found.shifts : DEFAULT_SHIFTS);
         setMinRest(Number(found.min_rest_hours) >= 0 ? Number(found.min_rest_hours) : 10);
         setMaxDays(Number(found.max_days_per_week) > 0 ? Number(found.max_days_per_week) : 5);
+        
+        // 고용주 맞춤 지침 불러오기
+        setCustomInstructions(found.custom_instructions || '');
+
         const perPerson = {};
         (found.day_overrides || []).forEach((row) => {
           const days = Number(row && row.max_days);
@@ -100,13 +105,14 @@ export default function RosterSettingsDialog({ open, onOpenChange, branch, onSav
       } else {
         setSettingId('');
         setShifts(DEFAULT_SHIFTS);
-        setCounts({});
-        setFixed({});
         setMinRest(10);
         setMaxDays(5);
         setDayOverrides({});
         setMaxShifts(DEFAULT_SHIFTS_PER_DAY);
         setShiftOverrides({});
+        setCounts({});
+        setFixed({});
+        setCustomInstructions('');
       }
       setLoading(false);
     };
@@ -116,35 +122,52 @@ export default function RosterSettingsDialog({ open, onOpenChange, branch, onSav
     };
   }, [open, branch]);
 
-  const setShift = (index, patch) => setShifts((prev) => prev.map((s, i) => (i === index ? { ...s, ...patch } : s)));
-  const addShift = () =>
-    setShifts((prev) => [...prev, { key: `s${Date.now()}`, label: '', start_time: '09:00', end_time: '17:00' }]);
-  const removeShift = (index) => setShifts((prev) => prev.filter((_, i) => i !== index));
-  const setCount = (shiftKey, day, position, value) =>
-    setCounts((prev) => ({ ...prev, [cellKey(shiftKey, day, position)]: value }));
+  const setShift = (index, patch) => {
+    setShifts((prev) => prev.map((s, i) => (i === index ? { ...s, ...patch } : s)));
+  };
 
-  const setDaysFor = (email, value) =>
+  const addShift = () => {
+    const key = `s${Date.now()}`;
+    setShifts((prev) => [...prev, { key, label: '', start_time: '09:00', end_time: '17:00' }]);
+  };
+
+  const removeShift = (index) => {
+    setShifts((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const setCount = (shiftKey, day, position, value) => {
+    const parsed = value === '' ? '' : Math.max(0, parseInt(value, 10) || 0);
+    setCounts((prev) => ({ ...prev, [cellKey(shiftKey, day, position)]: parsed }));
+  };
+
+  const toggleFixed = (day, email) => {
+    setFixed((prev) => {
+      const list = prev[day] || [];
+      const on = list.includes(email);
+      return {
+        ...prev,
+        [day]: on ? list.filter((e) => e !== email) : [...list, email]
+      };
+    });
+  };
+
+  const setDaysFor = (email, value) => {
     setDayOverrides((prev) => {
       const next = { ...prev };
-      if (value === 'default') delete next[email];
+      if (!value || value === 'default') delete next[email];
       else next[email] = Number(value);
       return next;
     });
+  };
 
-  const setShiftsFor = (email, value) =>
+  const setShiftsFor = (email, value) => {
     setShiftOverrides((prev) => {
       const next = { ...prev };
-      if (value === 'default') delete next[email];
+      if (!value || value === 'default') delete next[email];
       else next[email] = Number(value);
       return next;
     });
-
-  const toggleFixed = (day, email) =>
-    setFixed((prev) => {
-      const chosen = prev[day] || [];
-      const next = chosen.includes(email) ? chosen.filter((item) => item !== email) : [...chosen, email];
-      return { ...prev, [day]: next };
-    });
+  };
 
   const save = async () => {
     if (!branch) return;
@@ -180,7 +203,9 @@ export default function RosterSettingsDialog({ open, onOpenChange, branch, onSav
       shift_overrides: Object.entries(shiftOverrides).map(([email, count]) => ({
         email,
         max_shifts: Number(count)
-      }))
+      })),
+      // 고용주 맞춤 AI 지침 저장
+      custom_instructions: customInstructions.trim()
     };
     if (settingId) await base44.entities.RosterSetting.update(settingId, payload);
     else await base44.entities.RosterSetting.create(payload);
@@ -204,6 +229,7 @@ export default function RosterSettingsDialog({ open, onOpenChange, branch, onSav
           </p>
         ) : (
           <div className="space-y-7">
+            {/* 1. 기본 시프트 타입 및 근무 간 최소 휴식 시간 설정 */}
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <Label>{t('roster.shifts')}</Label>
@@ -249,8 +275,7 @@ export default function RosterSettingsDialog({ open, onOpenChange, branch, onSav
               </div>
             </div>
 
-            {/* How many days of one week a person is planned for: five by default, raised for the
-                people the store agreed more with. */}
+            {/* 2. 주당 근무 일수 및 하루 시프트 제한 */}
             <div className="space-y-3">
               <div>
                 <Label>{t('roster.maxDaysTitle')}</Label>
@@ -273,7 +298,7 @@ export default function RosterSettingsDialog({ open, onOpenChange, branch, onSav
                   </Select>
                 </div>
                 <div>
-                  <Label className="mb-1 block text-xs">{t('roster.shiftsDefaultLabel')}</Label>
+                  <Label className="mb-1 block text-xs">{t('roster.maxShiftsDefault')}</Label>
                   <Select value={String(maxShifts)} onValueChange={(value) => setMaxShifts(Number(value))}>
                     <SelectTrigger>
                       <SelectValue />
@@ -288,15 +313,19 @@ export default function RosterSettingsDialog({ open, onOpenChange, branch, onSav
                   </Select>
                 </div>
               </div>
+
               {staff.length > 0 ? (
-                <div className="space-y-2">
-                  <Label className="text-xs">{t('roster.maxDaysPerPerson')}</Label>
-                  <p className="text-[11px] text-muted-foreground">{t('roster.shiftsPerDayHint')}</p>
-                  <div className="grid max-h-72 gap-2 overflow-y-auto sm:grid-cols-2">
+                <div className="pt-2">
+                  <Label className="text-xs">{t('roster.individualRules')}</Label>
+                  <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                     {staff.map((person) => (
-                      <div key={person.id} className="space-y-1.5 rounded-lg border px-3 py-2">
-                        <span className="block truncate text-sm">{person.full_name}</span>
-                        <div className="grid grid-cols-2 gap-2">
+                      <div
+                        key={person.id}
+                        className="rounded-lg border bg-card/60 p-2.5 text-xs transition-colors hover:border-slate-300 dark:hover:border-slate-700"
+                      >
+                        <p className="font-medium truncate">{person.full_name}</p>
+                        <p className="text-[11px] text-muted-foreground truncate">{person.position || '—'}</p>
+                        <div className="mt-2 grid grid-cols-2 gap-2">
                           <div>
                             <Label className="mb-1 block text-[11px] text-muted-foreground">
                               {t('roster.daysPerPersonLabel')}
@@ -349,6 +378,7 @@ export default function RosterSettingsDialog({ open, onOpenChange, branch, onSav
               ) : null}
             </div>
 
+            {/* 3. 요일별 및 직책별 필요 인원 테이블 */}
             <div className="space-y-4">
               <div>
                 <Label>{t('roster.headcount')}</Label>
@@ -423,8 +453,7 @@ export default function RosterSettingsDialog({ open, onOpenChange, branch, onSav
               )}
             </div>
 
-            {/* The people who are always on a given day: the builder places them first and fills
-                the rest of that day's headcount around them. */}
+            {/* 4. 요일별 고정 근무자 설정 */}
             <div className="space-y-3">
               <div>
                 <Label>{t('roster.fixedTitle')}</Label>
@@ -452,29 +481,59 @@ export default function RosterSettingsDialog({ open, onOpenChange, branch, onSav
                           </span>
                         )}
                       </p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {staff.map((person) => {
-                        const on = (fixed[dayIndex] || []).includes(person.user_email);
-                        return (
-                          <button
-                            key={person.id}
-                            type="button"
-                            onClick={() => toggleFixed(dayIndex, person.user_email)}
-                            className={
-                              on
-                                ? 'rounded-full border border-primary bg-primary/10 px-3 py-1 text-xs font-medium text-primary'
-                                : 'rounded-full border px-3 py-1 text-xs text-muted-foreground hover:bg-muted'
-                            }
-                          >
-                            {person.full_name}
-                          </button>
-                        );
-                      })}
+                      <div className="flex flex-wrap gap-1.5">
+                        {staff.map((person) => {
+                          const on = (fixed[dayIndex] || []).includes(person.user_email);
+                          return (
+                            <button
+                              key={person.id}
+                              type="button"
+                              onClick={() => toggleFixed(dayIndex, person.user_email)}
+                              className={
+                                on
+                                  ? 'rounded-full border border-primary bg-primary/10 px-3 py-1 text-xs font-medium text-primary'
+                                  : 'rounded-full border px-3 py-1 text-xs text-muted-foreground hover:bg-muted'
+                              }
+                            >
+                              {person.full_name}
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
-                  </div>
-                );
-              })
+                  );
+                })
               )}
+            </div>
+
+            {/* 5. 고용주 맞춤 AI 로스터 지침 (Custom AI Instructions) */}
+            <div className="space-y-2 rounded-xl border border-indigo-200/80 bg-gradient-to-br from-indigo-50/50 via-card to-card p-4 dark:border-indigo-500/20 dark:from-indigo-950/20">
+              <div className="flex items-center gap-2">
+                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-500/10 text-indigo-600 dark:text-indigo-400">
+                  <Sparkles className="h-4 w-4" />
+                </div>
+                <div>
+                  <Label className="text-sm font-semibold text-foreground flex items-center gap-1.5">
+                    고용주 맞춤 AI 로스터 지침
+                    <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-medium text-indigo-700 dark:bg-indigo-900/60 dark:text-indigo-300">
+                      Smart AI Prompt
+                    </span>
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    기본 배정 알고리즘을 유지하면서, 고용주님이 원하는 특별 규칙이나 요청사항을 자유롭게 자연어로 입력하시면 AI가 로스터 생성 시 최우선 반영합니다.
+                  </p>
+                </div>
+              </div>
+              <Textarea
+                rows={3}
+                value={customInstructions}
+                onChange={(e) => setCustomInstructions(e.target.value)}
+                placeholder="예시:&#10;• sumin은 주 4일까지만 배정해줘&#10;• 금요일 오전에는 Tester를 우선 투입해줘&#10;• 오픈 시프트에는 경험이 많은 직원을 우선 배치해줘"
+                className="mt-2 border-indigo-100 bg-card/80 text-sm focus-visible:ring-indigo-500/40 dark:border-indigo-950/40"
+              />
+              <p className="text-[11px] text-muted-foreground/80">
+                💡 팁: 직원 이름, 특정 요일, 포지션 등에 대해 원하는 조건을 구체적으로 작성해주시면 더욱 똑똑하게 맞춰줍니다.
+              </p>
             </div>
           </div>
         )}

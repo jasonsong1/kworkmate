@@ -125,6 +125,73 @@ function remainingMinutes(person, weekMinutes) {
   return Math.min(...caps) * 60 - weekMinutes;
 }
 
+// 고용주가 자연어로 입력한 맞춤 AI 지침(custom_instructions)을 분석하여 규칙 객체로 변환합니다.
+export function parseCustomInstructions(instructions, staff) {
+  const rules = {
+    employeeDayCaps: {},
+    employeeExclude: new Set(),
+    dayPriority: {}
+  };
+  if (!instructions || !String(instructions).trim()) return rules;
+
+  const lines = String(instructions).split(/\r?\n|•|,|;/).map((s) => s.trim()).filter(Boolean);
+  const dayNames = [
+    { names: ['월요일', '월', 'mon', 'monday'], index: 0 },
+    { names: ['화요일', '화', 'tue', 'tuesday'], index: 1 },
+    { names: ['수요일', '수', 'wed', 'wednesday'], index: 2 },
+    { names: ['목요일', '목', 'thu', 'thursday'], index: 3 },
+    { names: ['금요일', '금', 'fri', 'friday'], index: 4 },
+    { names: ['토요일', '토', 'sat', 'saturday'], index: 5 },
+    { names: ['일요일', '일', 'sun', 'sunday'], index: 6 }
+  ];
+
+  for (const line of lines) {
+    const lowerLine = line.toLowerCase();
+
+    for (const person of staff || []) {
+      const name = String(person.full_name || '').toLowerCase();
+      const email = String(person.user_email || '').toLowerCase();
+      const nameKey = name ? name.split(' ')[0] : '';
+      const matched = (name && lowerLine.includes(name)) || (nameKey && lowerLine.includes(nameKey)) || lowerLine.includes(email);
+      if (!matched) continue;
+
+      // 1. 주 N일 제한: 예) "sumin은 주 4일만", "sumin 주 3일"
+      const matchDays = line.match(/주\s*(\d+)\s*일/);
+      if (matchDays) {
+        const cap = parseInt(matchDays[1], 10);
+        if (cap > 0 && cap <= 7) {
+          rules.employeeDayCaps[email] = cap;
+        }
+      }
+
+      // 2. 제외/쉬게 하기
+      if (lowerLine.includes('제외') || lowerLine.includes('빼') || lowerLine.includes('쉬게') || lowerLine.includes('오프') || lowerLine.includes('off')) {
+        rules.employeeExclude.add(email);
+      }
+    }
+
+    // 3. 특정 요일 특정 직원 우선 투입: 예) "금요일에는 Tester 우선", "금요일에 Tester"
+    for (const d of dayNames) {
+      const hasDay = d.names.some((dn) => lowerLine.includes(dn));
+      if (hasDay) {
+        for (const person of staff || []) {
+          const name = String(person.full_name || '').toLowerCase();
+          const email = String(person.user_email || '').toLowerCase();
+          const nameKey = name ? name.split(' ')[0] : '';
+          const matched = (name && lowerLine.includes(name)) || (nameKey && lowerLine.includes(nameKey)) || lowerLine.includes(email);
+          if (matched) {
+            const key = String(d.index);
+            rules.dayPriority[key] = rules.dayPriority[key] || new Set();
+            rules.dayPriority[key].add(email);
+          }
+        }
+      }
+    }
+  }
+
+  return rules;
+}
+
 // Builds one week's draft for a store and files it as draft shifts. The answer says what was
 // placed and what is still open, so the screen can say so. `{ error: 'no_settings' }` comes back
 // when the store has not set its shifts or headcount yet.
@@ -225,8 +292,15 @@ export async function buildDraft(base44, branch, weekStart) {
     daysOverrideByEmail[email] = days;
   }
 
+  // 고용주 맞춤 AI 자연어 지침 파싱
+  const customRules = parseCustomInstructions(setting ? setting.custom_instructions : '', staff);
+
   const dayCapFor = (email, person) => {
     const e = lower(email);
+    // 0순위: 고용주 맞춤 AI 지침에서 명시한 주 N일 제한 (최우선 반영)
+    if (typeof customRules.employeeDayCaps[e] === 'number') {
+      return customRules.employeeDayCaps[e];
+    }
     // 1순위: 관리자가 직접 개별 직원에게 설정한 주당 근무일수 오버라이드 (오너 포함 철저 적용)
     if (typeof daysOverrideByEmail[e] === 'number' && daysOverrideByEmail[e] > 0) {
       return daysOverrideByEmail[e];
@@ -446,7 +520,8 @@ export async function buildDraft(base44, branch, weekStart) {
           break;
         }
       }
-      if (!allowed) continue;
+      const isExcluded = customRules.employeeExclude.has(email) || customRules.employeeExclude.has(lower(email));
+      if (isExcluded) continue;
 
       candidates.push({
         email,
@@ -458,14 +533,21 @@ export async function buildDraft(base44, branch, weekStart) {
         split: coversDay >= 2,
         fullMatch: fullMatch ? 1 : 0,
         onlyOption: onlyOption ? 1 : 0,
+        customPriority:
+          customRules.dayPriority[String(dayIndex)] &&
+          (customRules.dayPriority[String(dayIndex)].has(email) ||
+            customRules.dayPriority[String(dayIndex)].has(lower(email)))
+            ? 1
+            : 0,
         overlapMin
       });
     }
 
-    // The pinned people come first, then 100% full match, then onlyOption (제약조건 최우선), then split shifts, then contracts, then fairness
+    // The pinned people come first, then custom priority, then 100% full match, then onlyOption (제약조건 최우선), then split shifts, then contracts, then fairness
     candidates.sort(
       (a, b) =>
         (b.fixed ? 1 : 0) - (a.fixed ? 1 : 0) ||
+        (b.customPriority ? 1 : 0) - (a.customPriority ? 1 : 0) || // 고용주 맞춤 지침 우선 배정
         b.fullMatch - a.fullMatch ||
         b.onlyOption - a.onlyOption || // 이 시프트밖에 못 뛰는 사람에게 먼저 시프트를 주고 다재다능한 사람은 양보
         (b.split ? 1 : 0) - (a.split ? 1 : 0) ||
@@ -474,7 +556,7 @@ export async function buildDraft(base44, branch, weekStart) {
         (b.primary ? 1 : 0) - (a.primary ? 1 : 0) ||
         b.overlapMin - a.overlapMin ||
         a.email.localeCompare(b.email)
-      );
+    );
 
     let filled = 0;
     for (const pick of candidates) {
