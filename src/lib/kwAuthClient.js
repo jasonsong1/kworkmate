@@ -493,18 +493,22 @@ export function createSupabaseAppClient() {
           return { signed_url: publicUrlData.publicUrl };
         }
         // 비공개 버킷인 경우 시간 제한 서명 URL 발급
+        let signedUrl = '';
         const { data, error } = await supabase.storage.from(bucket).createSignedUrl(path, expiresIn);
-        if (error) {
-          // 클라이언트 세션 토큰이 다를 경우 kwSession 함수를 통해 서명 URL 발급 재시도
+        if (!error && data && data.signedUrl) {
+          signedUrl = data.signedUrl;
+        } else {
+          // 클라이언트 세션 토큰이 다르거나 Storage RLS 권한이 제한된 경우 kwSession Edge Function을 통해 service_role 서명 URL 발급
           try {
             const fallback = await kwSessionAction({ action: 'sign_document', file_uri });
             if (fallback && fallback.signed_url) {
-              return { signed_url: fallback.signed_url };
+              signedUrl = fallback.signed_url;
             }
           } catch (_) {}
-          throw error;
         }
-        return { signed_url: data.signedUrl };
+        if (signedUrl) return { signed_url: signedUrl };
+        if (error) throw error;
+        throw new Error('파일 다운로드 링크를 생성할 수 없습니다.');
       }
     }
   };

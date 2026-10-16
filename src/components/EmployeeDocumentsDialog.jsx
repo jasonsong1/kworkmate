@@ -45,14 +45,31 @@ export default function EmployeeDocumentsDialog({ open, onOpenChange, employee }
   const identity = kwIdentity();
   const viaOwnRecord = Boolean(kwActive() && identity && employee && identity.email === employee.user_email);
 
+  // 온보딩 서류 열람 핸들러 (관리자 및 직원 모두 안전하고 확실하게 service_role 기반 URL 발급)
   const openDoc = async (doc) => {
     if (!doc || !doc.file_uri) return;
     setLoadingId(doc.file_uri);
     try {
-      const signed = viaOwnRecord
-        ? await kwCall('kwSession', { action: 'sign_document', file_uri: doc.file_uri })
-        : await base44.integrations.Core.CreateFileSignedUrl({ file_uri: doc.file_uri });
-      if (signed && signed.signed_url) window.open(signed.signed_url, '_blank', 'noopener');
+      let signedUrl = '';
+      // 1. Edge Function(kwSession sign_document)을 통해 service_role 권한으로 안전하게 서명 URL 발급 시도
+      try {
+        const res = await kwCall('kwSession', { action: 'sign_document', file_uri: doc.file_uri });
+        if (res && res.signed_url) signedUrl = res.signed_url;
+      } catch (err) {
+        console.warn('[openDoc] kwSession fallback to client SDK:', err);
+      }
+
+      // 2. 만약 안 되면 클라이언트 SDK를 통해 직접 서명 URL 발급 시도
+      if (!signedUrl) {
+        const clientRes = await base44.integrations.Core.CreateFileSignedUrl({ file_uri: doc.file_uri });
+        if (clientRes && clientRes.signed_url) signedUrl = clientRes.signed_url;
+      }
+
+      if (signedUrl) {
+        window.open(signedUrl, '_blank', 'noopener');
+      } else {
+        throw new Error(t('employees.docOpenFailed') || '문서 다운로드 링크를 생성할 수 없습니다.');
+      }
     } catch (error) {
       toast({ title: error.message || t('employees.docOpenFailed'), variant: 'destructive' });
     } finally {
@@ -73,10 +90,18 @@ export default function EmployeeDocumentsDialog({ open, onOpenChange, employee }
     const targetUri = signTargetDoc.file_uri;
     setLoadingId(targetUri);
     try {
-      // 1. 기존 원본 PDF 다운로드
-      const signed = await base44.integrations.Core.CreateFileSignedUrl({ file_uri: targetUri });
-      if (!signed || !signed.signed_url) throw new Error('PDF 다운로드 URL을 가져오지 못했습니다.');
-      const resp = await fetch(signed.signed_url);
+      // 1. 기존 원본 PDF 다운로드 (kwSession 1차 시도 -> client SDK 2차 시도)
+      let signedUrl = '';
+      try {
+        const res = await kwCall('kwSession', { action: 'sign_document', file_uri: targetUri });
+        if (res && res.signed_url) signedUrl = res.signed_url;
+      } catch (_) {}
+      if (!signedUrl) {
+        const signed = await base44.integrations.Core.CreateFileSignedUrl({ file_uri: targetUri });
+        if (signed && signed.signed_url) signedUrl = signed.signed_url;
+      }
+      if (!signedUrl) throw new Error('PDF 다운로드 URL을 가져오지 못했습니다.');
+      const resp = await fetch(signedUrl);
       const pdfBytes = new Uint8Array(await resp.arrayBuffer());
 
       // 2. 고용주 서명 및 오늘 날짜 날인 (호주 국세청 규격 박스)

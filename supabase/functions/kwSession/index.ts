@@ -283,19 +283,40 @@ async function handler(req: any) {
       const fileUri = String(body.file_uri || '').trim();
       if (!fileUri) return Response.json({ error: 'file_uri is required' }, { status: 400 });
 
-      const docs = rowsOf(
-        await base44.asServiceRole.entities.EmployeeDocument
-          .filter({ employee_profile_id: profile.id, file_uri: fileUri }, { limit: 1 })
-          .catch(() => [])
-      );
-      if (docs.length === 0 && me.role !== 'admin' && me.app_role !== 'company_admin') {
-        return Response.json({ error: 'Document not found' }, { status: 404 });
+      // 관리자 직책 확인 (어드민, 회사 관리자, 브랜치 매니저, 일반 매니저 등)
+      const isManagerOrAdmin =
+        me.role === 'admin' ||
+        me.app_role === 'super_admin' ||
+        me.app_role === 'company_admin' ||
+        me.app_role === 'branch_manager' ||
+        me.app_role === 'manager';
+
+      // 일반 직원의 경우 본인 프로필(profile.docs)에 등록된 서류인지 검증
+      let allowed = isManagerOrAdmin;
+      if (!allowed && profile) {
+        const myDocs = Array.isArray(profile.docs) ? profile.docs : [];
+        allowed = myDocs.some((d: any) => d && (d.file_uri === fileUri || d.url === fileUri));
       }
-      const signed = await base44.asServiceRole.integrations.Core.CreateFileSignedUrl({
-        file_uri: fileUri,
-        expiresIn: 3600
-      });
-      return Response.json({ ok: true, signed_url: signed.signed_url });
+
+      if (!allowed) {
+        return Response.json({ error: 'Access denied: 해당 문서를 열람할 권한이 없습니다.' }, { status: 403 });
+      }
+
+      // Supabase Storage에서 service_role 권한으로 안전하게 서명된 다운로드 URL(1시간 유효) 발급
+      try {
+        const signed = await base44.asServiceRole.integrations.Core.CreateFileSignedUrl({
+          file_uri: fileUri,
+          expiresIn: 3600
+        });
+        if (signed && signed.signed_url) {
+          return Response.json({ ok: true, signed_url: signed.signed_url });
+        }
+      } catch (storageErr: any) {
+        console.error('[kwSession sign_document storage error]:', storageErr);
+        return Response.json({ error: 'Document not found in storage: ' + (storageErr.message || '') }, { status: 404 });
+      }
+
+      return Response.json({ error: 'Document not found' }, { status: 404 });
     }
 
     // Default: Return the current session profile and documents
