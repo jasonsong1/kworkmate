@@ -500,12 +500,12 @@ export async function buildDraft(base44, branch, weekStart) {
   const leaveRanges = rowsOf(leavePage)
     .filter((row) => row && row.employee_email)
     .map((row) => ({
-      email: row.employee_email,
+      email: lower(row.employee_email),
       start: String(row.start_date || '').slice(0, 10),
       end: String(row.end_date || row.start_date || '').slice(0, 10)
     }));
   const onLeave = (email, date) =>
-    leaveRanges.some((range) => range.email === email && date >= range.start && date <= range.end);
+    leaveRanges.some((range) => range.email === lower(email) && date >= range.start && date <= range.end);
 
   const setting = rowsOf(settingPage)[0] || null;
   const staff = rowsOf(staffPage);
@@ -631,6 +631,11 @@ export async function buildDraft(base44, branch, weekStart) {
     if (!Number.isInteger(day) || day < 0 || day > 6 || !email) continue;
     // 고용주 맞춤 지침에서 '최소 배정'으로 지정된 직원은 고정 직원(fixed) 우선권에서 제외
     if (customRules.minStaff && (customRules.minStaff.has(email) || customRules.minStaff.has(lower(email)))) {
+      continue;
+    }
+    // 승인된 휴가 기간에 해당하는 요일은 고정 배정(fixed) 우선권에서도 제외합니다.
+    const dayDate = addDays(weekStart, day);
+    if (onLeave(email, dayDate)) {
       continue;
     }
     fixedByDay[day] = fixedByDay[day] || new Set();

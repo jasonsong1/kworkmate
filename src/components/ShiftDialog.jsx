@@ -20,6 +20,8 @@ export default function ShiftDialog({
   defaultDate,
   defaultEmployee,
   shift,
+  onLeaveFor,
+  approvedLeave,
   onSaved
 }) {
   const { t } = useI18n();
@@ -50,6 +52,24 @@ export default function ShiftDialog({
     break_min: 30,
     notes: ''
   });
+
+  // 선택된 직원이 선택된 날짜에 승인된 휴가 중인지 실시간 판별
+  const isLeaveOnDate = Boolean(
+    form.employee_email &&
+    form.date &&
+    (onLeaveFor
+      ? onLeaveFor(form.employee_email, form.date)
+      : (approvedLeave || []).some(
+          (row) =>
+            row.employee_email === form.employee_email &&
+            form.date >= String(row.start_date || '').slice(0, 10) &&
+            String(row.end_date || row.start_date || '').slice(0, 10) >= form.date
+        ))
+  );
+
+  // 선택된 직원의 이름 찾기
+  const targetPerson = (employees || []).find((e) => e.user_email === form.employee_email) || person;
+  const targetPersonName = targetPerson ? targetPerson.full_name || targetPerson.user_email : '직원';
 
   // 다이얼로그가 열릴 때 폼 초기화 및 매장의 시프트 템플릿(RosterSetting) 로드
   useEffect(() => {
@@ -108,6 +128,15 @@ export default function ShiftDialog({
   const submit = async () => {
     if (!branch || !form.employee_email || !form.date) {
       toast({ title: '직원과 날짜를 선택해주세요', variant: 'destructive' });
+      return;
+    }
+    // 선택된 날짜가 승인된 휴가 기간인 경우 즉시 배정 차단
+    if (isLeaveOnDate) {
+      toast({
+        title: '배정 불가: 해당 직원은 승인된 휴가 중입니다.',
+        description: `${targetPersonName} 님은 ${form.date}에 휴가로 등록되어 시프트를 배정할 수 없습니다.`,
+        variant: 'destructive'
+      });
       return;
     }
     const toMinutes = (value) => {
@@ -221,6 +250,21 @@ export default function ShiftDialog({
           <DialogTitle>{editing ? t('roster.editShiftTitle') : t('roster.addShiftTitle')}</DialogTitle>
         </DialogHeader>
         <div className="grid gap-4 sm:grid-cols-2">
+          {/* 승인된 휴가 경고 배너 */}
+          {isLeaveOnDate && (
+            <div className="sm:col-span-2 flex items-start gap-2.5 rounded-xl border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900 shadow-sm dark:border-amber-700/50 dark:bg-amber-950/60 dark:text-amber-200">
+              <span className="text-base leading-none">🏖️</span>
+              <div className="space-y-0.5">
+                <p className="font-semibold text-amber-950 dark:text-amber-100">
+                  승인된 휴가 기간 경고
+                </p>
+                <p className="text-[11px] leading-relaxed opacity-90">
+                  선택하신 직원({targetPersonName})은 <strong>{form.date}</strong>에 승인된 휴가(Leave) 중입니다. 휴가 중인 날짜에는 시프트를 배정할 수 없습니다.
+                </p>
+              </div>
+            </div>
+          )}
+
           {person ? (
             <div className="sm:col-span-2 rounded-lg bg-muted/50 px-3 py-2 text-sm">
               <span className="font-medium">{person.full_name}</span>
@@ -345,7 +389,7 @@ export default function ShiftDialog({
             <Button variant="outline" onClick={() => onOpenChange(false)}>
               {t('common.cancel')}
             </Button>
-            <Button onClick={submit} disabled={saving}>
+            <Button onClick={submit} disabled={saving || isLeaveOnDate}>
               {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               {editing ? t('roster.saveShift') : t('roster.addShiftAction')}
             </Button>

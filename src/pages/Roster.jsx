@@ -593,6 +593,8 @@ export default function Roster() {
         defaultDate={dialogDate}
         defaultEmployee={dialogEmployee}
         shift={editingShift}
+        onLeaveFor={onLeaveFor}
+        approvedLeave={approvedLeave}
         onSaved={({ date, position } = {}) => {
           relieveUnassigned(date, position);
           load();
