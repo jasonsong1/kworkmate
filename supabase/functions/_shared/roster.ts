@@ -499,13 +499,23 @@ export async function buildDraft(base44, branch, weekStart) {
 
   const leaveRanges = rowsOf(leavePage)
     .filter((row) => row && row.employee_email)
-    .map((row) => ({
-      email: lower(row.employee_email),
-      start: String(row.start_date || '').slice(0, 10),
-      end: String(row.end_date || row.start_date || '').slice(0, 10)
-    }));
+    .map((row) => {
+      const start = String(row.start_date || '').slice(0, 10);
+      const end = String(row.end_date || row.start_date || '').slice(0, 10);
+      const isSingleDay = start === end;
+      const hours = Number(row.hours) || 0;
+      const isPartial = isSingleDay && hours > 0 && hours < 7.6;
+      return {
+        email: lower(row.employee_email),
+        start,
+        end,
+        isFullDay: !isPartial,
+        hours
+      };
+    });
+  // 종일 휴가(Full-day)인 경우에만 AI 자동 배정 대상에서 제외 (반차는 배정 대상 포함)
   const onLeave = (email, date) =>
-    leaveRanges.some((range) => range.email === lower(email) && date >= range.start && date <= range.end);
+    leaveRanges.some((range) => range.isFullDay && range.email === lower(email) && date >= range.start && date <= range.end);
 
   const setting = rowsOf(settingPage)[0] || null;
   const staff = rowsOf(staffPage);

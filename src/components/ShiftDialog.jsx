@@ -21,6 +21,7 @@ export default function ShiftDialog({
   defaultEmployee,
   shift,
   onLeaveFor,
+  getLeaveFor,
   approvedLeave,
   onSaved
 }) {
@@ -53,19 +54,35 @@ export default function ShiftDialog({
     notes: ''
   });
 
-  // 선택된 직원이 선택된 날짜에 승인된 휴가 중인지 실시간 판별
-  const isLeaveOnDate = Boolean(
-    form.employee_email &&
-    form.date &&
-    (onLeaveFor
-      ? onLeaveFor(form.employee_email, form.date)
-      : (approvedLeave || []).some(
-          (row) =>
-            row.employee_email === form.employee_email &&
-            form.date >= String(row.start_date || '').slice(0, 10) &&
-            String(row.end_date || row.start_date || '').slice(0, 10) >= form.date
-        ))
-  );
+  // 선택된 직원이 선택된 날짜에 승인된 휴가 정보(종일 휴가 vs 반차) 실시간 판별
+  const leaveInfo = useMemo(() => {
+    if (!form.employee_email || !form.date) return null;
+    if (getLeaveFor) {
+      return getLeaveFor(form.employee_email, form.date);
+    }
+    const found = (approvedLeave || []).find(
+      (row) =>
+        row.employee_email === form.employee_email &&
+        form.date >= String(row.start_date || '').slice(0, 10) &&
+        String(row.end_date || row.start_date || '').slice(0, 10) >= form.date
+    );
+    if (!found) return null;
+    const isSingleDay =
+      String(found.start_date || '').slice(0, 10) === String(found.end_date || found.start_date || '').slice(0, 10);
+    const hours = Number(found.hours) || 0;
+    const isPartial = isSingleDay && hours > 0 && hours < 7.6;
+    return {
+      leave: found,
+      isFullDay: !isPartial,
+      isPartial,
+      hours: hours > 0 ? hours : 7.6,
+      typeName: found.leave_type_name || ''
+    };
+  }, [form.employee_email, form.date, getLeaveFor, approvedLeave]);
+
+  const isFullDayLeave = Boolean(leaveInfo && leaveInfo.isFullDay);
+  const isPartialLeave = Boolean(leaveInfo && leaveInfo.isPartial);
+  const leaveHours = leaveInfo ? leaveInfo.hours : 0;
 
   // 선택된 직원의 이름 찾기
   const targetPerson = (employees || []).find((e) => e.user_email === form.employee_email) || person;
@@ -130,11 +147,11 @@ export default function ShiftDialog({
       toast({ title: '직원과 날짜를 선택해주세요', variant: 'destructive' });
       return;
     }
-    // 선택된 날짜가 승인된 휴가 기간인 경우 즉시 배정 차단
-    if (isLeaveOnDate) {
+    // 선택된 날짜가 승인된 종일 휴가인 경우 즉시 배정 차단 (반차는 허용)
+    if (isFullDayLeave) {
       toast({
-        title: '배정 불가: 해당 직원은 승인된 휴가 중입니다.',
-        description: `${targetPersonName} 님은 ${form.date}에 휴가로 등록되어 시프트를 배정할 수 없습니다.`,
+        title: '배정 불가: 해당 직원은 종일 휴가 중입니다.',
+        description: `${targetPersonName} 님은 ${form.date}에 종일 휴가로 등록되어 시프트를 배정할 수 없습니다.`,
         variant: 'destructive'
       });
       return;
@@ -160,8 +177,8 @@ export default function ShiftDialog({
       toast({ title: '해당 직원의 근무 시간이 겹치는 기존 시프트가 있습니다', variant: 'destructive' });
       return;
     }
-    // 승인된 휴가가 있는 날에는 시프트 배정 불가
-    const approvedLeave = await base44.entities.LeaveRequest
+    // 승인된 휴가가 있는 날 재확인 (종일 휴가만 차단, 반차는 허용)
+    const dbLeaveRows = await base44.entities.LeaveRequest
       .filter({
         employee_email: form.employee_email,
         status: 'approved',
@@ -169,8 +186,16 @@ export default function ShiftDialog({
         end_date: { $gte: form.date }
       })
       .catch(() => []);
-    if ((approvedLeave || []).length > 0) {
-      toast({ title: t('roster.onLeaveBlocked'), variant: 'destructive' });
+    const hasFullDayDbLeave = (dbLeaveRows || []).some((row) => {
+      const startDate = String(row.start_date || '').slice(0, 10);
+      const endDate = String(row.end_date || row.start_date || '').slice(0, 10);
+      const isSingleDay = startDate === endDate;
+      const hours = Number(row.hours) || 0;
+      const isPartial = isSingleDay && hours > 0 && hours < 7.6;
+      return !isPartial;
+    });
+    if (hasFullDayDbLeave) {
+      toast({ title: '해당 날짜에 승인된 종일 휴가가 있어 시프트를 배정할 수 없습니다.', variant: 'destructive' });
       return;
     }
     setSaving(true);
@@ -250,16 +275,29 @@ export default function ShiftDialog({
           <DialogTitle>{editing ? t('roster.editShiftTitle') : t('roster.addShiftTitle')}</DialogTitle>
         </DialogHeader>
         <div className="grid gap-4 sm:grid-cols-2">
-          {/* 승인된 휴가 경고 배너 */}
-          {isLeaveOnDate && (
+          {/* 승인된 종일 휴가 경고 배너 (이모티콘 없음) */}
+          {isFullDayLeave && (
             <div className="sm:col-span-2 flex items-start gap-2.5 rounded-xl border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900 shadow-sm dark:border-amber-700/50 dark:bg-amber-950/60 dark:text-amber-200">
-              <span className="text-base leading-none">🏖️</span>
               <div className="space-y-0.5">
                 <p className="font-semibold text-amber-950 dark:text-amber-100">
-                  승인된 휴가 기간 경고
+                  승인된 휴가 (종일)
                 </p>
                 <p className="text-[11px] leading-relaxed opacity-90">
-                  선택하신 직원({targetPersonName})은 <strong>{form.date}</strong>에 승인된 휴가(Leave) 중입니다. 휴가 중인 날짜에는 시프트를 배정할 수 없습니다.
+                  선택하신 직원({targetPersonName})은 <strong>{form.date}</strong>에 종일 휴가(Leave) 중입니다. 종일 휴가일에는 시프트를 배정할 수 없습니다.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* 승인된 반차/시간 휴가 안내 배너 (이모티콘 없음, 배정 허용) */}
+          {isPartialLeave && (
+            <div className="sm:col-span-2 flex items-start gap-2.5 rounded-xl border border-sky-300 bg-sky-50 p-3 text-xs text-sky-900 shadow-sm dark:border-sky-800/60 dark:bg-sky-950/50 dark:text-sky-200">
+              <div className="space-y-0.5">
+                <p className="font-semibold text-sky-950 dark:text-sky-100">
+                  반차/시간 휴가 등록 안내 ({leaveHours}시간)
+                </p>
+                <p className="text-[11px] leading-relaxed opacity-90">
+                  선택하신 직원({targetPersonName})은 <strong>{form.date}</strong>에 {leaveHours}시간 휴가가 승인되어 있습니다. 남은 시간에 시프트 배정이 가능합니다. (권장 남은 근무: 약 {Math.max(0, 7.6 - leaveHours).toFixed(1)}시간)
                 </p>
               </div>
             </div>
@@ -389,7 +427,7 @@ export default function ShiftDialog({
             <Button variant="outline" onClick={() => onOpenChange(false)}>
               {t('common.cancel')}
             </Button>
-            <Button onClick={submit} disabled={saving || isLeaveOnDate}>
+            <Button onClick={submit} disabled={saving || isFullDayLeave}>
               {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               {editing ? t('roster.saveShift') : t('roster.addShiftAction')}
             </Button>

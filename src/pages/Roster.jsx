@@ -74,14 +74,35 @@ export default function Roster() {
     [weekStart, activeBranch?.trading_hours]
   );
 
-  // A day with approved leave is out of bounds: it shows as On leave and takes no shift.
-  const onLeaveFor = (email, date) =>
-    approvedLeave.some(
-      (row) =>
-        row.employee_email === email &&
-        date >= String(row.start_date || '').slice(0, 10) &&
-        String(row.end_date || row.start_date || '').slice(0, 10) >= date
+  // 승인된 휴가 정보 상세 조회 (종일 휴가 vs 반차/시간 단위 휴가 구분)
+  const getLeaveFor = (email, date) => {
+    const row = approvedLeave.find(
+      (r) =>
+        r.employee_email === email &&
+        date >= String(r.start_date || '').slice(0, 10) &&
+        String(r.end_date || r.start_date || '').slice(0, 10) >= date
     );
+    if (!row) return null;
+    const startDate = String(row.start_date || '').slice(0, 10);
+    const endDate = String(row.end_date || row.start_date || '').slice(0, 10);
+    const isSingleDay = startDate === endDate;
+    const hours = Number(row.hours) || 0;
+    // 당일 휴가이고 휴가 시간이 7.6시간 미만(예: 4시간)인 경우 반차/부분 휴가로 판정
+    const isPartial = isSingleDay && hours > 0 && hours < 7.6;
+    return {
+      leave: row,
+      isFullDay: !isPartial,
+      isPartial,
+      hours: hours > 0 ? hours : 7.6,
+      typeName: row.leave_type_name || ''
+    };
+  };
+
+  // 종일 휴가인 경우에만 완전 배정 차단 플래그 반환
+  const onLeaveFor = (email, date) => {
+    const info = getLeaveFor(email, date);
+    return info ? info.isFullDay : false;
+  };
 
   const load = useCallback(async () => {
     if (!activeBranch) {
@@ -553,6 +574,7 @@ export default function Roster() {
                       onMoveShift={moveShift}
                       onReorder={reorderEmployees}
                       onLeaveFor={onLeaveFor}
+                      getLeaveFor={getLeaveFor}
                       missingFor={unfilledByDay} />
                   </div>
                 </>
@@ -594,6 +616,7 @@ export default function Roster() {
         defaultEmployee={dialogEmployee}
         shift={editingShift}
         onLeaveFor={onLeaveFor}
+        getLeaveFor={getLeaveFor}
         approvedLeave={approvedLeave}
         onSaved={({ date, position } = {}) => {
           relieveUnassigned(date, position);
