@@ -67,6 +67,11 @@ export default function XeroIntegrationCard({ company, onUpdated }) {
       if (data.auth_url) {
         // Xero 공식 로그인 및 조직 권한 승인 페이지로 리다이렉트
         window.location.href = data.auth_url;
+      } else {
+        toast({
+          title: lang === 'ko' ? 'Xero 인증 주소를 생성하지 못했습니다.' : 'Failed to generate Xero authorization URL',
+          variant: 'destructive'
+        });
       }
     } catch (err) {
       toast({

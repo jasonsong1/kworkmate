@@ -88,4 +88,5 @@ async function handler(req: Request) {
   }
 }
 
-export default withCors(handler);
+// Supabase Edge Runtime 표준 Deno.serve 서빙
+Deno.serve(withCors(handler, Deno.env.get('ALLOWED_ORIGIN') || undefined));
