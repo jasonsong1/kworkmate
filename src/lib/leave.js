@@ -25,10 +25,44 @@ export const EMPLOYMENT_KEYS = {
 
 export const HOURS_PER_DAY = 7.6;
 
+export const LEAVE_TYPE_KO_MAP = {
+  'annual': '연차 휴가',
+  'annual leave': '연차 휴가',
+  'sick': '병가 · 간병 휴가',
+  "sick / carer's leave": '병가 · 간병 휴가',
+  'sick leave': '병가 · 간병 휴가',
+  'compassionate': '경조 휴가',
+  'compassionate leave': '경조 휴가',
+  'bereavement': '경조 휴가',
+  'unpaid': '무급 휴가',
+  'unpaid leave': '무급 휴가',
+  'wellness': '웰니스 데이',
+  'wellness day': '웰니스 데이'
+};
+
 export function typeName(type, lang) {
   if (!type) return '';
-  if (lang === 'ko' && type.name_ko) return type.name_ko;
+  if (lang === 'ko') {
+    if (type.name_ko) return type.name_ko;
+    const key = String(type.key || '').toLowerCase().trim();
+    const nameLower = String(type.name || '').toLowerCase().trim();
+    if (LEAVE_TYPE_KO_MAP[key]) return LEAVE_TYPE_KO_MAP[key];
+    if (LEAVE_TYPE_KO_MAP[nameLower]) return LEAVE_TYPE_KO_MAP[nameLower];
+  }
   return type.name || type.key || '';
+}
+
+export function formatLeaveTypeName(request, lang) {
+  if (!request) return '';
+  const rawName = request.leave_type_name || '';
+  const key = String(request.leave_type_key || '').toLowerCase().trim();
+  const nameLower = rawName.toLowerCase().trim();
+
+  if (lang === 'ko') {
+    if (LEAVE_TYPE_KO_MAP[key]) return LEAVE_TYPE_KO_MAP[key];
+    if (LEAVE_TYPE_KO_MAP[nameLower]) return LEAVE_TYPE_KO_MAP[nameLower];
+  }
+  return rawName || key;
 }
 
 export function hoursLabel(value) {

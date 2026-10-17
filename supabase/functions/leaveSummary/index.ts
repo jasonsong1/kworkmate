@@ -177,9 +177,35 @@ async function handler(req: Request) {
     const updates: any[] = [];
     const result: any[] = [];
 
+    // 신청 내역(LeaveRequest)으로부터 실제 대기 중(pending) 및 승인(approved) 시간을 실시간 집계합니다.
+    const allRequests = rowsOf(
+      await base44.asServiceRole.entities.LeaveRequest.filter(
+        { company_id: companyId },
+        { sort: '-start_date', limit: 2000 }
+      ).catch(() => [])
+    );
+
+    const pendingMap = new Map();
+    const approvedMap = new Map();
+
+    allRequests.forEach((req: any) => {
+      const email = String(req.employee_email || '').trim().toLowerCase();
+      const typeKey = String(req.leave_type_key || '').trim();
+      const key = `${email}::${typeKey}`;
+      const hours = Number(req.hours) || 0;
+
+      if (req.status === 'pending') {
+        pendingMap.set(key, round2((pendingMap.get(key) || 0) + hours));
+      } else if (req.status === 'approved') {
+        approvedMap.set(key, round2((approvedMap.get(key) || 0) + hours));
+      }
+    });
+
     for (const person of staff) {
       const employment = person.employment_type || 'casual';
       const worked = workedBy[person.user_email] || [];
+      const emailLower = String(person.user_email || '').trim().toLowerCase();
+
       for (const type of types) {
         const eligible = eligibleFor(type, employment);
         const existing = balanceBy.get(`${person.user_email}::${type.key}`);
@@ -189,6 +215,12 @@ async function handler(req: Request) {
         const ordinaryHours = worked
           .filter((entry: any) => entry.day >= anchor)
           .reduce((sum: number, entry: any) => sum + entry.hours, 0);
+
+        const reqKey = `${emailLower}::${type.key}`;
+        // 실제 대기 중인 신청 건들의 시간 합계 (신청 즉시 반영, 취소/반려 시 즉시 환원)
+        const realPending = pendingMap.get(reqKey) || 0;
+        // 실제 승인 완료된 시간 합계
+        const realUsed = approvedMap.get(reqKey) || 0;
 
         const next: any = {
           company_id: companyId,
@@ -203,8 +235,8 @@ async function handler(req: Request) {
           accrued_hours: eligible && type.accrual_method === 'ordinary_hours' ? round2(type.accrual_rate * ordinaryHours) : 0,
           granted_hours: Number((existing && existing.granted_hours) || 0),
           adjustment_hours: Number((existing && existing.adjustment_hours) || 0),
-          used_hours: Number((existing && existing.used_hours) || 0),
-          pending_hours: Number((existing && existing.pending_hours) || 0),
+          used_hours: Math.max(Number((existing && existing.used_hours) || 0), realUsed),
+          pending_hours: realPending,
           grant_period: (existing && existing.grant_period) || '',
           granted_expires_at: (existing && existing.granted_expires_at) || '',
           note: (existing && existing.note) || '',
@@ -237,6 +269,8 @@ async function handler(req: Request) {
           round2(existing.accrued_hours) !== next.accrued_hours ||
           round2(existing.granted_hours) !== next.granted_hours ||
           round2(existing.adjustment_hours) !== next.adjustment_hours ||
+          round2(existing.used_hours) !== next.used_hours ||
+          round2(existing.pending_hours) !== next.pending_hours ||
           String(existing.grant_period || '') !== next.grant_period ||
           String(existing.accrual_anchor_at || '').slice(0, 10) !== anchor;
         if (changed) updates.push({ id: existing.id, ...next });
@@ -248,18 +282,8 @@ async function handler(req: Request) {
     if (updates.length > 0) await base44.asServiceRole.entities.LeaveBalance.bulkUpdate(updates).catch(() => null);
 
     const requests = teamView
-      ? rowsOf(
-          await base44.asServiceRole.entities.LeaveRequest.filter(
-            { branch_id: branchId },
-            { sort: '-start_date', limit: 200 }
-          )
-        )
-      : rowsOf(
-          await base44.asServiceRole.entities.LeaveRequest.filter(
-            { employee_email: me.email },
-            { sort: '-start_date', limit: 200 }
-          )
-        );
+      ? allRequests.filter((r: any) => !branchId || r.branch_id === branchId)
+      : allRequests.filter((r: any) => String(r.employee_email || '').toLowerCase() === meEmail);
 
     return Response.json({
       ok: true,

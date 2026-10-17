@@ -76,55 +76,55 @@ async function handler(req: Request) {
     const hours = round2(asked > 0 ? asked : days * HOURS_PER_DAY);
     if (hours <= 0) return Response.json({ error: 'invalid_hours' }, { status: 400 });
 
-    const earned = type.accrual_method === 'ordinary_hours' || type.grant_enabled;
-    let balanceId = '';
-    if (earned) {
-      // [보안 패치]: 현재 소속 회사(companyId) 및 직원 번호(employee_number)를 1순위로 조회하여
-      // 타 회사(Starter Company)의 다른 레코드가 잡히는 오류를 원천 차단합니다.
-      let balance = null;
-      if (profile.employee_number) {
-        const byNum = rowsOf(
-          await base44.asServiceRole.entities.LeaveBalance.filter(
-            { company_id: companyId, employee_number: profile.employee_number, leave_type_key: type.key },
-            { limit: 1 }
-          )
-        );
-        balance = byNum[0] || null;
-      }
-      if (!balance) {
-        const byComp = rowsOf(
-          await base44.asServiceRole.entities.LeaveBalance.filter(
-            { company_id: companyId, employee_email: me.email, leave_type_key: type.key },
-            { limit: 1 }
-          )
-        );
-        balance = byComp[0] || null;
-      }
-      if (!balance) {
-        const fallback = rowsOf(
-          await base44.asServiceRole.entities.LeaveBalance.filter(
-            { employee_email: me.email, leave_type_key: type.key },
-            { limit: 1 }
-          )
-        );
-        balance = fallback[0] || null;
-      }
+    // 해당 휴가 유형의 잔액(LeaveBalance) 레코드를 조회하여 잔액 체크 및 대기 시간(pending_hours)을 연동합니다.
+    let balance = null;
+    if (profile.employee_number) {
+      const byNum = rowsOf(
+        await base44.asServiceRole.entities.LeaveBalance.filter(
+          { company_id: companyId, employee_number: profile.employee_number, leave_type_key: type.key },
+          { limit: 1 }
+        )
+      );
+      balance = byNum[0] || null;
+    }
+    if (!balance) {
+      const byComp = rowsOf(
+        await base44.asServiceRole.entities.LeaveBalance.filter(
+          { company_id: companyId, employee_email: me.email, leave_type_key: type.key },
+          { limit: 1 }
+        )
+      );
+      balance = byComp[0] || null;
+    }
+    if (!balance) {
+      const fallback = rowsOf(
+        await base44.asServiceRole.entities.LeaveBalance.filter(
+          { employee_email: me.email, leave_type_key: type.key },
+          { limit: 1 }
+        )
+      );
+      balance = fallback[0] || null;
+    }
 
-      if (!balance) {
-        balance = await base44.asServiceRole.entities.LeaveBalance.create({
-          company_id: companyId,
-          branch_id: profile.branch_id || '',
-          employee_email: me.email,
-          employee_name: profile.full_name || me.email,
-          employee_number: profile.employee_number || '',
-          leave_type_key: type.key,
-          leave_type_name: type.name,
-          accrual_anchor_at: `${profile.start_date || startDate}T00:00:00.000Z`
-        });
-      }
+    if (!balance && (type.accrual_method === 'ordinary_hours' || type.grant_enabled)) {
+      balance = await base44.asServiceRole.entities.LeaveBalance.create({
+        company_id: companyId,
+        branch_id: profile.branch_id || '',
+        employee_email: me.email,
+        employee_name: profile.full_name || me.email,
+        employee_number: profile.employee_number || '',
+        leave_type_key: type.key,
+        leave_type_name: type.name,
+        accrual_anchor_at: `${profile.start_date || startDate}T00:00:00.000Z`
+      });
+    }
+
+    let balanceId = '';
+    if (balance) {
       balanceId = balance.id;
       const left = availableHours(balance);
-      if (left + 0.001 < hours) {
+      const earned = type.accrual_method === 'ordinary_hours' || type.grant_enabled;
+      if (earned && left + 0.001 < hours) {
         return Response.json({ error: 'insufficient', available: left }, { status: 400 });
       }
     }

@@ -8,14 +8,14 @@ import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useToast } from '@/components/ui/use-toast';
 import { useI18n } from '@/lib/i18n';
-import { STATUS_KEYS, STATUS_TONES, hoursLabel, rangeLabel } from '@/lib/leave';
+import { STATUS_KEYS, STATUS_TONES, formatLeaveTypeName, hoursLabel, rangeLabel } from '@/lib/leave';
 import { base44 } from '@/api/base44Client';
 import { logActivity } from '@/lib/activityLogger';
 
 // The requests and what happened to them. A manager approves or declines here; declining asks
 // for the reason the employee will read.
 export default function LeaveRequestsTable({ requests, canManage, showEmployee, flagBalance, onDecided }) {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const { toast } = useToast();
   const [dialog, setDialog] = useState(null);
   const [reason, setReason] = useState('');
@@ -100,7 +100,7 @@ export default function LeaveRequestsTable({ requests, canManage, showEmployee, 
                   </TableCell>
                 ) : null}
                 <TableCell>
-                  <p className="text-sm">{request.leave_type_name}</p>
+                  <p className="text-sm font-medium">{formatLeaveTypeName(request, lang)}</p>
                   {request.reason ? <p className="text-xs text-muted-foreground">{request.reason}</p> : null}
                 </TableCell>
                 <TableCell className="text-sm">{rangeLabel(request)}</TableCell>
