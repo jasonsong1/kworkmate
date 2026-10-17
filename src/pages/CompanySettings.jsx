@@ -9,6 +9,7 @@ import OnboardingSetupCard from '@/components/company/OnboardingSetupCard';
 import PayMultipliersCard, { payMultipliers, paySettings } from '@/components/company/PayMultipliersCard';
 import PublicHolidayCard from '@/components/company/PublicHolidayCard';
 import CompanyRolesManager from '@/components/CompanyRolesManager';
+import XeroIntegrationCard from '@/components/company/XeroIntegrationCard';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -37,7 +38,7 @@ const PANEL_MODULES = {
 
 export default function CompanySettings() {
   const { t } = useI18n();
-  const { company, role, isPlatformAdmin, isCompanyAdmin, access, pkg, presets, feature, hasModule, levelOf, patchCompany } = useWorkspace();
+  const { company, role, isPlatformAdmin, isCompanyAdmin, access, pkg, presets, feature, hasModule, levelOf, patchCompany, reload } = useWorkspace();
   const videoAllowed = isPlatformAdmin || videoInterviewAllowed(pkg);
   const miniAllowed = isPlatformAdmin || feature('mini_interview');
   // 슈퍼어드민은 모든 설정을 무제한 저장 가능하며, 일반 사용자는 기존 권한 검사를 따릅니다.
@@ -49,6 +50,27 @@ export default function CompanySettings() {
   // is pressed, so one button writes the whole screen.
   const [onboarding, setOnboarding] = useState(null);
   const [saving, setSaving] = useState(false);
+
+  // Xero OAuth 인증 후 리다이렉트 결과 처리
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const xeroStatus = params.get('xero');
+    if (xeroStatus === 'success') {
+      const tenant = params.get('tenant') || '';
+      toast({
+        title: 'Xero 연동 완료!',
+        description: `${tenant ? `[${tenant}] ` : ''}Xero 계정이 성공적으로 연동되었습니다.`
+      });
+      setTab('xero');
+      window.history.replaceState({}, document.title, window.location.pathname);
+      reload && reload();
+    } else if (xeroStatus === 'error') {
+      const msg = params.get('msg') || 'Xero 연동에 실패했습니다.';
+      toast({ title: 'Xero 연동 오류', description: msg, variant: 'destructive' });
+      setTab('xero');
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }, [reload, toast]);
 
   useEffect(() => {
     if (!company) return;
@@ -210,8 +232,9 @@ export default function CompanySettings() {
     { key: 'docs', label: t('settings.cat.docs') },
     { key: 'screening', label: t('settings.cat.screening') },
     { key: 'permissions', label: t('settings.cat.permissions') },
-    { key: 'pay', label: t('settings.cat.pay') }
-  ].filter((category) => isPlatformAdmin || (PANEL_MODULES[category.key] || []).every((module) => hasModule(module)));
+    { key: 'pay', label: t('settings.cat.pay') },
+    { key: 'xero', label: 'Xero 연동' }
+  ].filter((category) => category.key === 'xero' || isPlatformAdmin || (PANEL_MODULES[category.key] || []).every((module) => hasModule(module)));
   // A panel this package does not carry is never the open one.
   const activeTab = CATEGORIES.some((category) => category.key === tab) ? tab : 'company';
 
@@ -368,6 +391,10 @@ export default function CompanySettings() {
               disabled={!canSave} />
             <PublicHolidayCard multiplier={payMultipliers(form.pay_multipliers).public_holiday} />
           </div>
+        </TabsContent>
+
+        <TabsContent value="xero">
+          <XeroIntegrationCard company={company} onUpdated={reload} />
         </TabsContent>
       </Tabs>
     </div>);

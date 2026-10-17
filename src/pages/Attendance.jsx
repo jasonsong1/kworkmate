@@ -1,9 +1,10 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { CheckCircle2, FileBarChart, Loader2, MapPin, QrCode, XCircle, Plus, Pencil, Trash2 } from 'lucide-react';
+import { CheckCircle2, FileBarChart, Loader2, MapPin, QrCode, XCircle, Plus, Pencil, Trash2, Send } from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
 import ApprovalActions from '@/components/attendance/ApprovalActions';
 import AttendanceReportDialog from '@/components/attendance/AttendanceReportDialog';
 import TimeEntryDialog from '@/components/attendance/TimeEntryDialog';
+import XeroSyncDialog from '@/components/attendance/XeroSyncDialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -51,6 +52,7 @@ export default function Attendance() {
   const [entryDialogOpen, setEntryDialogOpen] = useState(false);
   const [selectedEntry, setSelectedEntry] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
+  const [xeroModalOpen, setXeroModalOpen] = useState(false);
 
   useEffect(() => {
     setEmployeeFilter(ALL);
@@ -326,6 +328,19 @@ export default function Attendance() {
               >
                 <FileBarChart className="mr-1.5 h-3.5 w-3.5" /> {t('attendance.report')}
               </Button>
+              {canManageAttendance && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="flex-1 sm:flex-none h-9 text-xs gap-1.5 border-[#13b5ea]/40 text-[#0fa0cf] hover:bg-[#13b5ea]/10 font-semibold"
+                  onClick={() => setXeroModalOpen(true)}
+                  disabled={!activeBranch}
+                  title="승인된 출퇴근 기록을 Xero Payroll로 자동 전송합니다"
+                >
+                  <Send className="h-3.5 w-3.5" />
+                  Xero로 직접 전송
+                </Button>
+              )}
             </div>
           </div>
         } />
@@ -521,7 +536,17 @@ export default function Attendance() {
         branch={activeBranch}
         onSaved={load}
       />
-      
+
+      <XeroSyncDialog
+        open={xeroModalOpen}
+        onOpenChange={setXeroModalOpen}
+        company={company}
+        activeBranch={activeBranch}
+        fromDate={fromDate}
+        toDate={toDate}
+        rows={rows}
+        onSynced={load}
+      />
     </div>);
 
 }
