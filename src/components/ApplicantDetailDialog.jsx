@@ -7,7 +7,7 @@ import { useToast } from '@/components/ui/use-toast';
 import AvailabilityTable from '@/components/AvailabilityTable';
 import MiniInterviewPanel from '@/components/MiniInterviewPanel';
 import VideoInterviewPanel from '@/components/VideoInterviewPanel';
-import { useI18n } from '@/lib/i18n';
+import { useI18n, formatAiSummary } from '@/lib/i18n';
 import { useWorkspace } from '@/lib/WorkspaceContext';
 import { videoInterviewAllowed } from '@/lib/packages';
 import { APPLICANT_STATUS, formatDateTime, noticePeriodLabel, visaLabel } from '@/lib/bh';
@@ -38,7 +38,7 @@ const EMAIL_TYPE_LABELS = {
 };
 
 export default function ApplicantDetailDialog({ applicant, open, onOpenChange, onResent }) {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const { toast } = useToast();
   const { pkg } = useWorkspace();
   const videoAllowed = videoInterviewAllowed(pkg);
@@ -88,9 +88,9 @@ export default function ApplicantDetailDialog({ applicant, open, onOpenChange, o
           {applicant.ai_summary && (
             <div className="rounded-lg bg-muted/50 p-4">
               <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Summary
+                {lang === 'en' ? 'Summary' : 'AI 이력서 요약'}
               </p>
-              <p className="text-sm">{applicant.ai_summary}</p>
+              <p className="text-sm">{formatAiSummary(applicant.ai_summary, lang)}</p>
               {applicant.ai_notes && <p className="mt-2 text-xs text-muted-foreground">{applicant.ai_notes}</p>}
             </div>
           )}

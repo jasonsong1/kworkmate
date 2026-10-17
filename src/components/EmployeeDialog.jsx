@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/components/ui/use-toast';
-import { useI18n } from '@/lib/i18n';
+import { useI18n, formatRoleLabel } from '@/lib/i18n';
 import { EMPLOYMENT_TYPES, EMPLOYMENT_LABEL_KEYS, VISA_TYPES, VISA_LABEL_KEYS } from '@/lib/bh';
 import { useWorkspace } from '@/lib/WorkspaceContext';
 import { usePermissions } from '@/lib/permissions';
@@ -38,7 +38,7 @@ const empty = {
 };
 
 export default function EmployeeDialog({ open, onOpenChange, branch, employee, onSaved }) {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const { toast } = useToast();
   const { company, role: myRole, me, isPlatformAdmin, presetKey, employeeProfile } = useWorkspace();
   const { canEdit } = usePermissions();
@@ -392,15 +392,17 @@ export default function EmployeeDialog({ open, onOpenChange, branch, employee, o
               <div className="flex items-center justify-between">
                 <div>
                   <h4 className="text-sm font-semibold text-foreground flex items-center gap-1.5">
-                    📄 온보딩 서류 작성 링크
+                    📄 {t('employees.onboardingPaperworkLink') || '온보딩 서류 작성 링크'}
                     {onboardingSubmitted && (
                       <span className="text-[11px] font-normal px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">
-                        제출 완료
+                        {t('ob.completed') || '제출 완료'}
                       </span>
                     )}
                   </h4>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    직원에게 온보딩 작성 링크를 직접 전달하거나 이메일로 다시 발송할 수 있습니다.
+                    {lang === 'en'
+                      ? 'Share the onboarding paperwork link directly with the employee or send it via email.'
+                      : '직원에게 온보딩 작성 링크를 직접 전달하거나 이메일로 다시 발송할 수 있습니다.'}
                   </p>
                 </div>
               </div>
@@ -417,12 +419,12 @@ export default function EmployeeDialog({ open, onOpenChange, branch, employee, o
                   {copied ? (
                     <>
                       <Check className="mr-1.5 h-4 w-4 text-emerald-600" />
-                      링크 복사됨
+                      {t('common.copied') || '링크 복사됨'}
                     </>
                   ) : (
                     <>
                       <Copy className="mr-1.5 h-4 w-4 text-muted-foreground" />
-                      온보딩 링크 복사
+                      {t('employees.copyOnboardingLink') || '온보딩 링크 복사'}
                     </>
                   )}
                 </Button>
@@ -440,7 +442,7 @@ export default function EmployeeDialog({ open, onOpenChange, branch, employee, o
                   ) : (
                     <Send className="mr-1.5 h-4 w-4" />
                   )}
-                  온보딩 이메일 발송
+                  {t('employees.sendOnboardingEmail') || '온보딩 이메일 발송'}
                 </Button>
               </div>
             </div>
@@ -478,7 +480,7 @@ export default function EmployeeDialog({ open, onOpenChange, branch, employee, o
                 <SelectContent>
                   {positionOptions.map((label) =>
                     <SelectItem key={label} value={label}>
-                      {label}
+                      {formatRoleLabel(label, lang)}
                     </SelectItem>
                   )}
                 </SelectContent>
@@ -498,7 +500,7 @@ export default function EmployeeDialog({ open, onOpenChange, branch, employee, o
                   <SelectItem value="none">{t('employees.none')}</SelectItem>
                   {positionOptions.map((label) =>
                     <SelectItem key={label} value={label}>
-                      {label}
+                      {formatRoleLabel(label, lang)}
                     </SelectItem>
                   )}
                 </SelectContent>
@@ -527,7 +529,7 @@ export default function EmployeeDialog({ open, onOpenChange, branch, employee, o
                     <SelectContent>
                       {positionOptions.map((label) =>
                         <SelectItem key={label} value={label}>
-                          {label}
+                          {formatRoleLabel(label, lang)}
                         </SelectItem>
                       )}
                     </SelectContent>
@@ -585,7 +587,7 @@ export default function EmployeeDialog({ open, onOpenChange, branch, employee, o
                     <Label>{t('employees.fields.rate') || '시급'}</Label>
                     <div className="flex items-center gap-1.5 border-l pl-2.5 border-muted">
                       <Label htmlFor="penalty-toggle" className="text-xs font-normal text-muted-foreground cursor-pointer">
-                        패널티 적용
+                        {t('employees.applyPenalty') || '패널티 적용'}
                       </Label>
                       <Switch
                         id="penalty-toggle"
@@ -598,11 +600,11 @@ export default function EmployeeDialog({ open, onOpenChange, branch, employee, o
                   </div>
                   {rateUnlocked ? (
                     <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                      <Unlock className="h-3 w-3 text-emerald-600 dark:text-emerald-400" /> 잠금 해제됨
+                      <Unlock className="h-3 w-3 text-emerald-600 dark:text-emerald-400" /> {t('employees.unlocked') || '잠금 해제됨'}
                     </span>
                   ) : (
                     <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                      <Lock className="h-3 w-3" /> 보안 잠금
+                      <Lock className="h-3 w-3" /> {t('employees.locked') || '보안 잠금'}
                     </span>
                   )}
                 </div>
@@ -640,7 +642,7 @@ export default function EmployeeDialog({ open, onOpenChange, branch, employee, o
                       className="shrink-0 gap-1.5"
                     >
                       <KeyRound className="h-3.5 w-3.5" />
-                      확인
+                      {t('employees.verifyUnlock') || '확인'}
                     </Button>
                   </div>
                 )}
@@ -762,14 +764,15 @@ export default function EmployeeDialog({ open, onOpenChange, branch, employee, o
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-base">
               <ShieldAlert className="h-5 w-5 text-amber-500" />
-              시급 정보 조회 및 수정 인증
+              {lang === 'en' ? 'Verify Hourly Rate Access' : '시급 정보 조회 및 수정 인증'}
             </DialogTitle>
           </DialogHeader>
 
           <form onSubmit={handleVerifyPassword} className="space-y-3 pt-1">
             <p className="text-xs text-muted-foreground leading-relaxed">
-              직원의 시급 및 급여 정보는 최고 수준의 보안이 적용됩니다. 본인 확인을 위해 현재 로그인된 계정
-              <span className="font-semibold text-foreground block mt-0.5">({me?.email || '관리자 계정'})</span>의 비밀번호를 입력해주세요.
+              {lang === 'en'
+                ? `Hourly rates and salary details are strictly protected. Please enter the password for your logged in account (${me?.email || 'admin'}) to verify identity.`
+                : `직원의 시급 및 급여 정보는 최고 수준의 보안이 적용됩니다. 본인 확인을 위해 현재 로그인된 계정 (${me?.email || '관리자 계정'})의 비밀번호를 입력해주세요.`}
             </p>
 
             {authError && (
@@ -779,12 +782,12 @@ export default function EmployeeDialog({ open, onOpenChange, branch, employee, o
             )}
 
             <div className="space-y-1">
-              <Label className="text-xs">계정 비밀번호</Label>
+              <Label className="text-xs">{lang === 'en' ? 'Account Password' : '계정 비밀번호'}</Label>
               <Input
                 type="password"
                 value={authPassword}
                 onChange={(e) => setAuthPassword(e.target.value)}
-                placeholder="비밀번호를 입력하세요"
+                placeholder={lang === 'en' ? 'Enter your password' : '비밀번호를 입력하세요'}
                 autoFocus
                 className="text-sm"
               />
@@ -806,7 +809,7 @@ export default function EmployeeDialog({ open, onOpenChange, branch, employee, o
               </Button>
               <Button type="submit" size="sm" disabled={verifying || !authPassword.trim()}>
                 {verifying && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
-                확인 및 잠금 해제
+                {lang === 'en' ? 'Verify & Unlock' : '확인 및 잠금 해제'}
               </Button>
             </DialogFooter>
           </form>

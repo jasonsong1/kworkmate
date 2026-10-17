@@ -8,8 +8,10 @@ import { Button } from '@/components/ui/button';
 import { APPLICANT_STATUS, coverageDays, formatDateTime, noticePeriodLabel, visaLabel } from '@/lib/bh';
 import { useWorkspace } from '@/lib/WorkspaceContext';
 import { videoInterviewAllowed } from '@/lib/packages';
+import { useI18n, formatAiSummary } from '@/lib/i18n';
 
 export default function ApplicantCard({ applicant, actions, onOpen, onViewResume }) {
+  const { lang } = useI18n();
   const { pkg } = useWorkspace();
   const videoAllowed = videoInterviewAllowed(pkg);
   const meta = APPLICANT_STATUS[applicant.status] || APPLICANT_STATUS.submitted;
@@ -60,7 +62,9 @@ export default function ApplicantCard({ applicant, actions, onOpen, onViewResume
       <div className="mt-3 grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
         <div className="min-w-0 space-y-3">
           {(applicant.ai_summary || applicant.ai_notes) && (
-            <p className="rounded-lg bg-muted/50 px-3 py-2 text-sm text-foreground/90">{applicant.ai_summary}</p>
+            <p className="rounded-lg bg-muted/50 px-3 py-2 text-sm text-foreground/90">
+              {formatAiSummary(applicant.ai_summary, lang)}
+            </p>
           )}
 
           {(applicant.ai_skills || []).length > 0 && (

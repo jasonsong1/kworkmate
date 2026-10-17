@@ -23,7 +23,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/components/ui/use-toast';
-import { useI18n } from '@/lib/i18n';
+import { useI18n, formatRoleLabel } from '@/lib/i18n';
 import { useWorkspace } from '@/lib/WorkspaceContext';
 import {
   WEEKS_AHEAD,
@@ -41,7 +41,7 @@ import { checklistFor } from '@/lib/onboardingDocs';
 import { base44 } from '@/api/base44Client';
 
 export default function StaffHome() {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const { me, employeeProfile, company, activeBranch, hasModule, presetKey } = useWorkspace();
   const [profileOverride, setProfileOverride] = useState(null);
   const currentProfile = profileOverride || employeeProfile;
@@ -257,7 +257,7 @@ export default function StaffHome() {
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground">{t('common.role')}</p>
-                    <p className="text-sm capitalize">{me.app_role || me.role || 'Super Admin'}</p>
+                    <p className="text-sm font-medium">{formatRoleLabel(me.app_role || me.role || 'super_admin', lang)}</p>
                   </div>
                 </div>
               </div>

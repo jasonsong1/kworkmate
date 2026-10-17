@@ -10,13 +10,13 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/components/ui/use-toast';
-import { useI18n } from '@/lib/i18n';
+import { useI18n, formatRoleLabel } from '@/lib/i18n';
 import { useWorkspace } from '@/lib/WorkspaceContext';
 import { employeeNumberPreview } from '@/lib/bh';
 import { base44 } from '@/api/base44Client';
 
 export default function PropertySetup() {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const { branches, activeBranch, patchBranch, company, pkg, presets, role, presetKey } = useWorkspace();
   const { toast } = useToast();
   const [params] = useSearchParams();
@@ -162,8 +162,9 @@ export default function PropertySetup() {
   const branchRoleLabels = Object.fromEntries(
     customRoles.map((role) => {
       const preset = presets.find((item) => item.key === role.preset_key);
-      const presetLabel = preset ? preset.label || preset.label_en || preset.key : '';
-      return [role.key, presetLabel ? `${role.label} · ${presetLabel}` : role.label];
+      const translatedRoleLabel = formatRoleLabel(role.label, lang);
+      const presetLabel = preset ? (lang === 'en' ? (preset.label_en || formatRoleLabel(preset.label, 'en') || preset.key) : (preset.label || preset.key)) : '';
+      return [role.key, presetLabel ? `${translatedRoleLabel} · ${presetLabel}` : translatedRoleLabel];
     })
   );
   // A branch moves inside what the company (and the package, and the position preset) already
@@ -211,11 +212,11 @@ export default function PropertySetup() {
           </CardHeader>
           <CardContent className="grid gap-4 sm:grid-cols-2">
             <div className="sm:col-span-2">
-              <Label>Branch name</Label>
+              <Label>{t('branches.branchName') || '매장명'}</Label>
               <Input value={form.name} onChange={(e) => set('name', e.target.value)} />
             </div>
             <div>
-              <Label>Code</Label>
+              <Label>{t('branches.code') || '지점 코드'}</Label>
               <Input value={form.code} onChange={(e) => set('code', e.target.value)} />
             </div>
             <div>
@@ -227,26 +228,26 @@ export default function PropertySetup() {
               <Input value={form.address} onChange={(e) => set('address', e.target.value)} />
             </div>
             <div>
-              <Label>Suburb</Label>
+              <Label>{t('branches.suburb') || 'Suburb'}</Label>
               <Input value={form.suburb} onChange={(e) => set('suburb', e.target.value)} />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label>State</Label>
+                <Label>{t('branches.state') || 'State'}</Label>
                 <Input value={form.state} onChange={(e) => set('state', e.target.value)} />
               </div>
               <div>
-                <Label>Postcode</Label>
+                <Label>{t('branches.postcode') || 'Postcode'}</Label>
                 <Input value={form.postcode} onChange={(e) => set('postcode', e.target.value)} />
               </div>
             </div>
             <div className="sm:col-span-2 pt-2 border-t border-slate-100">
               <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
-                고용주 / 세무 서류 담당자 정보 (ATO Section B 연동)
+                {t('branches.contactHeader') || '고용주 / 세무 서류 담당자 정보 (ATO Section B 연동)'}
               </p>
             </div>
             <div>
-              <Label>담당자 이름 (Contact Person)</Label>
+              <Label>{t('branches.contactName') || '담당자 이름'}</Label>
               <Input
                 value={form.contact_name || ''}
                 onChange={(e) => set('contact_name', e.target.value)}
@@ -254,7 +255,7 @@ export default function PropertySetup() {
               />
             </div>
             <div>
-              <Label>고용주 공식 이메일 (Primary Email)</Label>
+              <Label>{t('branches.contactEmail') || '고용주 공식 이메일'}</Label>
               <Input
                 type="email"
                 value={form.contact_email || ''}
@@ -263,7 +264,7 @@ export default function PropertySetup() {
               />
             </div>
             <div>
-              <Label>담당자 직통 전화번호 (Contact Phone)</Label>
+              <Label>{t('branches.contactPhone') || '담당자 직통 전화번호'}</Label>
               <Input
                 value={form.contact_phone || ''}
                 onChange={(e) => set('contact_phone', e.target.value)}
@@ -314,17 +315,16 @@ export default function PropertySetup() {
 
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">{t('property.geo') || '출퇴근 위치 인증 반경 설정'}</CardTitle>
+              <CardTitle className="text-base">{t('branches.geoTitle') || '출퇴근 위치 인증 반경 설정'}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <p className="text-xs text-muted-foreground leading-relaxed">
-                직원이 매장 근처에서만 출퇴근을 기록할 수 있도록 매장 위치와 인증 반경을 설정합니다.
-                주소를 입력하시면 위도·경도 좌표가 자동으로 계산됩니다.
+                {t('branches.geoHint') || '직원이 매장 근처에서만 출퇴근을 기록할 수 있도록 매장 위치와 인증 반경을 설정합니다. 주소를 입력하시면 위도·경도 좌표가 자동으로 계산됩니다.'}
               </p>
 
               {/* 주소 검색 입력창 */}
               <div className="space-y-1.5">
-                <Label className="text-xs">인증 기준 매장 주소</Label>
+                <Label className="text-xs">{t('branches.geoAddressLabel') || '인증 기준 매장 주소'}</Label>
                 <div className="flex gap-2">
                   <Input
                     value={geoAddress}
@@ -340,7 +340,7 @@ export default function PropertySetup() {
                     className="gap-1 whitespace-nowrap text-xs"
                   >
                     {searchingGeo ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
-                    <span>주소로 좌표 찾기</span>
+                    <span>{t('branches.geoSearchBtn') || '주소로 좌표 찾기'}</span>
                   </Button>
                 </div>
               </div>
@@ -357,7 +357,7 @@ export default function PropertySetup() {
                   title="상단 매장 정보에 입력된 주소를 사용하여 좌표를 자동 설정합니다"
                 >
                   <Building2 className="h-3.5 w-3.5 text-primary" />
-                  <span>매장 주소 적용</span>
+                  <span>{t('branches.geoUseStoreBtn') || '매장 주소 적용'}</span>
                 </Button>
                 <Button
                   type="button"
@@ -374,14 +374,14 @@ export default function PropertySetup() {
 
               {/* 좌표 설정 상태 안내 뱃지 */}
               <div className="rounded-lg border px-3 py-2 bg-slate-50 dark:bg-slate-900/40 flex items-center justify-between text-xs">
-                <span className="text-muted-foreground">위치 인증 상태:</span>
+                <span className="text-muted-foreground">{t('branches.geoStatus') || '위치 인증 상태:'}</span>
                 {form.gps_lat && form.gps_lng ? (
                   <span className="font-medium text-emerald-700 dark:text-emerald-400 flex items-center gap-1">
-                    <Check className="h-3.5 w-3.5" /> 인증 좌표 설정 완료
+                    <Check className="h-3.5 w-3.5" /> {t('branches.geoConfigured') || '인증 좌표 설정 완료'}
                   </span>
                 ) : (
                   <span className="text-amber-600 dark:text-amber-400 flex items-center gap-1">
-                    <MapPinOff className="h-3.5 w-3.5" /> 좌표 미설정 (주소 검색 필요)
+                    <MapPinOff className="h-3.5 w-3.5" /> {t('branches.geoNotConfigured') || '좌표 미설정 (주소 검색 필요)'}
                   </span>
                 )}
               </div>

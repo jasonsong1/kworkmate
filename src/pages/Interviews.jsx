@@ -212,7 +212,7 @@ export default function Interviews() {
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-base">
-                <Filter className="h-4 w-4" /> 공고별 조회 필터
+                <Filter className="h-4 w-4" /> {t('interviews.filterByJob')}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -223,7 +223,7 @@ export default function Interviews() {
                     <SelectValue placeholder={t('jobs.title')} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">{t('common.all')} (전체 기준 관리)</SelectItem>
+                    <SelectItem value="all">{t('interviews.allShared')}</SelectItem>
                     {jobs.map((j) => (
                       <SelectItem key={j.id} value={j.id}>
                         {j.title}
@@ -237,13 +237,15 @@ export default function Interviews() {
                 <div className="rounded-md border border-sky-100 bg-sky-50/50 p-3 text-xs text-sky-800">
                   <div className="flex items-center gap-1.5 font-medium">
                     <Info className="h-4 w-4 text-sky-600" />
-                    <span>공고별 조회 모드 (Read-only)</span>
+                    <span>{t('interviews.filterModeTitle') || '공고별 조회 모드 (Read-only)'}</span>
                   </div>
                   <p className="mt-1 text-slate-600">
-                    현재 <b>'{selectedJob ? selectedJob.title : ''}'</b> 공고에 부킹된 지원자 현황만 읽기 전용으로 표시됩니다.
+                    {t('interviews.filterModeNotice')?.replace('{title}', selectedJob ? selectedJob.title : '') ||
+                      `현재 '${selectedJob ? selectedJob.title : ''}' 공고에 부킹된 지원자 현황만 읽기 전용으로 표시됩니다.`}
                   </p>
                   <p className="mt-1 text-slate-500">
-                    새로운 면접 슬롯 생성 및 일정 관리는 상단 필터를 <b>'전체'</b>로 선택하시면 가능합니다.
+                    {t('interviews.filterModeManageHint') ||
+                      "새로운 면접 슬롯 생성 및 일정 관리는 상단 필터를 '전체'로 선택하시면 가능합니다."}
                   </p>
                 </div>
               ) : null}
@@ -255,7 +257,7 @@ export default function Interviews() {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-base">
-                  <CalendarClock className="h-4 w-4" /> {t('interviews.open')} (전체 공용)
+                  <CalendarClock className="h-4 w-4" /> {t('interviews.openShared')}
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -283,10 +285,10 @@ export default function Interviews() {
                 </div>
                 <Button className="w-full" onClick={generate} disabled={saving}>
                   {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
-                  전체 공용 슬롯 생성
+                  {t('interviews.createSharedSlots')}
                 </Button>
                 <p className="text-xs text-muted-foreground">
-                  지점 전체 기준 1개의 공용 슬롯으로 열리며, 어느 공고에서든 한 지원자가 부킹하면 해당 시간은 다른 공고에서도 자동 마감됩니다.
+                  {t('interviews.sharedSlotNotice')}
                 </p>
               </CardContent>
             </Card>
@@ -320,10 +322,12 @@ export default function Interviews() {
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-semibold text-slate-700">
-              {isFilterMode ? `'${selectedJob?.title || ''}' 예약 현황` : '전체 면접 슬롯 및 예약 현황'}
+              {isFilterMode
+                ? t('interviews.jobBookings').replace('{title}', selectedJob?.title || '')
+                : t('interviews.allSlotsBookings')}
             </h3>
             <span className="text-xs text-muted-foreground">
-              총 {visible.length}개 슬롯 {isFilterMode && '(이 공고 예약자)'}
+              {t('interviews.totalSlots').replace('{count}', String(visible.length))} {isFilterMode && t('interviews.jobFilteredNotice')}
             </span>
           </div>
 
@@ -335,9 +339,7 @@ export default function Interviews() {
           ) : Object.keys(grouped).length === 0 ? (
             <Card>
               <CardContent className="p-10 text-center text-sm text-muted-foreground">
-                {isFilterMode
-                  ? '이 공고로 예약된 면접자가 아직 없습니다.'
-                  : '생성된 면접 슬롯이 없습니다. 왼쪽 폼에서 슬롯을 생성해 주세요.'}
+                {isFilterMode ? t('interviews.noBookingsForJob') : t('interviews.noSlotsFound')}
               </CardContent>
             </Card>
           ) : (

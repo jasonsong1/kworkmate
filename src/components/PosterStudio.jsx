@@ -7,9 +7,11 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/components/ui/use-toast';
 import { downloadPdfFromCanvas, downloadPng, renderPoster } from '@/lib/poster';
+import { useI18n } from '@/lib/i18n';
 import { base44 } from '@/api/base44Client';
 
 export default function PosterStudio({ job, branch, company, applyUrl, onJobChange }) {
+  const { t, lang } = useI18n();
   const { toast } = useToast();
   const canvasRef = useRef(null);
   const [busy, setBusy] = useState(false);
@@ -24,31 +26,41 @@ export default function PosterStudio({ job, branch, company, applyUrl, onJobChan
     const draw = async () => {
       if (!canvasRef.current) return;
       await renderPoster(canvasRef.current, {
-        title: job.title,
-        storeName: branch ? branch.name : '',
-        rate: job.hourly_rate ? `$${Number(job.hourly_rate).toFixed(2)}/hr` : '',
+        title: job.title || 'Team Member',
+        companyName: company?.name || 'Our Company',
+        branchName: branch?.name || '',
         address,
-        applyUrl,
-        brandColor: job.brand_color || branch?.brand_color || company?.brand_color,
-        logoUrl: job.logo_url || branch?.logo_url,
-        note: job.poster_note || ''
+        note: job.poster_note || '',
+        brandColor: job.brand_color || branch?.brand_color || '#4338ca',
+        logoUrl: job.logo_url || branch?.logo_url || company?.logo_url || '',
+        applyUrl: applyUrl || window.location.href
       });
-      if (!active) return;
     };
     draw();
     return () => {
       active = false;
     };
-  }, [job.title, job.hourly_rate, job.brand_color, job.logo_url, branch, company, applyUrl, address, job.poster_note]);
+  }, [
+    job.title,
+    job.poster_note,
+    job.brand_color,
+    job.logo_url,
+    branch?.name,
+    branch?.brand_color,
+    branch?.logo_url,
+    company?.name,
+    company?.logo_url,
+    address,
+    applyUrl
+  ]);
 
-  const uploadLogo = async (event) => {
-    const file = event.target.files && event.target.files[0];
+  const uploadLogo = async (e) => {
+    const file = e.target.files && e.target.files[0];
     if (!file) return;
     setBusy(true);
-    const { file_url } = await base44.integrations.Core.UploadPublicFile({ file });
-    setBusy(false);
+    const { file_url } = await base44.integrations.Core.UploadFile({ file });
     patchJob({ logo_url: file_url });
-    toast({ title: 'Logo updated' });
+    toast({ title: lang === 'en' ? 'Logo updated' : '로고가 등록되었습니다' });
   };
 
   const download = async (kind) => {
@@ -66,7 +78,7 @@ export default function PosterStudio({ job, branch, company, applyUrl, onJobChan
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Poster preview</CardTitle>
+          <CardTitle className="text-base">{t('jobs.posterPreview') || '포스터 미리보기'}</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="overflow-hidden rounded-xl border bg-muted/30 p-3">
@@ -78,15 +90,15 @@ export default function PosterStudio({ job, branch, company, applyUrl, onJobChan
       <div className="space-y-4">
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Design</CardTitle>
+            <CardTitle className="text-base">{t('jobs.design') || '디자인 설정'}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
-              <Label>Store logo</Label>
+              <Label>{t('jobs.storeLogo') || '매장 로고'}</Label>
               <div className="mt-2 flex items-center gap-2">
                 <Button variant="outline" className="relative" disabled={busy}>
                   {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
-                  Upload
+                  {t('common.upload') || '업로드'}
                   <input
                     type="file"
                     accept="image/*"
@@ -100,13 +112,13 @@ export default function PosterStudio({ job, branch, company, applyUrl, onJobChan
                     size="sm"
                     onClick={() => patchJob({ logo_url: '' })}
                   >
-                    Remove
+                    {t('common.delete') || '삭제'}
                   </Button>
                 )}
               </div>
             </div>
             <div>
-              <Label>Note line</Label>
+              <Label>{t('jobs.noteLine') || '강조 문구'}</Label>
               <Textarea
                 rows={3}
                 value={job.poster_note || ''}
@@ -115,7 +127,7 @@ export default function PosterStudio({ job, branch, company, applyUrl, onJobChan
               />
             </div>
             <div>
-              <Label>Poster colour</Label>
+              <Label>{t('jobs.posterColor') || '포스터 색상'}</Label>
               <Input
                 type="color"
                 value={job.brand_color || branch?.brand_color || '#4338ca'}
@@ -128,10 +140,10 @@ export default function PosterStudio({ job, branch, company, applyUrl, onJobChan
 
         <div className="grid gap-2">
           <Button onClick={() => download('png')} disabled={busy}>
-            <Download className="mr-2 h-4 w-4" /> Download PNG
+            <Download className="mr-2 h-4 w-4" /> {t('jobs.downloadPng') || 'PNG 다운로드'}
           </Button>
           <Button variant="outline" onClick={() => download('pdf')} disabled={busy}>
-            <FileDown className="mr-2 h-4 w-4" /> Download PDF
+            <FileDown className="mr-2 h-4 w-4" /> {t('jobs.downloadPdf') || 'PDF 다운로드'}
           </Button>
         </div>
       </div>

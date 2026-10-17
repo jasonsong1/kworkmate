@@ -14,7 +14,7 @@ import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/components/ui/use-toast';
-import { useI18n } from '@/lib/i18n';
+import { useI18n, formatRoleLabel } from '@/lib/i18n';
 import { useWorkspace } from '@/lib/WorkspaceContext';
 import { EMPLOYMENT_TYPES, visibleRequiredQuestions } from '@/lib/bh';
 import { canCreateJob, featureAllowed, videoInterviewAllowed } from '@/lib/packages';
@@ -22,7 +22,7 @@ import { base44 } from '@/api/base44Client';
 
 export default function JobDetail() {
   const { jobId } = useParams();
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const { activeBranch, branches, company, pkg, reloadPackage, hasModule } = useWorkspace();
   const { toast } = useToast();
   const videoAllowed = videoInterviewAllowed(pkg);
@@ -160,11 +160,11 @@ export default function JobDetail() {
           <div className="grid gap-6 lg:grid-cols-2">
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">Role</CardTitle>
+                <CardTitle className="text-base">{t('jobs.roleTitle') || '직무 및 역할'}</CardTitle>
               </CardHeader>
               <CardContent className="grid gap-4 sm:grid-cols-2">
                 <div className="sm:col-span-2">
-                  <Label>Job title</Label>
+                  <Label>{t('jobs.jobTitle') || '공고 제목'}</Label>
                   <Input value={job.title || ''} onChange={(e) => patch({ title: e.target.value })} />
                 </div>
                 <div>
@@ -176,11 +176,11 @@ export default function JobDetail() {
                     <SelectContent>
                       {roleOptions.map((option) => (
                         <SelectItem key={option.key} value={option.label}>
-                          {option.label}
+                          {formatRoleLabel(option.label, lang)}
                         </SelectItem>
                       ))}
                       {job.position && !roleOptions.some((option) => option.label === job.position) && (
-                        <SelectItem value={job.position}>{job.position}</SelectItem>
+                        <SelectItem value={job.position}>{formatRoleLabel(job.position, lang)}</SelectItem>
                       )}
                     </SelectContent>
                   </Select>
@@ -207,7 +207,7 @@ export default function JobDetail() {
                   <p className="mt-1 text-xs text-muted-foreground">{t('jobs.openingsHint')}</p>
                 </div>
                 <div>
-                  <Label>Employment type</Label>
+                  <Label>{t('jobs.employmentType') || '고용 형태'}</Label>
                   <Select value={job.employment_type || 'casual'} onValueChange={(v) => patch({ employment_type: v })}>
                     <SelectTrigger>
                       <SelectValue />
@@ -222,7 +222,7 @@ export default function JobDetail() {
                   </Select>
                 </div>
                 <div className="sm:col-span-2">
-                  <Label>Description</Label>
+                  <Label>{t('jobs.description') || '직무 상세 설명'}</Label>
                   <Textarea
                     rows={4}
                     value={job.description || ''}
@@ -308,13 +308,19 @@ export default function JobDetail() {
                       rows={4}
                       value={job.screening_criteria || ''}
                       onChange={(e) => patch({ screening_criteria: e.target.value })}
-                      placeholder={company && company.screening_criteria ? `[회사 설정 적용 중]: ${company.screening_criteria}` : "예: 바리스타 경력 2년 이상, 주말 근무 가능, 학생비자 제외"}
+                      placeholder={
+                        company && company.screening_criteria
+                          ? (lang === 'en'
+                              ? `[Company criteria active]: ${company.screening_criteria}`
+                              : `[회사 설정 적용 중]: ${company.screening_criteria}`)
+                          : (t('jobs.criteriaPlaceholder') || '예: 바리스타 경력 2년 이상, 주말 근무 가능, 학생비자 제외')
+                      }
                     />
                     <p className="mt-1 text-xs text-muted-foreground">
                       {job.screening_criteria
-                        ? '이 공고에 입력된 선별 중점 조건이 최우선으로 적용됩니다.'
+                        ? (t('jobs.customCriteriaPriority') || '이 공고에 입력된 선별 중점 조건이 최우선으로 적용됩니다.')
                         : (company && company.screening_criteria
-                            ? `현재 회사 설정("${company.screening_criteria}")이 자동 상속되어 적용 중입니다. 이 공고만의 특별한 기준이 있다면 입력해 주세요.`
+                            ? (t('jobs.inheritedCriteria') || '현재 회사 설정("{criteria}")이 자동 상속되어 적용 중입니다. 이 공고만의 특별한 기준이 있다면 입력해 주세요.').replace('{criteria}', company.screening_criteria)
                             : t('settings.screeningFocusHint'))}
                     </p>
                   </div>

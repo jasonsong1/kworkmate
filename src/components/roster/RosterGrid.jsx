@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { GripVertical } from 'lucide-react';
-import { useI18n } from '@/lib/i18n';
+import { useI18n, formatDayShort, formatRoleLabel } from '@/lib/i18n';
 import { hoursValue, shiftHours } from '@/lib/bh';
 
 // The week at a glance: one row per person, one column per day, and the hours each person has
@@ -21,7 +21,7 @@ export default function RosterGrid({
   getLeaveFor,
   missingFor
 }) {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const [dragId, setDragId] = useState('');
   // The row being carried. Kept apart from a dragged shift, so a drop on a day cell is never
   // mistaken for a row move and the other way round.
@@ -50,7 +50,9 @@ export default function RosterGrid({
                     isClosed ? 'bg-muted/30 dark:bg-muted/10 opacity-75' : ''
                   }`}
                 >
-                  <div className={isClosed ? 'text-muted-foreground/80' : ''}>{day.short}</div>
+                  <div className={isClosed ? 'text-muted-foreground/80' : ''}>
+                    {formatDayShort(day.key || day.short, lang)}
+                  </div>
                   <div className="font-normal text-[11px]">{day.date.slice(5)}</div>
                   {isClosed ? (
                     <span className="mt-1 inline-block rounded-full bg-slate-200/70 px-2 py-0.5 text-[10px] font-medium text-slate-600 dark:bg-slate-800/80 dark:text-slate-400">
@@ -62,7 +64,7 @@ export default function RosterGrid({
                         key={item.position}
                         className="mt-1 block rounded-full bg-destructive/10 px-2 py-0.5 text-[10px] font-medium text-destructive"
                       >
-                        {item.position} {t('roster.unassigned')}{item.missing}
+                        {formatRoleLabel(item.position, lang)} {t('roster.unassigned')}{item.missing}
                       </span>
                     ))
                   )}

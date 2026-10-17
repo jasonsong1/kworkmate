@@ -463,12 +463,14 @@ export default function StaffOnboardingCard({ onProfileUpdated }) {
           <div className="space-y-3">
             <h3 className="text-sm font-semibold flex items-center gap-2">
               <UploadCloud className="h-4 w-4 text-primary" />
-              온보딩 서류 제출 목록
+              {t('ob.documentsToSubmit') || '온보딩 서류 제출 목록'}
             </h3>
 
             <div className="divide-y rounded-xl border">
               {items.map((item) => {
-                const displayName = item.label || item.title || item.key;
+                const displayName = lang === 'en'
+                  ? (item.label_en || item.label || item.title || item.key)
+                  : (item.label || item.title || item.key);
                 const isDoc = item.kind !== 'info';
 
                 return (
@@ -488,15 +490,15 @@ export default function StaffOnboardingCard({ onProfileUpdated }) {
                         {item.secure && (
                           <span
                             className="inline-flex shrink-0 items-center gap-1 rounded-md bg-amber-500/10 px-1.5 py-0.5 text-[11px] font-medium text-amber-500"
-                            title="암호화 보안 서류 (열람 시 본인 인증 필요)"
+                            title={lang === 'en' ? 'Encrypted document (Requires verification to view)' : '암호화 보안 서류 (열람 시 본인 인증 필요)'}
                           >
                             <Lock className="h-3 w-3" />
-                            보안
+                            {t('ob.secureDoc') || '보안'}
                           </span>
                         )}
                       </div>
                       <p className="text-xs text-muted-foreground mt-0.5 break-all">
-                        <span>{item.required ? '필수' : '선택'}</span>
+                        <span>{item.required ? (t('common.required') || '필수') : (t('common.optional') || '선택')}</span>
                         {item.file && item.file.name && (
                           <span className="text-slate-600 dark:text-slate-300 font-mono text-[11px] block sm:inline sm:before:content-['·_파일명:_']">
                             {item.file.name}
@@ -524,7 +526,7 @@ export default function StaffOnboardingCard({ onProfileUpdated }) {
                               ) : (
                                 <Eye className="h-3.5 w-3.5" />
                               )}
-                              <span>열기</span>
+                              <span>{t('common.open') || '열기'}</span>
                             </Button>
 
                             {/* 다시 올리기 버튼 */}
@@ -538,7 +540,7 @@ export default function StaffOnboardingCard({ onProfileUpdated }) {
                               {uploadingKey === item.key ? (
                                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
                               ) : (
-                                '다시 올리기'
+                                t('ob.reupload') || '다시 올리기'
                               )}
                             </Button>
 
@@ -549,7 +551,7 @@ export default function StaffOnboardingCard({ onProfileUpdated }) {
                               disabled={busyUri === item.file.file_uri}
                               onClick={() => removeDoc(item.file)}
                               className="h-8 px-2 text-destructive hover:text-destructive"
-                              title="삭제"
+                              title={t('common.delete') || '삭제'}
                             >
                               <Trash2 className="h-3.5 w-3.5" />
                             </Button>
@@ -568,13 +570,13 @@ export default function StaffOnboardingCard({ onProfileUpdated }) {
                             ) : (
                               <UploadCloud className="h-3.5 w-3.5" />
                             )}
-                            <span>파일 선택</span>
+                            <span>{t('common.upload') || '파일 선택'}</span>
                           </Button>
                         )}
                       </div>
                     ) : (
                       <span className="text-xs text-primary font-medium">
-                        아래 정보 입력에서 확인됩니다
+                        {t('ob.providedBelow') || '아래 정보 입력에서 확인됩니다'}
                       </span>
                     )}
                   </div>
@@ -597,11 +599,11 @@ export default function StaffOnboardingCard({ onProfileUpdated }) {
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-semibold flex items-center gap-2">
                 <FileText className="h-4 w-4 text-primary" />
-                온보딩 개인정보 및 계좌·세금 정보
+                {t('ob.personalTaxBank') || '온보딩 개인정보 및 계좌·세금 정보'}
               </h3>
               <span className="text-xs text-muted-foreground flex items-center gap-1">
                 <ShieldCheck className="h-3.5 w-3.5 text-emerald-500" />
-                금융·개인정보 암호화 보호 적용
+                {t('ob.encryptedProtected') || '금융·개인정보 암호화 보호 적용'}
               </span>
             </div>
 
@@ -646,7 +648,7 @@ export default function StaffOnboardingCard({ onProfileUpdated }) {
                       onClick={() => requestUnlockField('date_of_birth')}
                     >
                       <Lock className="h-3 w-3" />
-                      <span>인증 후 열람</span>
+                      <span>{t('ob.verifyToView') || '인증 후 열람'}</span>
                     </Button>
                   )}
                 </div>
@@ -673,7 +675,7 @@ export default function StaffOnboardingCard({ onProfileUpdated }) {
                       onClick={() => requestUnlockField('emergency_contact')}
                     >
                       <Lock className="h-3 w-3" />
-                      <span>인증 후 열람</span>
+                      <span>{t('ob.verifyToView') || '인증 후 열람'}</span>
                     </Button>
                   )}
                 </div>
@@ -825,10 +827,10 @@ export default function StaffOnboardingCard({ onProfileUpdated }) {
               <div className="sm:col-span-2 border-t pt-4 mt-2 space-y-3 relative">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
-                    <Label className="text-sm font-semibold">급여 입금 계좌 정보</Label>
+                    <Label className="text-sm font-semibold">{t('ob.bankAccountDetails') || '급여 입금 계좌 정보'}</Label>
                     <span className="inline-flex items-center gap-1 rounded-md bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-500 border border-amber-500/20">
                       <Lock className="h-3 w-3" />
-                      기본 암호화 보안 적용
+                      {t('ob.defaultEncrypted') || '기본 암호화 보안 적용'}
                     </span>
                   </div>
 
@@ -846,14 +848,14 @@ export default function StaffOnboardingCard({ onProfileUpdated }) {
                   ) : (
                     <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 font-medium text-[11px] gap-1">
                       <ShieldCheck className="h-3.5 w-3.5" />
-                      인증 완료 (열람 및 수정 가능)
+                      {lang === 'en' ? 'Verified (Unlocked)' : '인증 완료 (열람 및 수정 가능)'}
                     </Badge>
                   )}
                 </div>
 
                 {!isBankUnlocked && (
                   <p className="text-xs text-muted-foreground">
-                    계좌 정보는 금융 보안 정책에 따라 암호화되어 마스킹 처리됩니다. 확인 및 수정하려면 본인 인증을 진행하세요.
+                    {t('ob.bankSecurityNotice') || '계좌 정보는 금융 보안 정책에 따라 암호화되어 마스킹 처리됩니다. 확인 및 수정하려면 본인 인증을 진행하세요.'}
                   </p>
                 )}
 
@@ -896,10 +898,10 @@ export default function StaffOnboardingCard({ onProfileUpdated }) {
                 <div className="sm:col-span-2 border-t pt-4 mt-2 space-y-3">
                   <div className="flex items-center gap-2">
                     <HelpCircle className="h-4 w-4 text-primary" />
-                    <Label className="text-sm font-semibold">추가 온보딩 확인 정보</Label>
+                    <Label className="text-sm font-semibold">{t('ob.additionalDetails') || '추가 온보딩 확인 정보'}</Label>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    입사 시 제출한 맞춤 설문 및 세부 온보딩 확인 내역입니다.
+                    {t('ob.additionalDetailsHint') || '입사 시 제출한 맞춤 설문 및 세부 온보딩 확인 내역입니다.'}
                   </p>
 
                   <div className="divide-y rounded-lg border bg-muted/20">
@@ -911,7 +913,7 @@ export default function StaffOnboardingCard({ onProfileUpdated }) {
                         <div key={row.id} className="p-3">
                           <div className="flex items-center justify-between mb-1">
                             <div className="flex items-center gap-1.5">
-                              {isSecure && <Lock className="h-3.5 w-3.5 text-amber-500" title="암호화 보안 처리된 질문" />}
+                              {isSecure && <Lock className="h-3.5 w-3.5 text-amber-500" title={lang === 'en' ? 'Encrypted Question' : '암호화 보안 처리된 질문'} />}
                               <p className="text-xs font-medium text-muted-foreground">{row.label}</p>
                             </div>
                             {isSecure && !isUnlocked && (
@@ -923,7 +925,7 @@ export default function StaffOnboardingCard({ onProfileUpdated }) {
                                 className="h-6 px-2 text-[11px] gap-1 border-amber-500/40 text-amber-700 dark:text-amber-300 bg-amber-500/10 hover:bg-amber-500/20"
                               >
                                 <Lock className="h-3 w-3" />
-                                <span>인증 후 열람</span>
+                                <span>{t('ob.verifyToView') || '인증 후 열람'}</span>
                               </Button>
                             )}
                           </div>
@@ -933,7 +935,7 @@ export default function StaffOnboardingCard({ onProfileUpdated }) {
                             <div className="flex items-center gap-2">
                               <span className="font-mono text-sm tracking-widest text-muted-foreground">••••••••••••</span>
                               <span className="text-[11px] text-amber-600/90 font-medium">
-                                (암호화 보안 처리됨)
+                                {lang === 'en' ? '(Encrypted & Protected)' : '(암호화 보안 처리됨)'}
                               </span>
                             </div>
                           ) : (
@@ -962,7 +964,7 @@ export default function StaffOnboardingCard({ onProfileUpdated }) {
             <div className="flex justify-end pt-3">
               <Button type="button" onClick={save} disabled={saving} className="gap-2">
                 {saving && <Loader2 className="h-4 w-4 animate-spin" />}
-                <span>온보딩 정보 저장하기</span>
+                <span>{t('ob.saveDetails') || '온보딩 정보 저장하기'}</span>
               </Button>
             </div>
           </div>

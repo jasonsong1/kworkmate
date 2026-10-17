@@ -31,7 +31,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/components/ui/use-toast';
-import { useI18n } from '@/lib/i18n';
+import { useI18n, formatDayShort } from '@/lib/i18n';
 import { useWorkspace } from '@/lib/WorkspaceContext';
 import { featureAllowed, videoInterviewAllowed } from '@/lib/packages';
 import {
@@ -52,7 +52,7 @@ const INTERVIEW_STATUSES = ['final_interview', 'interview_scheduled', 'hired'];
 const SHORTLIST_STATUSES = ['top10', 'mini_interview', 'final_interview', 'interview_scheduled', 'hired'];
 
 export default function Applicants() {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const { company, activeBranch, pkg } = useWorkspace();
   const videoAllowed = videoInterviewAllowed(pkg);
   const miniAllowed = featureAllowed(pkg, 'mini_interview');
@@ -428,17 +428,17 @@ export default function Applicants() {
               <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                 <div className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
                   <Filter className="h-3.5 w-3.5 text-primary" />
-                  <span>필터:</span>
+                  <span>{t('common.filter') || '필터'}:</span>
                 </div>
 
                 {/* 비자 필터 드롭다운 */}
                 <div className="w-full sm:w-auto flex-1 min-w-[140px] max-w-full sm:max-w-[200px]">
                   <Select value={visaFilter} onValueChange={setVisaFilter}>
                     <SelectTrigger className="h-8 text-xs">
-                      <SelectValue placeholder="비자 종류" />
+                      <SelectValue placeholder={lang === 'en' ? 'Visa Type' : '비자 종류'} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">전체 비자 (All Visas)</SelectItem>
+                      <SelectItem value="all">{t('applicants.allVisas') || (lang === 'en' ? 'All Visas' : '전체 비자')}</SelectItem>
                       {VISA_TYPES.map((v) => (
                         <SelectItem key={v.value} value={v.value}>
                           {v.label}
@@ -452,10 +452,10 @@ export default function Applicants() {
                 <div className="w-full sm:w-auto flex-1 min-w-[140px] max-w-full sm:max-w-[200px]">
                   <Select value={noticeFilter} onValueChange={setNoticeFilter}>
                     <SelectTrigger className="h-8 text-xs">
-                      <SelectValue placeholder="근무 시작 가능" />
+                      <SelectValue placeholder={lang === 'en' ? 'Available to start' : '근무 시작 가능'} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">전체 시작 시점 (All Notice)</SelectItem>
+                      <SelectItem value="all">{t('applicants.allNotice') || (lang === 'en' ? 'All Notice Periods' : '전체 시작 시점')}</SelectItem>
                       {NOTICE_PERIODS.map((n) => (
                         <SelectItem key={n.value} value={n.value}>
                           {n.label}
@@ -474,14 +474,14 @@ export default function Applicants() {
                     className="h-8 px-2.5 text-xs text-muted-foreground hover:text-foreground gap-1"
                   >
                     <RotateCcw className="h-3.5 w-3.5" />
-                    초기화
+                    {lang === 'en' ? 'Reset' : '초기화'}
                   </Button>
                 )}
 
                 {/* 필터링 결과 카운트 안내 */}
                 {isFiltered && (
                   <span className="text-xs text-primary font-medium ml-auto">
-                    {filteredApplicants.length}명 조회됨 (전체 {applicants.length}명)
+                    {filteredApplicants.length}{lang === 'en' ? ` found (Total ${applicants.length})` : `명 조회됨 (전체 ${applicants.length}명)`}
                   </span>
                 )}
               </div>
@@ -490,7 +490,7 @@ export default function Applicants() {
               <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-border/50">
                 <span className="text-xs text-muted-foreground font-medium flex items-center gap-1 shrink-0">
                   <CalendarDays className="h-3.5 w-3.5 text-primary" />
-                  근무 가능 요일:
+                  {t('applicants.availableDays') || (lang === 'en' ? 'Available Days:' : '근무 가능 요일:')}
                 </span>
                 <div className="flex flex-wrap items-center gap-1.5">
                   {DAYS.map((d) => {
@@ -507,7 +507,7 @@ export default function Applicants() {
                             : "bg-background border-border text-muted-foreground hover:text-foreground hover:bg-muted/50"
                         )}
                       >
-                        {d.short}
+                        {formatDayShort(d.key, lang)}
                       </button>
                     );
                   })}
@@ -515,13 +515,15 @@ export default function Applicants() {
 
                 {selectedDays.length > 1 && (
                   <div className="flex items-center gap-1 ml-auto text-[11px] text-muted-foreground">
-                    <span>조건:</span>
+                    <span>{lang === 'en' ? 'Condition:' : '조건:'}</span>
                     <button
                       type="button"
                       onClick={() => setDayMatchMode(dayMatchMode === 'any' ? 'all' : 'any')}
                       className="text-primary underline font-medium hover:opacity-80"
                     >
-                      {dayMatchMode === 'any' ? '선택 요일 중 하루 이상 가능' : '선택 요일 모두 가능 (AND)'}
+                      {dayMatchMode === 'any'
+                        ? (lang === 'en' ? 'Any selected day (OR)' : '선택 요일 중 하루 이상 가능')
+                        : (lang === 'en' ? 'All selected days (AND)' : '선택 요일 모두 가능 (AND)')}
                     </button>
                   </div>
                 )}

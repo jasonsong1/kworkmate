@@ -82,7 +82,7 @@ export default function OnboardingQuestionsCard({ questions = [], onChange, canE
           <CardTitle className="text-base">{t('onboardingQ.title')}</CardTitle>
           <p className="mt-1 text-sm text-muted-foreground">{t('onboardingQ.hint')}</p>
           <p className="mt-0.5 text-xs text-primary font-medium">
-            💡 왼쪽 그립 아이콘(⋮⋮)을 잡고 끌어서 마우스로 질문 순서를 자유롭게 바꿀 수 있습니다.
+            {t('ob.dragReorderNotice')}
           </p>
         </div>
         <Button variant="outline" size="sm" disabled={!canEdit} onClick={loadDefaults}>

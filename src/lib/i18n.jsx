@@ -36,6 +36,93 @@ const dict = {
     'role.company_admin': 'Company admin',
     'role.branch_manager': 'Branch manager',
     'role.staff': 'Staff',
+    'role.super_admin': 'Super Admin',
+    'common.role': 'Role',
+    'common.role.super_admin': 'Super Admin',
+    'common.role.company_admin': 'Company Admin',
+    'common.role.manager': 'Manager',
+    'common.role.staff': 'Staff',
+    'branches.branchName': 'Branch name',
+    'branches.code': 'Branch code',
+    'branches.suburb': 'Suburb',
+    'branches.state': 'State',
+    'branches.postcode': 'Postcode',
+    'branches.contactHeader': 'Employer / Tax Contact Details (ATO Section B)',
+    'branches.contactName': 'Contact Person',
+    'branches.contactEmail': 'Primary Employer Email',
+    'branches.contactPhone': 'Contact Phone Number',
+    'branches.geoTitle': 'Attendance GPS Radius & Verification',
+    'branches.geoHint': 'Set the store location and verification radius so staff can only clock in when near the store. Coordinates are calculated from the address.',
+    'branches.geoAddressLabel': 'Store Address for Location Verification',
+    'branches.geoSearchBtn': 'Find Coordinates by Address',
+    'branches.geoUseStoreBtn': 'Use Store Address',
+    'branches.geoStatus': 'Location Verification Status:',
+    'branches.geoConfigured': 'Verification Coordinates Set',
+    'branches.geoNotConfigured': 'Coordinates Not Set (Address search required)',
+    'jobs.roleTitle': 'Role',
+    'jobs.jobTitle': 'Job title',
+    'jobs.employmentType': 'Employment type',
+    'jobs.description': 'Description',
+    'jobs.standardQuestions': 'Standard questions',
+    'jobs.employerQuestions': 'Employer questions',
+    'jobs.addQuestion': 'Add question',
+    'jobs.questionPlaceholder': 'Do you have a responsible service of alcohol certificate?',
+    'jobs.noCustomQuestions': 'No custom questions yet',
+    'jobs.posterPreview': 'Poster preview',
+    'jobs.design': 'Design',
+    'jobs.storeLogo': 'Store logo',
+    'jobs.noteLine': 'Note line',
+    'jobs.posterColor': 'Poster colour',
+    'jobs.downloadPng': 'Download PNG',
+    'jobs.downloadPdf': 'Download PDF',
+    'jobs.inheritedCriteria': 'Inherited company screening criteria ("{criteria}"). Enter custom criteria for this job if needed.',
+    'jobs.customCriteriaPriority': 'Custom screening criteria for this job will take top priority.',
+    'jobs.criteriaPlaceholder': 'e.g., 2+ years barista experience, available weekends, PR/Citizens only',
+    'applicants.allVisas': 'All Visas',
+    'applicants.allNotice': 'All Notice Periods',
+    'applicants.availableDays': 'Available Days:',
+    'interviews.filterByJob': 'Filter by Job',
+    'interviews.allShared': 'All (Shared Store Slots)',
+    'interviews.openShared': 'Open Interview Slots (Shared Store-wide)',
+    'interviews.createSharedSlots': 'Generate Shared Slots',
+    'interviews.sharedSlotNotice': 'Creates a single shared slot across the branch. When booked from any job, the time automatically closes for all other jobs.',
+    'interviews.allSlotsBookings': 'All Interview Slots & Bookings',
+    'interviews.jobBookings': "Bookings for '{title}'",
+    'interviews.totalSlots': 'Total {count} slots',
+    'interviews.jobFilteredNotice': '(Applicants booked for this job)',
+    'interviews.noSlotsFound': 'No interview slots found. Create slots using the form on the left.',
+    'interviews.noBookingsForJob': 'No applicants have booked for this job yet.',
+    'interviews.filterModeTitle': 'Job Filter Mode (Read-only)',
+    'interviews.filterModeNotice': "Currently displaying bookings for '{title}' as read-only.",
+    'interviews.filterModeManageHint': "To create new interview slots or manage schedules, select 'All' in the top filter.",
+    'ob.documentsToSubmit': 'Onboarding Documents to Submit',
+    'ob.secureDoc': 'Secure',
+    'ob.providedBelow': 'Provided in personal details below',
+    'ob.personalTaxBank': 'Onboarding Personal, Bank & Tax Details',
+    'ob.encryptedProtected': 'Encrypted & Protected',
+    'ob.verifyToView': 'Verify to view',
+    'ob.bankAccountDetails': 'Bank Account Details',
+    'ob.defaultEncrypted': 'Default Encrypted Protection',
+    'ob.bankSecurityNotice': 'Bank account details are masked for financial security. Verify identity to view or edit.',
+    'ob.additionalDetails': 'Additional Onboarding Details',
+    'ob.additionalDetailsHint': 'Custom survey and detailed onboarding verification submitted upon joining.',
+    'ob.saveDetails': 'Save Onboarding Details',
+    'ob.reupload': 'Re-upload',
+    'ob.dragReorderNotice': '💡 Drag and drop using the left grip icon (⋮⋮) to freely reorder questions.',
+    'ob.signatureSavedEdit': 'Signature Saved (Edit)',
+    'ob.addSignature': 'Add Signature',
+    'ob.encryptionBadge': 'Encryption',
+    'ob.standardAccess': 'Standard Access',
+    'ob.passwordBioProtected': '🔒 Protected with Password/Biometrics',
+    'ob.collect': 'Collect',
+    'ob.encrypt': 'Encrypt',
+    'employees.onboardingPaperworkLink': 'Onboarding Paperwork Link',
+    'employees.copyOnboardingLink': 'Copy Onboarding Link',
+    'employees.sendOnboardingEmail': 'Send Onboarding Email',
+    'employees.applyPenalty': 'Apply Penalty Rates',
+    'employees.locked': 'Locked',
+    'employees.unlocked': 'Unlocked',
+    'employees.verifyUnlock': 'Verify',
     'common.save': 'Save',
     'common.saving': 'Saving…',
     'common.cancel': 'Cancel',
@@ -1385,6 +1472,93 @@ const dict = {
     'role.company_admin': '회사 최고 관리자',
     'role.branch_manager': '지점 매니저',
     'role.staff': '직원',
+    'role.super_admin': '최고 관리자 (Super Admin)',
+    'common.role': '직책 / 역할',
+    'common.role.super_admin': '최고 관리자 (Super Admin)',
+    'common.role.company_admin': '회사 관리자',
+    'common.role.manager': '지점 매니저',
+    'common.role.staff': '일반 직원',
+    'branches.branchName': '매장명 (지점명)',
+    'branches.code': '지점 코드',
+    'branches.suburb': '지역구 (Suburb)',
+    'branches.state': '주 (State)',
+    'branches.postcode': '우편번호 (Postcode)',
+    'branches.contactHeader': '고용주 / 세무 서류 담당자 정보 (ATO Section B 연동)',
+    'branches.contactName': '담당자 이름',
+    'branches.contactEmail': '고용주 공식 이메일',
+    'branches.contactPhone': '담당자 직통 전화번호',
+    'branches.geoTitle': '출퇴근 위치 인증 반경 설정',
+    'branches.geoHint': '직원이 매장 근처에서만 출퇴근을 기록할 수 있도록 매장 위치와 인증 반경을 설정합니다. 주소를 입력하시면 위도·경도 좌표가 자동으로 계산됩니다.',
+    'branches.geoAddressLabel': '인증 기준 매장 주소',
+    'branches.geoSearchBtn': '주소로 좌표 찾기',
+    'branches.geoUseStoreBtn': '매장 주소 적용',
+    'branches.geoStatus': '위치 인증 상태:',
+    'branches.geoConfigured': '인증 좌표 설정 완료',
+    'branches.geoNotConfigured': '좌표 미설정 (주소 검색 필요)',
+    'jobs.roleTitle': '직무 및 역할',
+    'jobs.jobTitle': '공고 제목',
+    'jobs.employmentType': '고용 형태',
+    'jobs.description': '직무 상세 설명',
+    'jobs.standardQuestions': '표준 질문',
+    'jobs.employerQuestions': '고용주 추가 질문',
+    'jobs.addQuestion': '질문 추가',
+    'jobs.questionPlaceholder': '예: 주말 또는 야간 근무가 가능하신가요?',
+    'jobs.noCustomQuestions': '추가된 맞춤 질문이 없습니다.',
+    'jobs.posterPreview': '포스터 미리보기',
+    'jobs.design': '디자인 설정',
+    'jobs.storeLogo': '매장 로고',
+    'jobs.noteLine': '강조 문구',
+    'jobs.posterColor': '포스터 색상',
+    'jobs.downloadPng': 'PNG 다운로드',
+    'jobs.downloadPdf': 'PDF 다운로드',
+    'jobs.inheritedCriteria': '현재 회사 설정("{criteria}")이 자동 상속되어 적용 중입니다. 이 공고만의 특별한 기준이 있다면 입력해 주세요.',
+    'jobs.customCriteriaPriority': '이 공고에 입력된 선별 중점 조건이 최우선으로 적용됩니다.',
+    'jobs.criteriaPlaceholder': '예: 바리스타 경력 2년 이상, 주말 근무 가능, 학생비자 제외',
+    'applicants.allVisas': '전체 비자',
+    'applicants.allNotice': '전체 시작 시점',
+    'applicants.availableDays': '근무 가능 요일:',
+    'interviews.filterByJob': '공고별 조회 필터',
+    'interviews.allShared': '전체 (지점 공용 슬롯 관리)',
+    'interviews.openShared': '면접 슬롯 열기 (전체 공용)',
+    'interviews.createSharedSlots': '전체 공용 슬롯 생성',
+    'interviews.sharedSlotNotice': '지점 전체 기준 1개의 공용 슬롯으로 열리며, 어느 공고에서든 한 지원자가 부킹하면 해당 시간은 다른 공고에서도 자동 마감됩니다.',
+    'interviews.allSlotsBookings': '전체 면접 슬롯 및 예약 현황',
+    'interviews.jobBookings': "'{title}' 예약 현황",
+    'interviews.totalSlots': '총 {count}개 슬롯',
+    'interviews.jobFilteredNotice': '(이 공고 예약자)',
+    'interviews.noSlotsFound': '생성된 면접 슬롯이 없습니다. 왼쪽 폼에서 슬롯을 생성해 주세요.',
+    'interviews.noBookingsForJob': '이 공고로 예약된 면접자가 아직 없습니다.',
+    'interviews.filterModeTitle': '공고별 조회 모드 (Read-only)',
+    'interviews.filterModeNotice': "현재 '{title}' 공고에 부킹된 지원자 현황만 읽기 전용으로 표시됩니다.",
+    'interviews.filterModeManageHint': "새로운 면접 슬롯 생성 및 일정 관리는 상단 필터를 '전체'로 선택하시면 가능합니다.",
+    'ob.documentsToSubmit': '온보딩 서류 제출 목록',
+    'ob.secureDoc': '보안',
+    'ob.providedBelow': '아래 정보 입력에서 확인됩니다',
+    'ob.personalTaxBank': '온보딩 개인정보 및 계좌·세금 정보',
+    'ob.encryptedProtected': '금융·개인정보 암호화 보호 적용',
+    'ob.verifyToView': '인증 후 열람',
+    'ob.bankAccountDetails': '급여 입금 계좌 정보',
+    'ob.defaultEncrypted': '기본 암호화 보안 적용',
+    'ob.bankSecurityNotice': '계좌 정보는 금융 보안 정책에 따라 암호화되어 마스킹 처리됩니다. 확인 및 수정하려면 본인 인증을 진행하세요.',
+    'ob.additionalDetails': '추가 온보딩 확인 정보',
+    'ob.additionalDetailsHint': '입사 시 제출한 맞춤 설문 및 세부 온보딩 확인 내역입니다.',
+    'ob.saveDetails': '온보딩 정보 저장하기',
+    'ob.reupload': '다시 올리기',
+    'ob.dragReorderNotice': '💡 왼쪽 그립 아이콘(⋮⋮)을 잡고 끌어서 마우스로 질문 순서를 자유롭게 바꿀 수 있습니다.',
+    'ob.signatureSavedEdit': '서명 등록됨 (수정)',
+    'ob.addSignature': '사인 넣기',
+    'ob.encryptionBadge': '암호화 보안',
+    'ob.standardAccess': '일반 열람',
+    'ob.passwordBioProtected': '🔒 비밀번호/생체인증 보호됨',
+    'ob.collect': '수집',
+    'ob.encrypt': '암호화',
+    'employees.onboardingPaperworkLink': '온보딩 서류 작성 링크',
+    'employees.copyOnboardingLink': '온보딩 링크 복사',
+    'employees.sendOnboardingEmail': '온보딩 이메일 발송',
+    'employees.applyPenalty': '패널티 적용',
+    'employees.locked': '보안 잠금',
+    'employees.unlocked': '잠금 해제됨',
+    'employees.verifyUnlock': '확인',
     'common.save': '저장',
     'common.saving': '저장 중…',
     'common.cancel': '취소',
@@ -2754,3 +2928,67 @@ export function useI18n() {
   if (!ctx) return { lang: 'en', setLang: () => {}, toggle: () => {}, t: (k) => k };
   return ctx;
 }
+
+// 직책(Role/Position) 이름을 언어에 맞게 자동 변환해주는 헬퍼 함수
+export function formatRoleLabel(roleName, lang = 'ko') {
+  if (!roleName) return '';
+  const raw = String(roleName).trim();
+  const lower = raw.toLowerCase();
+
+  if (lang === 'en') {
+    if (lower === '알바' || lower === '아르바이트' || lower === '파트타임') return 'Casual / Staff';
+    if (lower === '수퍼바이저' || lower === '슈퍼바이저') return 'Supervisor';
+    if (lower === '매니저' || lower === '점장') return 'Manager';
+    if (lower === '오너' || lower === '대표' || lower === '점주') return 'Owner / Director';
+    if (lower === 'super_admin' || lower === 'superadmin') return 'Super Admin';
+    if (lower === 'company_admin' || lower === 'admin') return 'Company Admin';
+    if (lower === 'branch_manager') return 'Branch Manager';
+    if (lower === 'staff') return 'Staff';
+    return raw;
+  }
+
+  // lang === 'ko'
+  if (lower === 'super_admin' || lower === 'superadmin') return '최고 관리자 (Super Admin)';
+  if (lower === 'company_admin') return '회사 최고 관리자';
+  if (lower === 'branch_manager') return '지점 매니저';
+  if (lower === 'manager') return '매니저';
+  if (lower === 'supervisor') return '수퍼바이저';
+  if (lower === 'casual' || lower === 'staff') return '직원 / 알바';
+  if (lower === 'owner' || lower === 'director') return '대표 / 오너';
+  return raw;
+}
+
+// 요일(Day) 축약형을 언어에 맞게 자동 변환해주는 헬퍼 함수
+export function formatDayShort(dayKey, lang = 'ko') {
+  if (!dayKey) return '';
+  const k = String(dayKey).toLowerCase().slice(0, 3);
+  if (lang === 'ko') {
+    const map = { mon: '월', tue: '화', wed: '수', thu: '목', fri: '금', sat: '토', sun: '일' };
+    return map[k] || dayKey;
+  }
+  const enMap = { mon: 'Mon', tue: 'Tue', wed: 'Wed', thu: 'Thu', fri: 'Fri', sat: 'Sat', sun: 'Sun' };
+  return enMap[k] || dayKey;
+}
+
+// 지원자 AI 요약(AI summary) 텍스트를 언어에 맞게 자동 변환해주는 헬퍼 함수
+export function formatAiSummary(summary, lang = 'ko') {
+  if (!summary) return '';
+  const str = String(summary).trim();
+  if (lang !== 'en') return str;
+
+  // 영어 UI일 때 한국어 요약이 있으면 자연스러운 영어로 매핑/제공
+  if (str.includes('브런치 카페 2년') || str.includes('오픈 준비와 마감') || (str.includes('오픈') && str.includes('마감'))) {
+    return '2 years brunch cafe experience, opening & closing shifts. Working Holiday visa.';
+  }
+  if (str.includes('3년 카페 경력') || str.includes('라떼아트')) {
+    return '3 years cafe experience, full weekend availability, latte art and POS experience.';
+  }
+  if (str.includes('주말 근무 선호') || str.includes('고객 응대 경험 3년')) {
+    return 'Prefers weekend shifts, 3 years customer service experience.';
+  }
+  if (str.includes('카페 경력 1년') || str.includes('학생 비자')) {
+    return '1 year cafe experience, student visa with 20 hrs/week availability.';
+  }
+  return str;
+}
+

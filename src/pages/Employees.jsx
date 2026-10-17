@@ -10,7 +10,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useToast } from '@/components/ui/use-toast';
-import { useI18n } from '@/lib/i18n';
+import { useI18n, formatRoleLabel } from '@/lib/i18n';
 import { useWorkspace } from '@/lib/WorkspaceContext';
 import { usePermissions } from '@/lib/permissions';
 import { money, visaLabel } from '@/lib/bh';
@@ -270,9 +270,9 @@ export default function Employees() {
                       </TableCell>
                       <TableCell className="font-mono text-xs">{row.employee_number || '—'}</TableCell>
                       <TableCell>
-                        <span>{row.position || '—'}</span>
+                        <span>{formatRoleLabel(row.position, lang) || '—'}</span>
                         {row.secondary_position ? (
-                          <span className="ml-1 text-xs text-muted-foreground">+ {row.secondary_position}</span>
+                          <span className="ml-1 text-xs text-muted-foreground">+ {formatRoleLabel(row.secondary_position, lang)}</span>
                         ) : null}
                       </TableCell>
                       
@@ -323,7 +323,7 @@ export default function Employees() {
                               <Button
                                 size="sm"
                                 variant="ghost"
-                                title="온보딩 링크 복사 (카카오톡/문자용)"
+                                title={lang === 'en' ? 'Copy onboarding link' : '온보딩 링크 복사 (카카오톡/문자용)'}
                                 disabled={copyingId === row.id}
                                 onClick={() => copyRowOnboardingLink(row)}>
                                 {copiedId === row.id ? (
@@ -335,7 +335,7 @@ export default function Employees() {
                               <Button
                                 size="sm"
                                 variant="ghost"
-                                title="온보딩 안내 이메일 지금 발송"
+                                title={lang === 'en' ? 'Send onboarding email now' : '온보딩 안내 이메일 지금 발송'}
                                 disabled={sendingId === row.id}
                                 onClick={() => sendRowOnboardingEmail(row)}>
                                 <Send className={`h-3.5 w-3.5 ${sendingId === row.id ? 'animate-pulse text-amber-500' : 'text-blue-600'}`} />

@@ -19,6 +19,29 @@ const PERSONAL_FIELDS = [
   { key: 'bank', label: '은행 계좌', label_en: 'Bank account' }
 ];
 
+// 기본 서류 라벨을 언어(lang)에 맞게 반환하는 헬퍼 함수
+function getDisplayDocLabel(type, lang) {
+  if (!type) return '';
+  if (lang === 'en') {
+    if (type.label_en) return type.label_en;
+    if (type.key === 'id') return 'Photo ID (passport or licence)';
+    if (type.key === 'right_to_work') return 'Right to work evidence';
+    if (type.key === 'personal') return 'Address, date of birth & emergency contact';
+    if (type.key === 'tfn') return 'TFN declaration form (NAT 3092)';
+    if (type.key === 'bank') return 'Bank account details';
+    if (type.key === 'contract') return 'Signed employment contract';
+    return type.label || '';
+  }
+  if (type.label) return type.label;
+  if (type.key === 'id') return '신분증 (ID)';
+  if (type.key === 'right_to_work') return 'Right to Work 증빙';
+  if (type.key === 'personal') return '주소·생년월일·비상연락처';
+  if (type.key === 'tfn') return 'TFN Declaration (ATO NAT 3092)';
+  if (type.key === 'bank') return '은행 계좌 정보';
+  if (type.key === 'contract') return '서명된 Employment Contract';
+  return type.label_en || '';
+}
+
 /**
  * OnboardingSetupCard 컴포넌트
  * 회사 설정 > 온보딩 탭의 서류 설정 및 개인정보 수집/암호화 설정 카드입니다.
@@ -104,11 +127,18 @@ export default function OnboardingSetupCard({
               >
                 {/* 서류 이름 입력 필드 */}
                 <Input
-                  value={type.label}
+                  value={getDisplayDocLabel(type, lang)}
                   disabled={!canEdit}
                   placeholder={t('ob.docTypeLabel') || '서류 이름'}
                   className="min-w-[12rem] flex-1 text-sm"
-                  onChange={(event) => setType(index, { label: event.target.value })}
+                  onChange={(event) => {
+                    const val = event.target.value;
+                    if (lang === 'en') {
+                      setType(index, { label_en: val, label: type.label || val });
+                    } else {
+                      setType(index, { label: val });
+                    }
+                  }}
                 />
 
                 {/* 정보 입력 확인 배지 */}
@@ -121,10 +151,10 @@ export default function OnboardingSetupCard({
                 {/* 암호화 보안 토글 스위치 (로그인 비번/생체인증 필요) */}
                 <div
                   className="flex items-center gap-2 rounded-lg border px-2.5 py-1 text-xs font-medium text-muted-foreground hover:text-foreground"
-                  title="켜면 직원이 내 공간에서 서류를 열람할 때 로그인 비밀번호 또는 얼굴인식(생체인증)을 통과해야 합니다."
+                  title={lang === 'en' ? 'When enabled, staff must authenticate via password or biometrics to view this document.' : '켜면 직원이 내 공간에서 서류를 열람할 때 로그인 비밀번호 또는 얼굴인식(생체인증)을 통과해야 합니다.'}
                 >
                   <Lock className={cn('h-3.5 w-3.5', type.secure ? 'text-amber-500' : 'text-muted-foreground')} />
-                  <span>암호화 보안</span>
+                  <span>{t('ob.encryptionBadge') || '암호화 보안'}</span>
                   <Switch
                     checked={Boolean(type.secure)}
                     disabled={!canEdit}
@@ -146,10 +176,12 @@ export default function OnboardingSetupCard({
                         : 'text-slate-700 hover:text-primary'
                     )}
                     onClick={() => setSigDialogOpen(true)}
-                    title="호주 국세청(ATO) 세무 서식 Section B에 자동 인쇄될 고용주 서명을 등록합니다."
+                    title={lang === 'en' ? 'Register employer signature to be automatically printed on Section B of ATO tax forms.' : '호주 국세청(ATO) 세무 서식 Section B에 자동 인쇄될 고용주 서명을 등록합니다.'}
                   >
                     <PenTool className="h-3.5 w-3.5" />
-                    {employerSignature ? '서명 등록됨 (수정)' : '사인 넣기'}
+                    {employerSignature
+                      ? (t('ob.signatureSavedEdit') || '서명 등록됨 (수정)')
+                      : (t('ob.addSignature') || '사인 넣기')}
                   </Button>
                 )}
 
@@ -213,7 +245,7 @@ export default function OnboardingSetupCard({
                       {lang === 'en' ? f.label_en : f.label}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      {isSecure ? '🔒 비밀번호/생체인증 보호됨' : '일반 열람'}
+                      {isSecure ? (t('ob.passwordBioProtected') || '🔒 비밀번호/생체인증 보호됨') : (t('ob.standardAccess') || '일반 열람')}
                     </p>
                   </div>
 
@@ -221,10 +253,10 @@ export default function OnboardingSetupCard({
                     {/* 암호화 보안 스위치 */}
                     <div
                       className="flex items-center gap-1.5 text-xs text-muted-foreground"
-                      title="켜면 직원의 내 공간에서 해당 정보가 블러 처리되며, 비밀번호/얼굴인식 후 확인할 수 있습니다."
+                      title={lang === 'en' ? 'When enabled, this field is masked in staff My Space and requires authentication to view.' : '켜면 직원의 내 공간에서 해당 정보가 블러 처리되며, 비밀번호/얼굴인식 후 확인할 수 있습니다.'}
                     >
                       <Lock className={cn('h-3.5 w-3.5', isSecure ? 'text-amber-500' : 'text-muted-foreground')} />
-                      <span className="hidden sm:inline">암호화</span>
+                      <span className="hidden sm:inline">{t('ob.encrypt') || '암호화'}</span>
                       <Switch
                         checked={isSecure}
                         disabled={!canEdit || !isCollected}
@@ -234,7 +266,7 @@ export default function OnboardingSetupCard({
 
                     {/* 수집 활성화 스위치 */}
                     <div className="flex items-center gap-1.5 border-l pl-3 text-xs font-medium">
-                      <span>수집</span>
+                      <span>{t('ob.collect') || '수집'}</span>
                       <Switch
                         checked={isCollected}
                         disabled={!canEdit}
