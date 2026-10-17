@@ -5,7 +5,7 @@ export const KWORKMATE_ISSUER = {
   name: 'KWorkMate',
   abn: '96 804 937 141',
   rawAbn: '96804937141',
-  email: 'billing@kworkmate.com',
+  email: 'kworkmatesupport@gmail.com',
   bsb: '062-006',
   accountNumber: '1128 9380',
   accountName: 'KWorkMate',
@@ -70,7 +70,14 @@ export function buildTaxInvoicePdf({
     year: 'numeric'
   });
 
-  const dueD = dueDate ? new Date(dueDate) : new Date(d.getTime() + 14 * 24 * 60 * 60 * 1000);
+  // Due Date: 발행일 기준 1개월 (한 달)
+  const dueD = dueDate
+    ? new Date(dueDate)
+    : (() => {
+        const nd = new Date(d);
+        nd.setMonth(nd.getMonth() + 1);
+        return nd;
+      })();
   const dueDateFormatted = dueD.toLocaleDateString('en-AU', {
     day: '2-digit',
     month: 'short',
@@ -86,6 +93,42 @@ export function buildTaxInvoicePdf({
   const total = Math.round((subtotal + gst) * 100) / 100;
 
   const invNum = invoiceNumber || generateInvoiceNumber(company?.id, issueDate);
+
+  // 품목 Breakdown 구성 (99 + 20불 분리 표시)
+  const hasXeroAddon =
+    Boolean(company?.xero_addon_enabled) ||
+    subtotal === 119 ||
+    String(notes || '').toLowerCase().includes('xero') ||
+    subtotal > planInfo.monthlyExGst;
+
+  const lineItems = [];
+  if (hasXeroAddon && subtotal >= planInfo.monthlyExGst + XERO_ADDON_PRICE) {
+    lineItems.push({
+      title: `KWorkMate Subscription - ${planInfo.name} Plan`,
+      desc: `Billing period: ${billingPeriod} · Workforce management, automated roster & timesheet`,
+      amount: planInfo.monthlyExGst
+    });
+    lineItems.push({
+      title: 'Xero Payroll Integration Add-on',
+      desc: 'Direct timesheet synchronization & automated push to Xero Payroll',
+      amount: XERO_ADDON_PRICE
+    });
+    // 추가 금액이 더 남아있는 경우 (커스텀 추가분)
+    const remainder = subtotal - (planInfo.monthlyExGst + XERO_ADDON_PRICE);
+    if (remainder > 0) {
+      lineItems.push({
+        title: 'Additional Service / Adjustments',
+        desc: notes || 'Custom adjustment',
+        amount: remainder
+      });
+    }
+  } else {
+    lineItems.push({
+      title: `KWorkMate Subscription - ${planInfo.name} Plan`,
+      desc: `Billing period: ${billingPeriod} · Workforce management, automated roster & timesheet`,
+      amount: subtotal
+    });
+  }
 
   // 디자인 팔레트 (신뢰감 있는 인디고 & 다크 슬레이트)
   const primaryColor = [67, 56, 202]; // #4338ca
@@ -191,29 +234,35 @@ export function buildTaxInvoicePdf({
   doc.text('Rate (AUD)', 145, tableY + 5.5);
   doc.text('Amount (AUD)', 170, tableY + 5.5);
 
-  // 4. 품목 행
-  const rowY = tableY + 16;
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(10);
-  doc.text(`KWorkMate Subscription - ${planInfo.name} Plan`, 20, rowY);
+  // 4. 품목 행 렌더링 (Breakdown 지원)
+  let currentY = tableY + 15;
+  lineItems.forEach((item, idx) => {
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9.5);
+    doc.setTextColor(...darkTextColor);
+    doc.text(item.title, 20, currentY);
 
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8.5);
-  doc.setTextColor(...mutedTextColor);
-  doc.text(`Billing period: ${billingPeriod} · Workforce management, automated roster & timesheet`, 20, rowY + 5);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.setTextColor(...mutedTextColor);
+    doc.text(item.desc, 20, currentY + 4.5);
 
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(9.5);
-  doc.setTextColor(...darkTextColor);
-  doc.text('1', 128, rowY);
-  doc.text(`$${subtotal.toFixed(2)}`, 147, rowY);
-  doc.text(`$${subtotal.toFixed(2)}`, 172, rowY);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9.5);
+    doc.setTextColor(...darkTextColor);
+    doc.text('1', 128, currentY);
+    doc.text(`$${item.amount.toFixed(2)}`, 147, currentY);
+    doc.text(`$${item.amount.toFixed(2)}`, 172, currentY);
 
-  doc.setDrawColor(...borderColor);
-  doc.line(15, rowY + 11, 195, rowY + 11);
+    doc.setDrawColor(...borderColor);
+    doc.setLineWidth(0.3);
+    doc.line(15, currentY + 9, 195, currentY + 9);
+
+    currentY += 14;
+  });
 
   // 5. 합계 계산 영역
-  const summaryY = rowY + 18;
+  const summaryY = currentY + 6;
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(9.5);
@@ -242,7 +291,7 @@ export function buildTaxInvoicePdf({
   doc.text(`$${total.toFixed(2)} AUD`, 164, summaryY + 18);
 
   // 6. 결제 계좌(Bank Details) 정보 카드
-  const bankY = summaryY + 34;
+  const bankY = summaryY + 32;
   doc.setFillColor(...lightBgColor);
   doc.roundedRect(15, bankY, 180, 36, 2, 2, 'F');
   doc.setDrawColor(...borderColor);
@@ -292,7 +341,7 @@ export function buildTaxInvoicePdf({
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8);
   doc.setTextColor(...mutedTextColor);
-  doc.text('Questions? Contact us at billing@kworkmate.com or visit https://kworkmate.com', 105, footerY + 5, { align: 'center' });
+  doc.text('Questions? Contact us at kworkmatesupport@gmail.com or visit https://kworkmate.com', 105, footerY + 5, { align: 'center' });
   doc.text('KWorkMate Pty Ltd · ABN 96 804 937 141 · Australia', 105, footerY + 9, { align: 'center' });
 
   return doc;

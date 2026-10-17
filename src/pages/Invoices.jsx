@@ -619,20 +619,44 @@ export default function Invoices() {
                           </div>
                         </td>
 
-                        {/* 5. 최근 인보이스 & 수금 상태 */}
+                        {/* 5. 최근 인보이스 & 수금 상태 (원클릭 입금 확인 버튼 지원) */}
                         <td className="py-3 px-4">
                           {latestInv ? (
                             <div>
-                              <div className="font-medium text-foreground flex items-center gap-1.5">
-                                <span>{latestInv.invoice_number}</span>
+                              <div className="font-medium text-foreground flex items-center gap-1.5 flex-wrap">
+                                <span className="font-mono text-xs">{latestInv.invoice_number}</span>
                                 {latestInv.status === 'paid' ? (
-                                  <Badge variant="outline" className="h-5 px-1.5 bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-300">
-                                    <Check className="h-3 w-3 mr-0.5" /> {t('invoice.paidBadge')}
-                                  </Badge>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleTogglePaymentStatus(latestInv)}
+                                    disabled={updatingInvoiceId === latestInv.id}
+                                    title="클릭 시 '미납(Unpaid)' 상태로 전환됩니다"
+                                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-300 hover:bg-emerald-200 transition-colors dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800"
+                                  >
+                                    {updatingInvoiceId === latestInv.id ? (
+                                      <Loader2 className="h-3 w-3 animate-spin" />
+                                    ) : (
+                                      <Check className="h-3 w-3 text-emerald-700" />
+                                    )}
+                                    <span>{t('invoice.paidBadge')}</span>
+                                  </button>
                                 ) : (
-                                  <Badge variant="outline" className="h-5 px-1.5 bg-amber-50 text-amber-700 border-amber-300 dark:bg-amber-950/40 dark:text-amber-300">
-                                    <Clock className="h-3 w-3 mr-0.5" /> {t('invoice.unpaidBadge')}
-                                  </Badge>
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => handleTogglePaymentStatus(latestInv)}
+                                    disabled={updatingInvoiceId === latestInv.id}
+                                    className="h-6 px-2 text-[11px] font-bold text-emerald-700 bg-emerald-50 border-emerald-300 hover:bg-emerald-100 hover:text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300 gap-1 shadow-2xs"
+                                    title="계좌 입금 확인 후 클릭하면 즉시 '입금 완료(Paid)'로 처리됩니다"
+                                  >
+                                    {updatingInvoiceId === latestInv.id ? (
+                                      <Loader2 className="h-3 w-3 animate-spin" />
+                                    ) : (
+                                      <CheckCircle2 className="h-3 w-3 text-emerald-600" />
+                                    )}
+                                    <span>{t('invoice.markPaid')}</span>
+                                  </Button>
                                 )}
                               </div>
                               <div className="text-[10px] text-muted-foreground mt-0.5">
@@ -652,6 +676,25 @@ export default function Invoices() {
                         {/* 6. 액션 버튼 */}
                         <td className="py-3 px-4 text-right">
                           <div className="flex items-center justify-end gap-1.5">
+                            {/* 최근 인보이스가 미납 상태일 때 원클릭 입금 확인 버튼 노출 */}
+                            {latestInv && latestInv.status !== 'paid' && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-8 text-xs gap-1 border-emerald-400 bg-emerald-50/80 text-emerald-800 hover:bg-emerald-100 font-bold dark:bg-emerald-950/50 dark:text-emerald-200"
+                                onClick={() => handleTogglePaymentStatus(latestInv)}
+                                disabled={updatingInvoiceId === latestInv.id}
+                                title="개인계좌 입금 확인 완료 시 클릭"
+                              >
+                                {updatingInvoiceId === latestInv.id ? (
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                ) : (
+                                  <Check className="h-3.5 w-3.5 text-emerald-600" />
+                                )}
+                                <span>{t('invoice.markPaid')}</span>
+                              </Button>
+                            )}
+
                             {/* 지난 인보이스 내역 모달 열기 버튼 */}
                             <Button
                               variant="outline"

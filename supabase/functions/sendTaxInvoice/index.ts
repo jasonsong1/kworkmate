@@ -110,6 +110,29 @@ function buildInvoiceEmailHtml({
                   </tr>
                 </thead>
                 <tbody>
+                  ${subtotal >= 119 ? `
+                  <tr style="border-bottom:1px solid #f1f5f9;">
+                    <td style="padding:12px 0;color:#1e293b;">
+                      <strong>KWorkMate Subscription - ${planName} Plan</strong>
+                      <div style="font-size:12px;color:#64748b;margin-top:2px;">Monthly workforce management service</div>
+                    </td>
+                    <td style="padding:12px 0;color:#1e293b;text-align:right;font-weight:600;">$99.00</td>
+                  </tr>
+                  <tr style="border-bottom:1px solid #f1f5f9;">
+                    <td style="padding:12px 0;color:#1e293b;">
+                      <strong>Xero Payroll Integration Add-on</strong>
+                      <div style="font-size:12px;color:#64748b;margin-top:2px;">Direct timesheet push & automatic sync to Xero Payroll</div>
+                    </td>
+                    <td style="padding:12px 0;color:#1e293b;text-align:right;font-weight:600;">$20.00</td>
+                  </tr>
+                  ${subtotal > 119 ? `
+                  <tr style="border-bottom:1px solid #f1f5f9;">
+                    <td style="padding:12px 0;color:#1e293b;">
+                      <strong>Custom Service / Adjustments</strong>
+                    </td>
+                    <td style="padding:12px 0;color:#1e293b;text-align:right;font-weight:600;">$${(subtotal - 119).toFixed(2)}</td>
+                  </tr>` : ''}
+                  ` : `
                   <tr style="border-bottom:1px solid #f1f5f9;">
                     <td style="padding:14px 0;color:#1e293b;">
                       <strong>KWorkMate Subscription - ${planName} Plan</strong>
@@ -117,6 +140,7 @@ function buildInvoiceEmailHtml({
                     </td>
                     <td style="padding:14px 0;color:#1e293b;text-align:right;font-weight:600;">$${subtotal.toFixed(2)}</td>
                   </tr>
+                  `}
                   <tr>
                     <td style="padding:8px 0;color:#64748b;">Subtotal (excl. GST)</td>
                     <td style="padding:8px 0;color:#1e293b;text-align:right;">$${subtotal.toFixed(2)}</td>
@@ -183,7 +207,7 @@ function buildInvoiceEmailHtml({
             <td style="padding:24px 36px;background-color:#f8fafc;border-top:1px solid #e2e8f0;text-align:center;">
               <div style="font-size:12px;font-weight:600;color:#475569;">KWorkMate Pty Ltd</div>
               <div style="font-size:11px;color:#94a3b8;margin-top:3px;">
-                ABN: 96 804 937 141 · billing@kworkmate.com · Australia
+                ABN: 96 804 937 141 · kworkmatesupport@gmail.com · Australia
               </div>
             </td>
           </tr>
@@ -245,7 +269,8 @@ async function handler(req: Request) {
 
     const todayDate = new Date();
     const issueDateStr = todayDate.toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: 'numeric' });
-    const dueDateObj = new Date(todayDate.getTime() + 14 * 24 * 60 * 60 * 1000);
+    const dueDateObj = new Date(todayDate);
+    dueDateObj.setMonth(dueDateObj.getMonth() + 1);
     const dueDateStr = dueDateObj.toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: 'numeric' });
 
     const invNum = invoice_number || `INV-${todayDate.getFullYear()}${String(todayDate.getMonth() + 1).padStart(2, '0')}-${(company.id || 'KWM').slice(-4).toUpperCase()}`;

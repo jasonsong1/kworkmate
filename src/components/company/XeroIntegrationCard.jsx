@@ -197,17 +197,12 @@ export default function XeroIntegrationCard({ company, onUpdated }) {
                     <CheckCircle2 className="h-3 w-3" />
                     {t('xero.connected')}
                   </Badge>
-                ) : isAddonEnabled ? (
-                  <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950/40 dark:text-indigo-300 text-[10px] font-semibold gap-1">
-                    <Sparkles className="h-3 w-3" />
-                    {t('xero.addonActive')}
-                  </Badge>
-                ) : (
+                ) : !isAddonEnabled ? (
                   <Badge variant="outline" className="text-muted-foreground text-[10px] gap-1">
                     <Lock className="h-2.5 w-2.5" />
                     {t('xero.paidAddon')}
                   </Badge>
-                )}
+                ) : null}
               </CardTitle>
               <CardDescription className="text-xs mt-0.5">
                 {t('xero.cardDesc')}
