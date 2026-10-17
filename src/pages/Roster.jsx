@@ -76,7 +76,7 @@ export default function Roster() {
 
   // 승인된 휴가 정보 상세 조회 (종일 휴가 vs 반차/시간 단위 휴가 구분)
   const getLeaveFor = (email, date) => {
-    const row = approvedLeave.find(
+    const row = (approvedLeave || []).find(
       (r) =>
         r.employee_email === email &&
         date >= String(r.start_date || '').slice(0, 10) &&
