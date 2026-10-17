@@ -1,15 +1,9 @@
 import React, { useState } from 'react';
 import {
   CheckCircle2,
-  ExternalLink,
   Link2,
   Loader2,
-  RefreshCw,
   Unlink,
-  AlertCircle,
-  Lock,
-  Unlock,
-  ShieldCheck,
   Sparkles
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -25,7 +19,6 @@ export default function XeroIntegrationCard({ company, onUpdated }) {
   const { t, lang } = useI18n();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
-  const [addonToggling, setAddonToggling] = useState(false);
 
   const dateLocale = lang === 'ko' ? 'ko-KR' : 'en-AU';
 
@@ -44,34 +37,6 @@ export default function XeroIntegrationCard({ company, onUpdated }) {
   const lastSyncAt = company?.xero_last_synced_at
     ? new Date(company.xero_last_synced_at).toLocaleString(dateLocale)
     : null;
-
-  // 슈퍼어드민(나) 전용: Xero 애드온 활성화/비활성화 토글 핸들러
-  const handleToggleAddon = async () => {
-    if (!company) return;
-    setAddonToggling(true);
-    const nextState = !isAddonEnabled;
-
-    try {
-      await base44.entities.Company.update(company.id, {
-        xero_addon_enabled: nextState,
-        xero_addon_enabled_at: nextState ? new Date().toISOString() : null
-      });
-
-      toast({
-        title: nextState ? t('xero.addonActive') : t('xero.revokeAccess'),
-        description: `${company.name} (Xero: ${nextState ? 'ON' : 'OFF'})`
-      });
-
-      onUpdated && onUpdated();
-    } catch (err) {
-      toast({
-        title: (err && err.message) || 'Error updating add-on',
-        variant: 'destructive'
-      });
-    } finally {
-      setAddonToggling(false);
-    }
-  };
 
   // [Connect to Xero] 클릭 시 Xero 인증 페이지로 이동
   const handleConnect = async () => {

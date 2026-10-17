@@ -63,7 +63,7 @@ export default function ApplicantCard({ applicant, actions, onOpen, onViewResume
         <div className="min-w-0 space-y-3">
           {(applicant.ai_summary || applicant.ai_notes) && (
             <p className="rounded-lg bg-muted/50 px-3 py-2 text-sm text-foreground/90">
-              {formatAiSummary(applicant.ai_summary, lang)}
+              {formatAiSummary(applicant.ai_summary || applicant.ai_notes, lang)}
             </p>
           )}
 

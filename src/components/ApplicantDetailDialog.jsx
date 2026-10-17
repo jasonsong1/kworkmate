@@ -85,13 +85,15 @@ export default function ApplicantDetailDialog({ applicant, open, onOpenChange, o
         </DialogHeader>
 
         <div className="space-y-4">
-          {applicant.ai_summary && (
+          {(applicant.ai_summary || applicant.ai_notes) && (
             <div className="rounded-lg bg-muted/50 p-4">
               <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 {lang === 'en' ? 'Summary' : 'AI 이력서 요약'}
               </p>
-              <p className="text-sm">{formatAiSummary(applicant.ai_summary, lang)}</p>
-              {applicant.ai_notes && <p className="mt-2 text-xs text-muted-foreground">{applicant.ai_notes}</p>}
+              <p className="text-sm">{formatAiSummary(applicant.ai_summary || applicant.ai_notes, lang)}</p>
+              {applicant.ai_summary && applicant.ai_notes && (
+                <p className="mt-2 text-xs text-muted-foreground">{applicant.ai_notes}</p>
+              )}
             </div>
           )}
 

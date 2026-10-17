@@ -1,29 +1,18 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import {
-  FileText,
   Send,
   Download,
   Building2,
-  DollarSign,
-  Calendar,
-  Mail,
   CheckCircle2,
-  AlertCircle,
   Loader2,
   Search,
-  ExternalLink,
   ShieldCheck,
-  Edit2,
   Save,
   Clock,
   History,
   Check,
   RotateCcw,
-  Receipt,
-  Plus,
-  Sparkles,
-  Lock,
-  Unlock
+  Receipt
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -64,7 +53,6 @@ export default function Invoices() {
   // 회사별 인보이스 이메일 편집 상태 { [companyId]: string }
   const [editingEmails, setEditingEmails] = useState({});
   const [savingEmailId, setSavingEmailId] = useState('');
-  const [togglingXeroId, setTogglingXeroId] = useState('');
 
   // 1. 이번 달 인보이스 발송 모달 상태
   const [sendModalOpen, setSendModalOpen] = useState(false);
@@ -124,19 +112,6 @@ export default function Invoices() {
       loadData();
     }
   }, [isPlatformAdmin]);
-
-  // 슈퍼어드민 권한 체크
-  if (!authLoading && !isPlatformAdmin) {
-    return (
-      <div className="flex h-[70vh] flex-col items-center justify-center text-center">
-        <ShieldCheck className="h-12 w-12 text-muted-foreground/60 mb-3" />
-        <h2 className="text-xl font-semibold">{t('invoice.superAdminOnly')}</h2>
-        <p className="text-sm text-muted-foreground mt-1 max-w-sm">
-          {t('invoice.superAdminOnlyDesc')}
-        </p>
-      </div>
-    );
-  }
 
   // 검색 필터링된 활성 회사 목록
   const filteredCompanies = useMemo(() => {
@@ -205,6 +180,19 @@ export default function Invoices() {
     };
   }, [companies, invoices]);
 
+  // 슈퍼어드민 권한 체크 (모든 React Hook 호출 이후에 조건부 렌더링을 수행하여 Hook 규칙 준수)
+  if (!authLoading && !isPlatformAdmin) {
+    return (
+      <div className="flex h-[70vh] flex-col items-center justify-center text-center">
+        <ShieldCheck className="h-12 w-12 text-muted-foreground/60 mb-3" />
+        <h2 className="text-xl font-semibold">{t('invoice.superAdminOnly')}</h2>
+        <p className="text-sm text-muted-foreground mt-1 max-w-sm">
+          {t('invoice.superAdminOnlyDesc')}
+        </p>
+      </div>
+    );
+  }
+
   // 인보이스 전용 이메일 단일 저장 핸들러
   const handleSaveEmail = async (companyId) => {
     const email = (editingEmails[companyId] || '').trim();
@@ -230,34 +218,6 @@ export default function Invoices() {
       });
     } finally {
       setSavingEmailId('');
-    }
-  };
-
-  // 슈퍼어드민 전용: Xero 애드온 토글 (+$20 AUD)
-  const handleToggleXeroAddon = async (company) => {
-    setTogglingXeroId(company.id);
-    const nextState = !company.xero_addon_enabled;
-    try {
-      await base44.entities.Company.update(company.id, {
-        xero_addon_enabled: nextState,
-        xero_addon_enabled_at: nextState ? new Date().toISOString() : null
-      });
-
-      toast({
-        title: nextState ? t('xero.addonActive') : t('xero.revokeAccess'),
-        description: `${company.name} (Xero: ${nextState ? 'ON' : 'OFF'})`
-      });
-
-      setCompanies((prev) =>
-        prev.map((c) => (c.id === company.id ? { ...c, xero_addon_enabled: nextState } : c))
-      );
-    } catch (err) {
-      toast({
-        title: (err && err.message) || 'Error updating Xero Add-on',
-        variant: 'destructive'
-      });
-    } finally {
-      setTogglingXeroId('');
     }
   };
 
@@ -587,40 +547,17 @@ export default function Invoices() {
                           </div>
                         </td>
 
-                        {/* 2. 플랜 & Xero 애드온 제어 버튼 */}
+                        {/* 2. 플랜 & Xero 연동 표시 (버튼 대신 글자로만 표시) */}
                         <td className="py-3 px-4">
                           <div className="flex flex-wrap items-center gap-1.5">
                             <Badge variant="outline" className="font-semibold capitalize">
                               {planInfo.name}
                             </Badge>
-
-                            {/* Xero 애드온 토글 버튼 */}
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleToggleXeroAddon(company)}
-                              disabled={togglingXeroId === company.id}
-                              className={`h-6 px-2 text-[11px] gap-1 font-medium transition-all ${
-                                hasXeroAddon
-                                  ? 'bg-blue-50 text-blue-700 border-blue-300 dark:bg-blue-950/40 dark:text-blue-300 hover:bg-blue-100'
-                                  : 'text-muted-foreground hover:text-foreground border-dashed'
-                              }`}
-                              title={hasXeroAddon ? t('xero.revokeAccess') : t('xero.grantAccess')}
-                            >
-                              {togglingXeroId === company.id ? (
-                                <Loader2 className="h-2.5 w-2.5 animate-spin" />
-                              ) : hasXeroAddon ? (
-                                <>
-                                  <Sparkles className="h-2.5 w-2.5 text-blue-600" />
-                                  <span>{t('invoice.xeroAddonOn')}</span>
-                                </>
-                              ) : (
-                                <>
-                                  <Plus className="h-2.5 w-2.5" />
-                                  <span>{t('invoice.xeroAddonAdd')}</span>
-                                </>
-                              )}
-                            </Button>
+                            {hasXeroAddon && (
+                              <span className="text-xs text-blue-600 dark:text-blue-400 font-medium">
+                                {lang === 'en' ? 'Xero Integration' : 'Xero 연동'}
+                              </span>
+                            )}
                           </div>
                         </td>
 
@@ -630,7 +567,7 @@ export default function Invoices() {
                             ${total.toFixed(2)} AUD
                           </div>
                           <div className="text-[10px] text-muted-foreground">
-                            ${subtotal} {hasXeroAddon && '(+Xero $20)'} + GST ${gst}
+                            ${subtotal} + GST ${gst}
                           </div>
                         </td>
 
@@ -661,13 +598,9 @@ export default function Invoices() {
                               )}
                             </Button>
                           </div>
-                          <div className="text-[10px] text-muted-foreground mt-0.5 flex items-center gap-1">
-                            <span>{t('common.email')}:</span>
-                            <span className="truncate max-w-[180px]">{company.contact_email || '—'}</span>
-                          </div>
                         </td>
 
-                        {/* 5. 최근 인보이스 & 수금 상태 (원클릭 입금 확인 버튼 지원) */}
+                        {/* 5. 최근 인보이스 (우측 관리 액션 열에 입금확인 버튼이 있으므로 여기서는 인보이스 정보만 단정하게 표시) */}
                         <td className="py-3 px-4">
                           {(() => {
                             const targetInv = latestInv || (company.last_invoice_number ? {
@@ -688,37 +621,11 @@ export default function Invoices() {
                               <div>
                                 <div className="font-medium text-foreground flex items-center gap-1.5 flex-wrap">
                                   <span className="font-mono text-xs font-bold">{targetInv.invoice_number}</span>
-                                  {isPaid ? (
-                                    <button
-                                      type="button"
-                                      onClick={() => handleTogglePaymentStatus(latestInv, company)}
-                                      disabled={updatingInvoiceId === (latestInv?.id || company.id)}
-                                      title={lang === 'ko' ? "클릭 시 '미납(Unpaid)' 상태로 전환됩니다" : "Click to mark as Unpaid"}
-                                      className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 hover:bg-emerald-200 transition-colors dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800 shadow-2xs"
-                                    >
-                                      {updatingInvoiceId === (latestInv?.id || company.id) ? (
-                                        <Loader2 className="h-3 w-3 animate-spin" />
-                                      ) : (
-                                        <Check className="h-3 w-3 text-emerald-700" />
-                                      )}
-                                      <span>{t('invoice.paidBadge') || '입금완료'}</span>
-                                    </button>
-                                  ) : (
-                                    <Button
-                                      type="button"
-                                      size="sm"
-                                      onClick={() => handleTogglePaymentStatus(latestInv, company)}
-                                      disabled={updatingInvoiceId === (latestInv?.id || company.id)}
-                                      className="h-6 px-2.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-500 gap-1 shadow-sm"
-                                      title={lang === 'ko' ? "계좌 입금 확인 후 클릭하면 즉시 '입금 완료(Paid)'로 처리됩니다" : "Click to mark invoice as Paid after verifying bank transfer"}
-                                    >
-                                      {updatingInvoiceId === (latestInv?.id || company.id) ? (
-                                        <Loader2 className="h-3 w-3 animate-spin" />
-                                      ) : (
-                                        <CheckCircle2 className="h-3 w-3" />
-                                      )}
-                                      <span>{t('invoice.markPaid') || '입금 확인'}</span>
-                                    </Button>
+                                  {isPaid && (
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">
+                                      <Check className="h-3 w-3 text-emerald-700" />
+                                      {t('invoice.paidBadge') || '입금완료'}
+                                    </span>
                                   )}
                                 </div>
                                 <div className="text-[10px] text-muted-foreground mt-1 flex items-center gap-1.5">
