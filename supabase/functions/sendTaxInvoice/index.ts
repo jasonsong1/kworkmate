@@ -198,11 +198,19 @@ function buildInvoiceEmailHtml({
 async function handler(req: Request) {
   try {
     const base44 = createBase44Like();
-    const me = await resolveCaller(base44, req);
+    
+    // 호출자 인증: resolveCaller 또는 base44.auth.me()를 통한 슈퍼어드민 검증
+    let me: any = await resolveCaller(base44, req).catch(() => null);
+    if (!me) {
+      me = await base44.auth.me().catch(() => null);
+    }
     if (!me) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
-    // 최고 관리자(isPlatformAdmin 또는 app_role === 'platform_admin') 권한 검증
-    const isPlatformAdmin = Boolean(me.app_role === 'platform_admin' || me.isPlatformAdmin);
+    const isPlatformAdmin = Boolean(
+      me.app_role === 'platform_admin' ||
+      me.role === 'admin' ||
+      me.isPlatformAdmin
+    );
     if (!isPlatformAdmin) {
       return Response.json({ error: 'Forbidden: Super Admin only' }, { status: 403 });
     }
@@ -311,4 +319,5 @@ async function handler(req: Request) {
   }
 }
 
-export default withCors(handler);
+// Supabase Edge Runtime 표준 Deno.serve 서빙
+Deno.serve(withCors(handler, Deno.env.get('ALLOWED_ORIGIN') || undefined));
