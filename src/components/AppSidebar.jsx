@@ -19,7 +19,8 @@ import {
   QrCode,
   Clock,
   Sparkles,
-  ScrollText
+  ScrollText,
+  Receipt
 } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 import { useWorkspace } from '@/lib/WorkspaceContext';
@@ -65,8 +66,11 @@ const MY_SPACE_ITEM = { to: '/my-space', key: 'nav.mySpace', icon: UserCircle2, 
 
 const STAFF_ITEMS = [{ to: '/', key: 'nav.mySpace', icon: UserCircle2, end: true, module: 'dashboard' }];
 
-// Only a super admin (platform admin) ever sees this section.
-const PLATFORM_ITEMS = [{ to: '/platform', key: 'nav.platform', icon: ShieldCheck }];
+// 슈퍼어드민 전용 하단 메뉴 (플랫폼 관리 위에 인보이스 탭 배치)
+const PLATFORM_ITEMS = [
+  { to: '/invoices', key: 'nav.invoices', icon: Receipt },
+  { to: '/platform', key: 'nav.platform', icon: ShieldCheck }
+];
 
 export default function AppSidebar({ onNavigate }) {
   const { t } = useI18n();
