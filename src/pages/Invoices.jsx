@@ -21,7 +21,10 @@ import {
   Check,
   RotateCcw,
   Receipt,
-  Plus
+  Plus,
+  Sparkles,
+  Lock,
+  Unlock
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -44,6 +47,7 @@ import PageHeader from '@/components/PageHeader';
 import {
   KWORKMATE_ISSUER,
   PLAN_PRICING,
+  XERO_ADDON_PRICE,
   generateInvoiceNumber,
   downloadTaxInvoicePdf
 } from '@/lib/taxInvoicePdf';
@@ -60,6 +64,7 @@ export default function Invoices() {
   // 회사별 인보이스 이메일 편집 상태 { [companyId]: string }
   const [editingEmails, setEditingEmails] = useState({});
   const [savingEmailId, setSavingEmailId] = useState('');
+  const [togglingXeroId, setTogglingXeroId] = useState('');
 
   // 1. 이번 달 인보이스 발송 모달 상태
   const [sendModalOpen, setSendModalOpen] = useState(false);
@@ -79,7 +84,7 @@ export default function Invoices() {
   const [updatingInvoiceId, setUpdatingInvoiceId] = useState('');
   const [extendingCompanyId, setExtendingCompanyId] = useState('');
 
-  // 데이터 로드 (회사 목록 및 인보이스 이력)
+  // 데이터 로드 (활성 회사 목록 및 인보이스 이력)
   const loadData = async () => {
     setLoading(true);
     try {
@@ -152,16 +157,20 @@ export default function Invoices() {
     return map;
   }, [invoices]);
 
-  // 상단 통계 수치 계산
+  // 상단 통계 수치 계산 (Xero 애드온 $20 자동 합산)
   const stats = useMemo(() => {
     const totalCount = companies.length;
     let totalMonthlyExGst = 0;
     let sentThisMonthCount = 0;
+    let xeroAddonCount = 0;
     const currentYm = new Date().toISOString().slice(0, 7); // YYYY-MM
 
     companies.forEach((c) => {
       const plan = PLAN_PRICING[c.pricing_package || 'starter'] || PLAN_PRICING.starter;
-      totalMonthlyExGst += plan.monthlyExGst;
+      const xeroAddon = c.xero_addon_enabled ? XERO_ADDON_PRICE : 0;
+      if (c.xero_addon_enabled) xeroAddonCount += 1;
+
+      totalMonthlyExGst += plan.monthlyExGst + xeroAddon;
 
       if (c.last_invoice_sent_at && c.last_invoice_sent_at.startsWith(currentYm)) {
         sentThisMonthCount += 1;
@@ -188,6 +197,7 @@ export default function Invoices() {
       totalMonthlyExGst,
       totalIncGst,
       sentThisMonthCount,
+      xeroAddonCount,
       totalPaidAmount,
       totalUnpaidAmount
     };
@@ -195,7 +205,7 @@ export default function Invoices() {
 
   // 인보이스 전용 이메일 단일 저장 핸들러
   const handleSaveEmail = async (companyId) => {
-    const email = editingEmails[companyId] || '';
+    const email = (editingEmails[companyId] || '').trim();
     if (!email) {
       toast({ title: '이메일 주소를 입력해주세요.', variant: 'destructive' });
       return;
@@ -203,18 +213,57 @@ export default function Invoices() {
     setSavingEmailId(companyId);
     try {
       await base44.entities.Company.update(companyId, { invoice_email: email });
-      toast({ title: '인보이스 전용 이메일이 저장되었습니다.' });
+      toast({
+        title: '인보이스 전용 이메일이 저장되었습니다.',
+        description: `앞으로 이 회사에 발송되는 인보이스는 ${email} 로 전송됩니다.`
+      });
       setCompanies((prev) =>
         prev.map((c) => (c.id === companyId ? { ...c, invoice_email: email } : c))
       );
     } catch (err) {
-      toast({ title: '이메일 저장 실패', variant: 'destructive' });
+      console.error('이메일 저장 실패:', err);
+      toast({
+        title: '이메일 저장 실패',
+        description: (err && err.message) || '데이터베이스 저장 중 오류가 발생했습니다.',
+        variant: 'destructive'
+      });
     } finally {
       setSavingEmailId('');
     }
   };
 
-  // PDF 다운로드 핸들러 (최신 또는 특정 인보이스 기준)
+  // 슈퍼어드민 전용: Xero 애드온 토글 (+$20 AUD)
+  const handleToggleXeroAddon = async (company) => {
+    setTogglingXeroId(company.id);
+    const nextState = !company.xero_addon_enabled;
+    try {
+      await base44.entities.Company.update(company.id, {
+        xero_addon_enabled: nextState,
+        xero_addon_enabled_at: nextState ? new Date().toISOString() : null
+      });
+
+      toast({
+        title: nextState ? 'Xero 애드온 활성화 완료' : 'Xero 애드온 해제 완료',
+        description: nextState
+          ? `${company.name}에 Xero 연동 권한이 승인되었으며, 인보이스에 +$20이 자동 추가됩니다.`
+          : `${company.name}의 Xero 연동 권한이 해제되었습니다.`
+      });
+
+      setCompanies((prev) =>
+        prev.map((c) => (c.id === company.id ? { ...c, xero_addon_enabled: nextState } : c))
+      );
+    } catch (err) {
+      toast({
+        title: '애드온 설정 변경 실패',
+        description: (err && err.message) || '설정 저장 중 오류가 발생했습니다.',
+        variant: 'destructive'
+      });
+    } finally {
+      setTogglingXeroId('');
+    }
+  };
+
+  // PDF 다운로드 핸들러 (Xero 애드온 $20 자동 반영)
   const handleDownloadPdf = (company, invoiceRecord = null) => {
     if (invoiceRecord) {
       downloadTaxInvoicePdf({
@@ -227,18 +276,24 @@ export default function Invoices() {
       toast({ title: `${company.name} 인보이스(${invoiceRecord.invoice_number}) PDF가 다운로드되었습니다.` });
     } else {
       const planKey = company.pricing_package || 'starter';
+      const planInfo = PLAN_PRICING[planKey] || PLAN_PRICING.starter;
+      const xeroAddon = company.xero_addon_enabled ? XERO_ADDON_PRICE : 0;
+      const calculatedSubtotal = planInfo.monthlyExGst + xeroAddon;
+
       const invNum = company.last_invoice_number || generateInvoiceNumber(company.id);
       downloadTaxInvoicePdf({
         company,
         invoiceNumber: invNum,
         issueDate: new Date().toISOString().slice(0, 10),
-        planKey
+        planKey,
+        customAmount: calculatedSubtotal,
+        notes: company.xero_addon_enabled ? 'Includes Xero Payroll Integration Add-on ($20.00 AUD)' : ''
       });
       toast({ title: `${company.name} Tax Invoice PDF가 다운로드되었습니다.` });
     }
   };
 
-  // 인보이스 발송 모달 열기 핸들러
+  // 인보이스 발송 모달 열기 핸들러 (Xero 애드온 자동 합산)
   const handleOpenSendModal = (company) => {
     setSelectedCompany(company);
     const planKey = company.pricing_package || 'starter';
@@ -246,11 +301,17 @@ export default function Invoices() {
     const defaultEmail = company.invoice_email || company.contact_email || '';
     const invNum = generateInvoiceNumber(company.id);
 
+    const xeroAddon = company.xero_addon_enabled ? XERO_ADDON_PRICE : 0;
+    const initialSubtotal = planInfo.monthlyExGst + xeroAddon;
+    const initialNotes = company.xero_addon_enabled
+      ? `KWorkMate ${planInfo.name} Plan ($${planInfo.monthlyExGst}) + Xero Integration Add-on ($${XERO_ADDON_PRICE}.00 AUD)`
+      : '';
+
     setSendForm({
       invoice_email: defaultEmail,
       plan_key: planKey,
-      subtotal: planInfo.monthlyExGst,
-      notes: '',
+      subtotal: initialSubtotal,
+      notes: initialNotes,
       invoice_number: invNum
     });
     setSendModalOpen(true);
@@ -375,7 +436,7 @@ export default function Invoices() {
     <div className="space-y-6">
       <PageHeader
         title="인보이스 관리 (Invoices)"
-        subtitle="고객사별 Tax Invoice 발행, 입금(Paid) 확인 체크 및 액세스 종료일 자동 연장 시스템"
+        subtitle="고객사별 Tax Invoice 발행, Xero 애드온(월 $20) 제어, 입금(Paid) 확인 및 기간 자동 연장"
         actions={
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" onClick={loadData} disabled={loading}>
@@ -393,7 +454,7 @@ export default function Invoices() {
             <CardTitle className="text-2xl font-bold">{stats.totalCount}개 사</CardTitle>
           </CardHeader>
           <CardContent className="text-xs text-muted-foreground">
-            정상 이용 중인 활성 기업만 표시
+            정상 이용 중인 활성 기업 (Xero 애드온 {stats.xeroAddonCount}개 사)
           </CardContent>
         </Card>
 
@@ -405,7 +466,7 @@ export default function Invoices() {
             </CardTitle>
           </CardHeader>
           <CardContent className="text-xs text-muted-foreground">
-            GST 포함 시 ${stats.totalIncGst.toLocaleString()} AUD
+            GST 포함 시 ${stats.totalIncGst.toLocaleString()} AUD (Xero +$20 반영)
           </CardContent>
         </Card>
 
@@ -441,11 +502,11 @@ export default function Invoices() {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
               <CardTitle className="text-lg flex items-center gap-2">
-                <span>활성 고객사 인보이스 목록</span>
+                <span>활성 고객사 인보이스 및 Xero 애드온 관리</span>
                 <Badge variant="secondary" className="text-xs font-normal">Active Only</Badge>
               </CardTitle>
               <CardDescription className="text-xs mt-1">
-                계좌 입금 확인 시 [인보이스 내역]에서 '입금 완료(Paid)'를 체크하고, '한 달 늘리기'로 이용 기간을 연장하세요.
+                고객이 Xero 연동을 요청하면 [Xero Add-on]을 켜주세요. 인보이스에 $20이 자동 추가되며, 고객 화면에서 연동 버튼이 열립니다.
               </CardDescription>
             </div>
             <div className="relative w-full sm:w-64">
@@ -475,8 +536,8 @@ export default function Invoices() {
                 <thead>
                   <tr className="border-t border-b bg-muted/40 text-xs font-semibold text-muted-foreground text-left">
                     <th className="py-3 px-4">고객사 (Active Company)</th>
-                    <th className="py-3 px-4">구독 플랜</th>
-                    <th className="py-3 px-4">월 청구액</th>
+                    <th className="py-3 px-4">구독 플랜 & Xero 애드온</th>
+                    <th className="py-3 px-4">월 청구액 (AUD)</th>
                     <th className="py-3 px-4 min-w-[260px]">인보이스 전용 이메일</th>
                     <th className="py-3 px-4">최근 인보이스</th>
                     <th className="py-3 px-4 text-right">관리 액션</th>
@@ -486,13 +547,17 @@ export default function Invoices() {
                   {filteredCompanies.map((company) => {
                     const planKey = company.pricing_package || 'starter';
                     const planInfo = PLAN_PRICING[planKey] || PLAN_PRICING.starter;
-                    const subtotal = planInfo.monthlyExGst;
+                    const hasXeroAddon = Boolean(company.xero_addon_enabled);
+                    const addonAmount = hasXeroAddon ? XERO_ADDON_PRICE : 0;
+
+                    // 공급가 = 플랜 기본가 + Xero 애드온가
+                    const subtotal = planInfo.monthlyExGst + addonAmount;
                     const gst = Math.round(subtotal * 0.1 * 100) / 100;
                     const total = subtotal + gst;
 
                     const companyInvs = invoicesByCompany[company.id] || [];
                     const invCount = companyInvs.length;
-                    const latestInv = companyInvs[0]; // 가장 최근 인보이스
+                    const latestInv = companyInvs[0];
 
                     const lastSent = company.last_invoice_sent_at
                       ? new Date(company.last_invoice_sent_at).toLocaleDateString('ko-KR', {
@@ -515,11 +580,41 @@ export default function Invoices() {
                           </div>
                         </td>
 
-                        {/* 2. 플랜 */}
+                        {/* 2. 플랜 & Xero 애드온 제어 버튼 */}
                         <td className="py-3 px-4">
-                          <Badge variant="outline" className="font-semibold capitalize">
-                            {planInfo.name}
-                          </Badge>
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <Badge variant="outline" className="font-semibold capitalize">
+                              {planInfo.name}
+                            </Badge>
+
+                            {/* Xero 애드온 토글 버튼 */}
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleToggleXeroAddon(company)}
+                              disabled={togglingXeroId === company.id}
+                              className={`h-6 px-2 text-[11px] gap-1 font-medium transition-all ${
+                                hasXeroAddon
+                                  ? 'bg-blue-50 text-blue-700 border-blue-300 dark:bg-blue-950/40 dark:text-blue-300 hover:bg-blue-100'
+                                  : 'text-muted-foreground hover:text-foreground border-dashed'
+                              }`}
+                              title={hasXeroAddon ? 'Xero 애드온 권한 해제' : 'Xero 연동 권한 열어주기 (+월 $20)'}
+                            >
+                              {togglingXeroId === company.id ? (
+                                <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                              ) : hasXeroAddon ? (
+                                <>
+                                  <Sparkles className="h-2.5 w-2.5 text-blue-600" />
+                                  <span>Xero +$20 (ON)</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Plus className="h-2.5 w-2.5" />
+                                  <span>Xero 추가</span>
+                                </>
+                              )}
+                            </Button>
+                          </div>
                         </td>
 
                         {/* 3. 월 청구액 */}
@@ -528,7 +623,7 @@ export default function Invoices() {
                             ${total.toFixed(2)} AUD
                           </div>
                           <div className="text-[10px] text-muted-foreground">
-                            공급가 ${subtotal} + GST ${gst}
+                            공급가 ${subtotal} {hasXeroAddon && '(Xero $20 포함)'} + GST ${gst}
                           </div>
                         </td>
 
@@ -547,13 +642,13 @@ export default function Invoices() {
                             <Button
                               size="sm"
                               variant="ghost"
-                              className="h-8 px-2 shrink-0"
+                              className="h-8 px-2 shrink-0 hover:bg-primary/10"
                               onClick={() => handleSaveEmail(company.id)}
                               disabled={savingEmailId === company.id}
                               title="이메일 저장"
                             >
                               {savingEmailId === company.id ? (
-                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
                               ) : (
                                 <Save className="h-3.5 w-3.5 text-muted-foreground hover:text-primary" />
                               )}
@@ -582,7 +677,7 @@ export default function Invoices() {
                                 )}
                               </div>
                               <div className="text-[10px] text-muted-foreground mt-0.5">
-                                발행일: {latestInv.issue_date} (${Number(latestInv.total_amount).toFixed(2)})
+                                발행: {latestInv.issue_date} (${Number(latestInv.total_amount).toFixed(2)})
                               </div>
                             </div>
                           ) : lastSent ? (
@@ -670,7 +765,7 @@ export default function Invoices() {
               )}
             </DialogTitle>
             <DialogDescription className="text-xs">
-              계좌로 입금된 내역을 확인한 후 각 인보이스의 <strong>[입금 확인]</strong>을 체크하세요. 이전 인보이스의 PDF도 언제든 다시 다운로드할 수 있습니다.
+              계좌로 입금된 내역을 확인한 후 각 인보이스의 <strong>[입금확인]</strong>을 체크하세요. 이전 인보이스의 PDF도 언제든 다시 다운로드할 수 있습니다.
             </DialogDescription>
           </DialogHeader>
 
@@ -831,7 +926,12 @@ export default function Invoices() {
           <DialogHeader>
             <DialogTitle>Tax Invoice 이메일 발송</DialogTitle>
             <DialogDescription className="text-xs">
-              {selectedCompany?.name}에 공식 호주 세법 규격의 인보이스 이메일을 발송합니다. 발송 시 인보이스 내역에 자동 등록됩니다.
+              {selectedCompany?.name}에 공식 호주 세법 규격의 인보이스 이메일을 발송합니다.
+              {selectedCompany?.xero_addon_enabled && (
+                <span className="block mt-1 text-primary font-medium">
+                  * Xero 연동 애드온($20.00 AUD)이 자동으로 포함되어 계산되었습니다.
+                </span>
+              )}
             </DialogDescription>
           </DialogHeader>
 
@@ -854,7 +954,8 @@ export default function Invoices() {
                   value={sendForm.plan_key}
                   onValueChange={(val) => {
                     const info = PLAN_PRICING[val] || PLAN_PRICING.starter;
-                    setSendForm({ ...sendForm, plan_key: val, subtotal: info.monthlyExGst });
+                    const addon = selectedCompany?.xero_addon_enabled ? XERO_ADDON_PRICE : 0;
+                    setSendForm({ ...sendForm, plan_key: val, subtotal: info.monthlyExGst + addon });
                   }}
                 >
                   <SelectTrigger className="mt-1 text-xs h-9">
@@ -871,7 +972,10 @@ export default function Invoices() {
               </div>
 
               <div>
-                <Label className="text-xs">공급가액 (AUD, excl. GST)</Label>
+                <Label className="text-xs">
+                  공급가액 (AUD, excl. GST)
+                  {selectedCompany?.xero_addon_enabled && <span className="text-primary font-bold ml-1">(Xero $20 포함)</span>}
+                </Label>
                 <Input
                   type="number"
                   value={sendForm.subtotal}
@@ -909,11 +1013,11 @@ export default function Invoices() {
             </div>
 
             <div>
-              <Label className="text-xs">추가 메모 (선택사항)</Label>
+              <Label className="text-xs">추가 메모 / 내역 표기 (선택사항)</Label>
               <Input
                 value={sendForm.notes}
                 onChange={(e) => setSendForm({ ...sendForm, notes: e.target.value })}
-                placeholder="예: 조기 납부 감사 할인 반영 등"
+                placeholder="예: Xero Add-on 포함 또는 조기 납부 감사 할인"
                 className="mt-1 text-xs h-8"
               />
             </div>
@@ -930,7 +1034,8 @@ export default function Invoices() {
                     company: selectedCompany,
                     invoiceNumber: sendForm.invoice_number,
                     planKey: sendForm.plan_key,
-                    customAmount: Number(sendForm.subtotal)
+                    customAmount: Number(sendForm.subtotal),
+                    notes: sendForm.notes
                   });
                 }
               }}

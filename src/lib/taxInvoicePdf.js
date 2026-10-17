@@ -20,6 +20,9 @@ export const PLAN_PRICING = {
   enterprise: { name: 'Enterprise', monthlyExGst: 399 }
 };
 
+// Xero 직접 연동 유료 애드온 월 요금 (AUD, GST 별도)
+export const XERO_ADDON_PRICE = 20;
+
 /**
  * 인보이스 번호 자동 채번
  * @param {string} companyId - 회사 ID 또는 코드
