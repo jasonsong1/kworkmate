@@ -48,28 +48,28 @@ import AccessDenied from '@/components/AccessDenied';
 
 const ALL = 'all';
 
-// 모듈별 뱃지 및 아이콘 헬퍼
+// 모듈별 뱃지 및 아이콘 헬퍼 (다국어 지원)
 const MODULE_CONFIG = {
-  attendance: { label: '타임시트', icon: Timer, color: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300' },
-  leave: { label: '휴가관리', icon: CalendarDays, color: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300' },
-  employees: { label: '직원관리', icon: Users, color: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300' },
-  settings: { label: '회사설정', icon: Settings, color: 'bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-300' },
-  branches: { label: '지점관리', icon: Building, color: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300' },
-  jobs: { label: '공고관리', icon: Briefcase, color: 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-300' },
-  applicants: { label: '지원자관리', icon: UserSearch, color: 'bg-pink-100 text-pink-800 dark:bg-pink-900/30 dark:text-pink-300' },
-  interviews: { label: '면접조율', icon: CalendarClock, color: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-300' },
-  roster: { label: '로스터', icon: Calendar, color: 'bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-300' },
+  attendance: { tKey: 'activity.modAttendance', icon: Timer, color: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300' },
+  leave: { tKey: 'activity.modLeave', icon: CalendarDays, color: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300' },
+  employees: { tKey: 'activity.modEmployees', icon: Users, color: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300' },
+  settings: { tKey: 'activity.modSettings', icon: Settings, color: 'bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-300' },
+  branches: { tKey: 'activity.modBranches', icon: Building, color: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300' },
+  jobs: { tKey: 'activity.modJobs', icon: Briefcase, color: 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-300' },
+  applicants: { tKey: 'activity.modApplicants', icon: UserSearch, color: 'bg-pink-100 text-pink-800 dark:bg-pink-900/30 dark:text-pink-300' },
+  interviews: { tKey: 'activity.modInterviews', icon: CalendarClock, color: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-300' },
+  roster: { tKey: 'activity.modRoster', icon: Calendar, color: 'bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-300' },
 };
 
-// 액션 유형별 뱃지 헬퍼
+// 액션 유형별 뱃지 헬퍼 (다국어 지원)
 const ACTION_LABELS = {
-  create: { label: '생성/추가', variant: 'default' },
-  update: { label: '수정', variant: 'secondary' },
-  delete: { label: '삭제', variant: 'destructive' },
-  approve: { label: '승인', variant: 'outline', className: 'border-emerald-500 text-emerald-700 dark:text-emerald-400' },
-  reject: { label: '거절', variant: 'outline', className: 'border-rose-500 text-rose-700 dark:text-rose-400' },
-  clock_in: { label: '출근', variant: 'secondary' },
-  clock_out: { label: '퇴근', variant: 'secondary' },
+  create: { tKey: 'activity.actCreate', variant: 'default' },
+  update: { tKey: 'activity.actUpdate', variant: 'secondary' },
+  delete: { tKey: 'activity.actDelete', variant: 'destructive' },
+  approve: { tKey: 'activity.actApprove', variant: 'outline', className: 'border-emerald-500 text-emerald-700 dark:text-emerald-400' },
+  reject: { tKey: 'activity.actReject', variant: 'outline', className: 'border-rose-500 text-rose-700 dark:text-rose-400' },
+  clock_in: { tKey: 'activity.actClockIn', variant: 'secondary' },
+  clock_out: { tKey: 'activity.actClockOut', variant: 'secondary' },
 };
 
 /**
@@ -124,7 +124,7 @@ export default function ActivityLogs() {
     setLoading(true);
     try {
       if (!supabase) {
-        throw new Error('Supabase 클라이언트가 초기화되지 않았습니다.');
+        throw new Error('Supabase client is not initialized.');
       }
 
       let query = supabase
@@ -166,8 +166,8 @@ export default function ActivityLogs() {
     } catch (err) {
       console.error('[ActivityLogs] Failed to load activity logs:', err);
       toast({
-        title: '로그 조회 실패',
-        description: err.message || '활동 로그를 불러오는 중 오류가 발생했습니다.',
+        title: 'Error loading logs',
+        description: err.message,
         variant: 'destructive',
       });
     } finally {
@@ -186,11 +186,11 @@ export default function ActivityLogs() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="활동 및 변경 로그"
+        title={t('activity.title')}
         subtitle={
           isPlatformAdmin
-            ? '플랫폼 최고 관리자 모드: 모든 브랜치의 활동 로그를 조회합니다 (최근 3개월 보관, 3개월 초과 시 자동 삭제).'
-            : `${activeBranch?.name || '현재 지점'}의 활동 로그를 조회합니다 (최근 3개월 보관, 3개월 초과 시 자동 삭제).`
+            ? t('activity.subtitlePlatform')
+            : t('activity.subtitleBranch').replace('{branch}', activeBranch?.name || 'Current Branch')
         }
         actions={
           <Button
@@ -201,7 +201,7 @@ export default function ActivityLogs() {
             className="h-9 gap-1.5"
           >
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-            새로고침
+            {t('activity.refresh')}
           </Button>
         }
       />
@@ -213,13 +213,15 @@ export default function ActivityLogs() {
             {/* 1. 지점 선택 (슈퍼어드민/전사 관리자 전용) */}
             {!branchScoped && (
               <div>
-                <label className="text-xs font-medium text-muted-foreground mb-1 block">지점 선택</label>
+                <label className="text-xs font-medium text-muted-foreground mb-1 block">
+                  {t('activity.filterBranch')}
+                </label>
                 <Select value={selectedBranchId} onValueChange={setSelectedBranchId}>
                   <SelectTrigger className="h-9 text-xs">
-                    <SelectValue placeholder="전체 지점" />
+                    <SelectValue placeholder={t('activity.allBranches')} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value={ALL}>전체 지점</SelectItem>
+                    <SelectItem value={ALL}>{t('activity.allBranches')}</SelectItem>
                     {branches.map((b) => (
                       <SelectItem key={b.id} value={b.id}>
                         {b.name}
@@ -232,16 +234,18 @@ export default function ActivityLogs() {
 
             {/* 2. 모듈 선택 */}
             <div>
-              <label className="text-xs font-medium text-muted-foreground mb-1 block">모듈 필터</label>
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">
+                {t('activity.filterModule')}
+              </label>
               <Select value={selectedModule} onValueChange={setSelectedModule}>
                 <SelectTrigger className="h-9 text-xs">
-                  <SelectValue placeholder="전체 모듈" />
+                  <SelectValue placeholder={t('activity.allModules')} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value={ALL}>전체 모듈</SelectItem>
+                  <SelectItem value={ALL}>{t('activity.allModules')}</SelectItem>
                   {Object.entries(MODULE_CONFIG).map(([key, cfg]) => (
                     <SelectItem key={key} value={key}>
-                      {cfg.label}
+                      {t(cfg.tKey)}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -250,7 +254,9 @@ export default function ActivityLogs() {
 
             {/* 3. 날짜 범위 선택 */}
             <div className={!branchScoped ? '' : 'sm:col-span-2'}>
-              <label className="text-xs font-medium text-muted-foreground mb-1 block">조회 기간</label>
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">
+                {t('attendance.reportRange')}
+              </label>
               <div className="flex items-center gap-1.5">
                 <Input
                   type="date"
@@ -270,12 +276,14 @@ export default function ActivityLogs() {
 
             {/* 4. 유저 검색 */}
             <div>
-              <label className="text-xs font-medium text-muted-foreground mb-1 block">작업자 검색</label>
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">
+                {t('activity.searchActor')}
+              </label>
               <div className="relative">
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
                   type="text"
-                  placeholder="이름 또는 이메일..."
+                  placeholder={t('activity.searchPlaceholder')}
                   value={searchUser}
                   onChange={(e) => setSearchUser(e.target.value)}
                   className="h-9 pl-8 text-xs"
@@ -292,14 +300,14 @@ export default function ActivityLogs() {
           {loading ? (
             <div className="py-20 text-center text-sm text-muted-foreground">
               <Loader2 className="mx-auto mb-3 h-6 w-6 animate-spin text-primary" />
-              활동 로그를 불러오는 중입니다...
+              {t('activity.loading')}
             </div>
           ) : logs.length === 0 ? (
             <div className="py-20 text-center">
               <FileText className="mx-auto mb-2 h-8 w-8 text-muted-foreground/60" />
-              <p className="text-sm font-medium text-muted-foreground">조회된 활동 로그가 없습니다.</p>
+              <p className="text-sm font-medium text-muted-foreground">{t('activity.emptyTitle')}</p>
               <p className="text-xs text-muted-foreground/80 mt-1">
-                선택한 필터 조건에 해당하는 활동 기록이 없습니다.
+                {t('activity.emptyDesc')}
               </p>
             </div>
           ) : (
@@ -307,25 +315,28 @@ export default function ActivityLogs() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-36">발생 일시</TableHead>
-                    <TableHead className="w-32">지점</TableHead>
-                    <TableHead className="w-44">작업자 (유저)</TableHead>
-                    <TableHead className="w-28">모듈</TableHead>
-                    <TableHead className="w-24">액션</TableHead>
-                    <TableHead>작업 요약 내용</TableHead>
-                    <TableHead className="w-20 text-right">상세</TableHead>
+                    <TableHead className="w-36">{t('activity.thTime')}</TableHead>
+                    <TableHead className="w-32">{t('common.branch')}</TableHead>
+                    <TableHead className="w-44">{t('activity.thActor')}</TableHead>
+                    <TableHead className="w-28">{t('activity.thModule')}</TableHead>
+                    <TableHead className="w-24">{t('activity.thAction')}</TableHead>
+                    <TableHead>{t('activity.thSummary')}</TableHead>
+                    <TableHead className="w-20 text-right">{t('activity.thDetail')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {logs.map((log) => {
                     const modConfig = MODULE_CONFIG[log.module] || {
+                      tKey: '',
                       label: log.module,
                       icon: FileText,
                       color: 'bg-muted text-muted-foreground',
                     };
                     const ModIcon = modConfig.icon;
-                    const actionConfig = ACTION_LABELS[log.action] || { label: log.action, variant: 'secondary' };
+                    const actionConfig = ACTION_LABELS[log.action] || { tKey: '', label: log.action, variant: 'secondary' };
                     const branchItem = branches.find((b) => b.id === log.branch_id);
+                    const modLabel = modConfig.tKey ? t(modConfig.tKey) : (modConfig.label || log.module);
+                    const actionLabel = actionConfig.tKey ? t(actionConfig.tKey) : (actionConfig.label || log.action);
 
                     return (
                       <TableRow key={log.id} className="hover:bg-muted/40 transition-colors">
@@ -341,7 +352,7 @@ export default function ActivityLogs() {
                           ) : log.branch_id ? (
                             <span className="text-muted-foreground">{log.branch_id.slice(0, 8)}</span>
                           ) : (
-                            <Badge variant="outline" className="text-[10px]">전사(Company)</Badge>
+                            <Badge variant="outline" className="text-[10px]">{t('activity.scopeCompany')}</Badge>
                           )}
                         </TableCell>
 
@@ -364,7 +375,7 @@ export default function ActivityLogs() {
                             className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ${modConfig.color}`}
                           >
                             <ModIcon className="h-3 w-3" />
-                            {modConfig.label}
+                            {modLabel}
                           </span>
                         </TableCell>
 
@@ -374,7 +385,7 @@ export default function ActivityLogs() {
                             variant={actionConfig.variant}
                             className={`text-[11px] ${actionConfig.className || ''}`}
                           >
-                            {actionConfig.label}
+                            {actionLabel}
                           </Badge>
                         </TableCell>
 
@@ -395,7 +406,7 @@ export default function ActivityLogs() {
                               onClick={() => setDetailLog(log)}
                             >
                               <Eye className="h-3.5 w-3.5" />
-                              상세
+                              {t('activity.viewDetail')}
                             </Button>
                           ) : (
                             <span className="text-xs text-muted-foreground/60">—</span>
@@ -417,7 +428,7 @@ export default function ActivityLogs() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-base">
               <FileText className="h-4 w-4 text-primary" />
-              활동 상세 변경 내역 (Audit Diff)
+              {t('activity.diffModalTitle')}
             </DialogTitle>
             <DialogDescription className="text-xs">
               {detailLog?.created_at && formatTimeInZone(detailLog.created_at, branchState)} ·{' '}
@@ -431,13 +442,13 @@ export default function ActivityLogs() {
               <div className="p-3 bg-muted/50 rounded-lg border text-xs space-y-1">
                 <p className="font-semibold text-foreground">{detailLog.summary}</p>
                 <div className="flex flex-wrap gap-2 text-[11px] text-muted-foreground pt-1">
-                  <span>모듈: <b>{MODULE_CONFIG[detailLog.module]?.label || detailLog.module}</b></span>
+                  <span>{t('activity.thModule')}: <b>{MODULE_CONFIG[detailLog.module]?.tKey ? t(MODULE_CONFIG[detailLog.module].tKey) : detailLog.module}</b></span>
                   <span>·</span>
-                  <span>액션: <b>{detailLog.action}</b></span>
+                  <span>{t('activity.thAction')}: <b>{ACTION_LABELS[detailLog.action]?.tKey ? t(ACTION_LABELS[detailLog.action].tKey) : detailLog.action}</b></span>
                   {detailLog.target_name && (
                     <>
                       <span>·</span>
-                      <span>대상: <b>{detailLog.target_name}</b></span>
+                      <span>Target: <b>{detailLog.target_name}</b></span>
                     </>
                   )}
                 </div>
@@ -446,7 +457,7 @@ export default function ActivityLogs() {
               {/* 사유 (Reason) 표시 */}
               {detailLog.details?.reason && (
                 <div className="p-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-lg text-xs">
-                  <p className="font-semibold text-amber-900 dark:text-amber-300 mb-0.5">사유 / 비고:</p>
+                  <p className="font-semibold text-amber-900 dark:text-amber-300 mb-0.5">{t('activity.reasonLabel')}</p>
                   <p className="text-amber-800 dark:text-amber-200">{detailLog.details.reason}</p>
                 </div>
               )}
@@ -458,12 +469,12 @@ export default function ActivityLogs() {
                   <div className="space-y-1.5">
                     <div className="flex items-center gap-1.5 text-xs font-semibold text-rose-700 dark:text-rose-400">
                       <span className="w-2 h-2 rounded-full bg-rose-500"></span>
-                      변경 전 (Before)
+                      {t('activity.diffBefore')}
                     </div>
                     <pre className="p-3 rounded-lg bg-rose-50/50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-900 text-[11px] font-mono whitespace-pre-wrap overflow-x-auto text-rose-950 dark:text-rose-200 min-h-[120px]">
                       {detailLog.details.before
                         ? JSON.stringify(detailLog.details.before, null, 2)
-                        : '(신규 추가 또는 이전 기록 없음)'}
+                        : t('activity.noBefore')}
                     </pre>
                   </div>
 
@@ -471,7 +482,7 @@ export default function ActivityLogs() {
                   <div className="space-y-1.5">
                     <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-400">
                       <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                      변경 후 (After)
+                      {t('activity.diffAfter')}
                     </div>
                     <pre className="p-3 rounded-lg bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-900 text-[11px] font-mono whitespace-pre-wrap overflow-x-auto text-emerald-950 dark:text-emerald-200 min-h-[120px]">
                       {detailLog.details.after
@@ -483,7 +494,7 @@ export default function ActivityLogs() {
               ) : (
                 /* 단순 JSON 뷰어 */
                 <div className="space-y-1.5">
-                  <p className="text-xs font-semibold text-muted-foreground">상세 데이터 (JSON):</p>
+                  <p className="text-xs font-semibold text-muted-foreground">{t('activity.jsonData')}</p>
                   <pre className="p-3 rounded-lg bg-muted text-[11px] font-mono whitespace-pre-wrap overflow-x-auto text-foreground">
                     {JSON.stringify(detailLog.details, null, 2)}
                   </pre>

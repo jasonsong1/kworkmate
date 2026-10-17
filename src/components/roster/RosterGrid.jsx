@@ -159,9 +159,9 @@ export default function RosterGrid({
                       {isFullDayLeave ? (
                         <div
                           className="flex items-center justify-center rounded-md border border-amber-300 bg-amber-100/90 px-2 py-1 text-[11px] font-semibold text-amber-900 shadow-xs dark:border-amber-700/60 dark:bg-amber-950/70 dark:text-amber-200"
-                          title={`${employee.full_name || '직원'} 님은 이 날짜에 승인된 휴가(종일) 중입니다.`}
+                          title={`${employee.full_name || 'Staff'} - ${t('roster.leave.fullDayBadge')}`}
                         >
-                          <span>{t('roster.onLeave') || '휴가 중'}</span>
+                          <span>{t('roster.leave.onLeave')}</span>
                         </div>
                       ) : null}
 
@@ -169,9 +169,9 @@ export default function RosterGrid({
                       {isPartialLeave ? (
                         <div
                           className="flex items-center justify-center rounded-md border border-sky-300/80 bg-sky-50 px-2 py-1 text-[11px] font-semibold text-sky-800 shadow-xs dark:border-sky-800 dark:bg-sky-950/60 dark:text-sky-200"
-                          title={`${employee.full_name || '직원'} 님은 이 날짜에 ${leaveInfo.hours}시간 휴가(반차)가 승인되어 있습니다. 나머지 시간에 시프트 배정이 가능합니다.`}
+                          title={`${employee.full_name || 'Staff'} - ${t('roster.leave.halfDayBadge')} (${leaveInfo.hours}h)`}
                         >
-                          <span>반차 ({leaveInfo.hours}h)</span>
+                          <span>{t('roster.leave.halfDayBadge')} ({leaveInfo.hours}h)</span>
                         </div>
                       ) : null}
 
@@ -184,7 +184,7 @@ export default function RosterGrid({
                           onClick={canManage && onShiftClick ? () => onShiftClick(shift) : undefined}
                           title={
                             isFullDayLeave
-                              ? '해당 직원은 이 날짜에 종일 휴가 중입니다. 시프트를 취소하거나 다른 날로 이동하세요.'
+                              ? t('roster.leave.dragWarning')
                               : canManage
                               ? t('roster.dragHint')
                               : undefined
@@ -203,7 +203,7 @@ export default function RosterGrid({
                         >
                           {isFullDayLeave && (
                             <div className="mb-0.5 text-[10px] font-bold text-destructive">
-                              휴가 중 배정됨
+                              {t('roster.leave.assignedWhileOnLeave')}
                             </div>
                           )}
                           <span className="font-medium">
@@ -229,10 +229,10 @@ export default function RosterGrid({
                       {/* 종일 휴가일 때만 + 버튼 대신 '배정 불가' 안내 노출 (이모티콘 없음) */}
                       {canManage && isFullDayLeave ? (
                         <div
-                          title={`${employee.full_name || '직원'} 님은 이 날짜에 승인된 휴가(종일) 기간입니다.`}
+                          title={`${employee.full_name || 'Staff'} - ${t('roster.leave.fullDayBadge')}`}
                           className="w-full select-none rounded-md border border-dashed border-amber-300/60 bg-amber-50/40 px-1 py-0.5 text-center text-[10px] text-amber-700/70 dark:border-amber-800/40 dark:bg-amber-950/20 dark:text-amber-400/70"
                         >
-                          배정 불가
+                          {t('roster.leave.cannotAssign')}
                         </div>
                       ) : null}
                     </div>

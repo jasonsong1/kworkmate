@@ -41,6 +41,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/components/ui/use-toast';
 import { useWorkspace } from '@/lib/WorkspaceContext';
+import { useI18n } from '@/lib/i18n';
 import { base44 } from '@/api/base44Client';
 import PageHeader from '@/components/PageHeader';
 import {
@@ -52,6 +53,7 @@ import {
 
 export default function Invoices() {
   const { isPlatformAdmin, loading: authLoading } = useWorkspace();
+  const { t, lang } = useI18n();
   const { toast } = useToast();
 
   const [companies, setCompanies] = useState([]);
@@ -81,6 +83,9 @@ export default function Invoices() {
   const [historyCompany, setHistoryCompany] = useState(null);
   const [updatingInvoiceId, setUpdatingInvoiceId] = useState('');
 
+  // 날짜 로케일 선택 (한국어 모드: ko-KR, 영어 모드: en-AU)
+  const dateLocale = lang === 'ko' ? 'ko-KR' : 'en-AU';
+
   // 데이터 로드 (활성 회사 목록 및 인보이스 이력)
   const loadData = async () => {
     setLoading(true);
@@ -108,7 +113,7 @@ export default function Invoices() {
       });
       setEditingEmails(emailMap);
     } catch (err) {
-      toast({ title: '데이터를 불러오는 중 오류가 발생했습니다.', variant: 'destructive' });
+      toast({ title: t('common.loadingError') || 'Error loading data', variant: 'destructive' });
     } finally {
       setLoading(false);
     }
@@ -125,9 +130,9 @@ export default function Invoices() {
     return (
       <div className="flex h-[70vh] flex-col items-center justify-center text-center">
         <ShieldCheck className="h-12 w-12 text-muted-foreground/60 mb-3" />
-        <h2 className="text-xl font-semibold">슈퍼어드민 전용 화면</h2>
+        <h2 className="text-xl font-semibold">{t('invoice.superAdminOnly')}</h2>
         <p className="text-sm text-muted-foreground mt-1 max-w-sm">
-          인보이스 관리 화면은 KWorkMate 최고 관리자만 접근할 수 있습니다.
+          {t('invoice.superAdminOnlyDesc')}
         </p>
       </div>
     );
@@ -204,15 +209,15 @@ export default function Invoices() {
   const handleSaveEmail = async (companyId) => {
     const email = (editingEmails[companyId] || '').trim();
     if (!email) {
-      toast({ title: '이메일 주소를 입력해주세요.', variant: 'destructive' });
+      toast({ title: t('common.required'), variant: 'destructive' });
       return;
     }
     setSavingEmailId(companyId);
     try {
       await base44.entities.Company.update(companyId, { invoice_email: email });
       toast({
-        title: '인보이스 전용 이메일이 저장되었습니다.',
-        description: `앞으로 이 회사에 발송되는 인보이스는 ${email} 로 전송됩니다.`
+        title: t('invoice.emailSaved'),
+        description: email
       });
       setCompanies((prev) =>
         prev.map((c) => (c.id === companyId ? { ...c, invoice_email: email } : c))
@@ -220,8 +225,7 @@ export default function Invoices() {
     } catch (err) {
       console.error('이메일 저장 실패:', err);
       toast({
-        title: '이메일 저장 실패',
-        description: (err && err.message) || '데이터베이스 저장 중 오류가 발생했습니다.',
+        title: (err && err.message) || 'Error saving email',
         variant: 'destructive'
       });
     } finally {
@@ -240,10 +244,8 @@ export default function Invoices() {
       });
 
       toast({
-        title: nextState ? 'Xero 애드온 활성화 완료' : 'Xero 애드온 해제 완료',
-        description: nextState
-          ? `${company.name}에 Xero 연동 권한이 승인되었으며, 인보이스에 +$20이 자동 추가됩니다.`
-          : `${company.name}의 Xero 연동 권한이 해제되었습니다.`
+        title: nextState ? t('xero.addonActive') : t('xero.revokeAccess'),
+        description: `${company.name} (Xero: ${nextState ? 'ON' : 'OFF'})`
       });
 
       setCompanies((prev) =>
@@ -251,8 +253,7 @@ export default function Invoices() {
       );
     } catch (err) {
       toast({
-        title: '애드온 설정 변경 실패',
-        description: (err && err.message) || '설정 저장 중 오류가 발생했습니다.',
+        title: (err && err.message) || 'Error updating Xero Add-on',
         variant: 'destructive'
       });
     } finally {
@@ -270,7 +271,7 @@ export default function Invoices() {
         planKey: invoiceRecord.plan_key || 'starter',
         customAmount: Number(invoiceRecord.subtotal)
       });
-      toast({ title: `${company.name} 인보이스(${invoiceRecord.invoice_number}) PDF가 다운로드되었습니다.` });
+      toast({ title: `${company.name} (${invoiceRecord.invoice_number}) PDF ${t('common.download')}` });
     } else {
       const planKey = company.pricing_package || 'starter';
       const planInfo = PLAN_PRICING[planKey] || PLAN_PRICING.starter;
@@ -286,7 +287,7 @@ export default function Invoices() {
         customAmount: calculatedSubtotal,
         notes: company.xero_addon_enabled ? 'Includes Xero Payroll Integration Add-on ($20.00 AUD)' : ''
       });
-      toast({ title: `${company.name} Tax Invoice PDF가 다운로드되었습니다.` });
+      toast({ title: `${company.name} Tax Invoice PDF ${t('common.download')}` });
     }
   };
 
@@ -341,13 +342,12 @@ export default function Invoices() {
       );
 
       toast({
-        title: nextStatus === 'paid' ? '입금 확인(Paid) 처리 완료' : '미납(Unpaid)으로 변경 완료',
-        description: `${invoice.invoice_number} 상태가 갱신되었습니다.`
+        title: nextStatus === 'paid' ? t('invoice.markPaid') : t('invoice.markUnpaid'),
+        description: `${invoice.invoice_number}`
       });
     } catch (err) {
       toast({
-        title: '상태 업데이트 실패',
-        description: (err && err.message) || '수금 상태 변경 중 오류가 발생했습니다.',
+        title: (err && err.message) || 'Error updating payment status',
         variant: 'destructive'
       });
     } finally {
@@ -359,7 +359,7 @@ export default function Invoices() {
   const handleSendInvoice = async () => {
     if (!selectedCompany) return;
     if (!sendForm.invoice_email) {
-      toast({ title: '수신인 이메일을 입력해주세요.', variant: 'destructive' });
+      toast({ title: t('common.required'), variant: 'destructive' });
       return;
     }
 
@@ -383,15 +383,15 @@ export default function Invoices() {
       }
 
       toast({
-        title: 'Tax Invoice가 성공적으로 발송되었습니다!',
-        description: `${selectedCompany.name} (${sendForm.invoice_email}) 수신 완료`
+        title: t('invoice.sendSuccess'),
+        description: `${selectedCompany.name} (${sendForm.invoice_email})`
       });
 
       setSendModalOpen(false);
       await loadData();
     } catch (err) {
       toast({
-        title: (err && err.message) || '인보이스 발송 중 오류가 발생했습니다.',
+        title: (err && err.message) || 'Error sending invoice',
         variant: 'destructive'
       });
     } finally {
@@ -405,12 +405,12 @@ export default function Invoices() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="인보이스 관리 (Invoices)"
-        subtitle="고객사별 Tax Invoice 발행, Xero 애드온(월 $20) 제어 및 입금(Paid) 확인"
+        title={t('invoice.title')}
+        subtitle={t('invoice.subtitle')}
         actions={
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" onClick={loadData} disabled={loading}>
-              새로고침
+              {t('invoice.refresh')}
             </Button>
           </div>
         }
@@ -420,35 +420,37 @@ export default function Invoices() {
       <div className="grid gap-4 md:grid-cols-3">
         <Card className="border-l-4 border-l-primary">
           <CardHeader className="pb-2">
-            <CardDescription className="text-xs">현재 활성 고객사 (Active)</CardDescription>
-            <CardTitle className="text-2xl font-bold">{stats.totalCount}개 사</CardTitle>
+            <CardDescription className="text-xs">{t('invoice.activeClients')}</CardDescription>
+            <CardTitle className="text-2xl font-bold">
+              {stats.totalCount}{lang === 'ko' ? '개 사' : ' companies'}
+            </CardTitle>
           </CardHeader>
           <CardContent className="text-xs text-muted-foreground">
-            정상 이용 중인 활성 기업 (Xero 애드온 {stats.xeroAddonCount}개 사)
+            {t('invoice.activeClientsDesc')} (Xero Add-on: {stats.xeroAddonCount})
           </CardContent>
         </Card>
 
         <Card className="border-l-4 border-l-indigo-500">
           <CardHeader className="pb-2">
-            <CardDescription className="text-xs">월 정기 청구 예상액 (excl. GST)</CardDescription>
+            <CardDescription className="text-xs">{t('invoice.monthlyBilling')}</CardDescription>
             <CardTitle className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">
               ${stats.totalMonthlyExGst.toLocaleString()} AUD
             </CardTitle>
           </CardHeader>
           <CardContent className="text-xs text-muted-foreground">
-            GST 포함 시 ${stats.totalIncGst.toLocaleString()} AUD (Xero +$20 반영)
+            {t('invoice.monthlyBillingGst')}: ${stats.totalIncGst.toLocaleString()} AUD
           </CardContent>
         </Card>
 
         <Card className="border-l-4 border-l-emerald-500">
           <CardHeader className="pb-2">
-            <CardDescription className="text-xs">누적 수금 완료액 (Paid)</CardDescription>
+            <CardDescription className="text-xs">{t('invoice.paidAmount')}</CardDescription>
             <CardTitle className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">
               ${stats.totalPaidAmount.toLocaleString()} AUD
             </CardTitle>
           </CardHeader>
           <CardContent className="text-xs text-muted-foreground">
-            미수금액: ${stats.totalUnpaidAmount.toLocaleString()} AUD
+            {t('invoice.unpaidAmount')}: ${stats.totalUnpaidAmount.toLocaleString()} AUD
           </CardContent>
         </Card>
       </div>
@@ -459,17 +461,17 @@ export default function Invoices() {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
               <CardTitle className="text-lg flex items-center gap-2">
-                <span>활성 고객사 인보이스 및 Xero 애드온 관리</span>
+                <span>{t('invoice.clientListTitle')}</span>
                 <Badge variant="secondary" className="text-xs font-normal">Active Only</Badge>
               </CardTitle>
               <CardDescription className="text-xs mt-1">
-                고객이 Xero 연동을 요청하면 [Xero Add-on]을 켜주세요. 인보이스에 $20이 자동 추가되며, 고객 화면에서 연동 버튼이 열립니다.
+                {t('invoice.clientListDesc')}
               </CardDescription>
             </div>
             <div className="relative w-full sm:w-64">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="회사명, ABN, 이메일 검색..."
+                placeholder={t('invoice.searchPlaceholder')}
                 className="pl-8 text-xs h-9"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
@@ -481,23 +483,23 @@ export default function Invoices() {
           {loading ? (
             <div className="py-16 text-center text-sm text-muted-foreground">
               <Loader2 className="mx-auto mb-2 h-6 w-6 animate-spin text-primary" />
-              활성 고객사 정보를 불러오는 중입니다...
+              {t('invoice.loading')}
             </div>
           ) : filteredCompanies.length === 0 ? (
             <div className="py-16 text-center text-sm text-muted-foreground">
-              활성화된 고객사가 없거나 검색 결과가 없습니다.
+              {t('invoice.noCompanies')}
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm border-collapse">
                 <thead>
                   <tr className="border-t border-b bg-muted/40 text-xs font-semibold text-muted-foreground text-left">
-                    <th className="py-3 px-4">고객사 (Active Company)</th>
-                    <th className="py-3 px-4">구독 플랜 & Xero 애드온</th>
-                    <th className="py-3 px-4">월 청구액 (AUD)</th>
-                    <th className="py-3 px-4 min-w-[260px]">인보이스 전용 이메일</th>
-                    <th className="py-3 px-4">최근 인보이스</th>
-                    <th className="py-3 px-4 text-right">관리 액션</th>
+                    <th className="py-3 px-4">{t('invoice.thCompany')}</th>
+                    <th className="py-3 px-4">{t('invoice.thPlan')}</th>
+                    <th className="py-3 px-4">{t('invoice.thAmount')} (AUD)</th>
+                    <th className="py-3 px-4 min-w-[260px]">{t('invoice.thEmail')}</th>
+                    <th className="py-3 px-4">{t('invoice.thRecent')}</th>
+                    <th className="py-3 px-4 text-right">{t('invoice.thActions')}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y text-xs">
@@ -517,7 +519,7 @@ export default function Invoices() {
                     const latestInv = companyInvs[0];
 
                     const lastSent = company.last_invoice_sent_at
-                      ? new Date(company.last_invoice_sent_at).toLocaleDateString('ko-KR', {
+                      ? new Date(company.last_invoice_sent_at).toLocaleDateString(dateLocale, {
                           year: 'numeric',
                           month: '2-digit',
                           day: '2-digit'
@@ -530,10 +532,10 @@ export default function Invoices() {
                         <td className="py-3 px-4">
                           <div className="font-semibold text-foreground text-sm flex items-center gap-1.5">
                             <Building2 className="h-4 w-4 text-primary shrink-0" />
-                            {company.name || '미지정 회사'}
+                            {company.name || (lang === 'ko' ? '미지정 회사' : 'Unnamed Company')}
                           </div>
                           <div className="text-[11px] text-muted-foreground mt-0.5">
-                            {company.abn ? `ABN: ${company.abn}` : 'ABN 미등록'}
+                            {company.abn ? `ABN: ${company.abn}` : t('invoice.noAbn')}
                           </div>
                         </td>
 
@@ -555,19 +557,19 @@ export default function Invoices() {
                                   ? 'bg-blue-50 text-blue-700 border-blue-300 dark:bg-blue-950/40 dark:text-blue-300 hover:bg-blue-100'
                                   : 'text-muted-foreground hover:text-foreground border-dashed'
                               }`}
-                              title={hasXeroAddon ? 'Xero 애드온 권한 해제' : 'Xero 연동 권한 열어주기 (+월 $20)'}
+                              title={hasXeroAddon ? t('xero.revokeAccess') : t('xero.grantAccess')}
                             >
                               {togglingXeroId === company.id ? (
                                 <Loader2 className="h-2.5 w-2.5 animate-spin" />
                               ) : hasXeroAddon ? (
                                 <>
                                   <Sparkles className="h-2.5 w-2.5 text-blue-600" />
-                                  <span>Xero +$20 (ON)</span>
+                                  <span>{t('invoice.xeroAddonOn')}</span>
                                 </>
                               ) : (
                                 <>
                                   <Plus className="h-2.5 w-2.5" />
-                                  <span>Xero 추가</span>
+                                  <span>{t('invoice.xeroAddonAdd')}</span>
                                 </>
                               )}
                             </Button>
@@ -580,7 +582,7 @@ export default function Invoices() {
                             ${total.toFixed(2)} AUD
                           </div>
                           <div className="text-[10px] text-muted-foreground">
-                            공급가 ${subtotal} {hasXeroAddon && '(Xero $20 포함)'} + GST ${gst}
+                            ${subtotal} {hasXeroAddon && '(+Xero $20)'} + GST ${gst}
                           </div>
                         </td>
 
@@ -593,7 +595,7 @@ export default function Invoices() {
                               onChange={(e) =>
                                 setEditingEmails({ ...editingEmails, [company.id]: e.target.value })
                               }
-                              placeholder="인보이스 수신 이메일 입력"
+                              placeholder="accounts@company.com"
                               className="h-8 text-xs"
                             />
                             <Button
@@ -602,7 +604,7 @@ export default function Invoices() {
                               className="h-8 px-2 shrink-0 hover:bg-primary/10"
                               onClick={() => handleSaveEmail(company.id)}
                               disabled={savingEmailId === company.id}
-                              title="이메일 저장"
+                              title={t('common.save')}
                             >
                               {savingEmailId === company.id ? (
                                 <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
@@ -612,7 +614,7 @@ export default function Invoices() {
                             </Button>
                           </div>
                           <div className="text-[10px] text-muted-foreground mt-0.5 flex items-center gap-1">
-                            <span>대표:</span>
+                            <span>{t('common.email')}:</span>
                             <span className="truncate max-w-[180px]">{company.contact_email || '—'}</span>
                           </div>
                         </td>
@@ -625,25 +627,25 @@ export default function Invoices() {
                                 <span>{latestInv.invoice_number}</span>
                                 {latestInv.status === 'paid' ? (
                                   <Badge variant="outline" className="h-5 px-1.5 bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-300">
-                                    <Check className="h-3 w-3 mr-0.5" /> 입금완료
+                                    <Check className="h-3 w-3 mr-0.5" /> {t('invoice.paidBadge')}
                                   </Badge>
                                 ) : (
                                   <Badge variant="outline" className="h-5 px-1.5 bg-amber-50 text-amber-700 border-amber-300 dark:bg-amber-950/40 dark:text-amber-300">
-                                    <Clock className="h-3 w-3 mr-0.5" /> 미납
+                                    <Clock className="h-3 w-3 mr-0.5" /> {t('invoice.unpaidBadge')}
                                   </Badge>
                                 )}
                               </div>
                               <div className="text-[10px] text-muted-foreground mt-0.5">
-                                발행: {latestInv.issue_date} (${Number(latestInv.total_amount).toFixed(2)})
+                                {latestInv.issue_date} (${Number(latestInv.total_amount).toFixed(2)})
                               </div>
                             </div>
                           ) : lastSent ? (
                             <div>
-                              <div className="text-emerald-600 dark:text-emerald-400 font-medium">{lastSent} 발송</div>
+                              <div className="text-emerald-600 dark:text-emerald-400 font-medium">{lastSent}</div>
                               <div className="text-[10px] text-muted-foreground">{company.last_invoice_number}</div>
                             </div>
                           ) : (
-                            <span className="text-muted-foreground">발송 이력 없음</span>
+                            <span className="text-muted-foreground">{t('invoice.noHistory')}</span>
                           )}
                         </td>
 
@@ -656,10 +658,9 @@ export default function Invoices() {
                               size="sm"
                               className="h-8 text-xs gap-1 border-indigo-200 text-indigo-700 hover:bg-indigo-50 dark:border-indigo-800 dark:text-indigo-300"
                               onClick={() => handleOpenHistoryModal(company)}
-                              title="과거 모든 인보이스 목록 조회 및 수금 체크"
                             >
                               <History className="h-3.5 w-3.5" />
-                              <span>내역 ({invCount})</span>
+                              <span>{t('invoice.historyBtn')} ({invCount})</span>
                             </Button>
 
                             {/* 이번 달 PDF 즉시 다운로드 */}
@@ -670,7 +671,7 @@ export default function Invoices() {
                               onClick={() => handleDownloadPdf(company)}
                             >
                               <Download className="h-3.5 w-3.5" />
-                              <span>PDF</span>
+                              <span>{t('invoice.pdfBtn')}</span>
                             </Button>
 
                             {/* 이번 달 인보이스 발송 */}
@@ -680,7 +681,7 @@ export default function Invoices() {
                               onClick={() => handleOpenSendModal(company)}
                             >
                               <Send className="h-3.5 w-3.5" />
-                              <span>발송</span>
+                              <span>{t('invoice.sendBtn')}</span>
                             </Button>
                           </div>
                         </td>
@@ -700,10 +701,10 @@ export default function Invoices() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Receipt className="h-5 w-5 text-primary" />
-              <span>{historyCompany?.name} 인보이스 전체 내역</span>
+              <span>{historyCompany?.name} {t('invoice.historyTitle')}</span>
             </DialogTitle>
             <DialogDescription className="text-xs">
-              계좌로 입금된 내역을 확인한 후 각 인보이스의 <strong>[입금확인]</strong>을 체크하세요. 이전 인보이스의 PDF도 언제든 다시 다운로드할 수 있습니다.
+              {t('invoice.historyDesc')}
             </DialogDescription>
           </DialogHeader>
 
@@ -711,21 +712,18 @@ export default function Invoices() {
             {currentCompanyInvoices.length === 0 ? (
               <div className="py-12 text-center text-xs text-muted-foreground border rounded-lg bg-muted/20">
                 <Receipt className="mx-auto mb-2 h-8 w-8 text-muted-foreground/40" />
-                저장된 인보이스 내역이 없습니다.
-                <div className="mt-1 text-[11px]">
-                  [발송] 버튼으로 인보이스를 발송하면 이 테이블에 자동으로 누적 기록됩니다.
-                </div>
+                {t('invoice.noInvoicesYet')}
               </div>
             ) : (
               <div className="max-h-[380px] overflow-y-auto border rounded-lg">
                 <table className="w-full text-xs border-collapse">
                   <thead className="sticky top-0 bg-muted/90 backdrop-blur z-10 border-b">
                     <tr className="text-muted-foreground text-left">
-                      <th className="py-2.5 px-3">발행일</th>
-                      <th className="py-2.5 px-3">인보이스 번호</th>
-                      <th className="py-2.5 px-3">플랜 / 금액</th>
-                      <th className="py-2.5 px-3">수금 상태</th>
-                      <th className="py-2.5 px-3 text-right">액션</th>
+                      <th className="py-2.5 px-3">{t('invoice.thIssueDate')}</th>
+                      <th className="py-2.5 px-3">{t('invoice.thInvNumber')}</th>
+                      <th className="py-2.5 px-3">{t('invoice.thSubtotalGst')}</th>
+                      <th className="py-2.5 px-3">{t('invoice.thStatus')}</th>
+                      <th className="py-2.5 px-3 text-right">{t('common.actions')}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y">
@@ -733,7 +731,7 @@ export default function Invoices() {
                       const isPaid = inv.status === 'paid';
                       const isUpdating = updatingInvoiceId === inv.id;
                       const paidDateStr = inv.paid_at
-                        ? new Date(inv.paid_at).toLocaleDateString('ko-KR', {
+                        ? new Date(inv.paid_at).toLocaleDateString(dateLocale, {
                             year: 'numeric',
                             month: '2-digit',
                             day: '2-digit'
@@ -763,7 +761,7 @@ export default function Invoices() {
                               ${Number(inv.total_amount).toFixed(2)} AUD
                             </div>
                             <div className="text-[10px] text-muted-foreground">
-                              공급가 ${Number(inv.subtotal).toFixed(2)} + GST ${Number(inv.gst).toFixed(2)}
+                              Subtotal ${Number(inv.subtotal).toFixed(2)} + GST ${Number(inv.gst).toFixed(2)}
                             </div>
                           </td>
 
@@ -772,18 +770,18 @@ export default function Invoices() {
                             {isPaid ? (
                               <div>
                                 <Badge className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-[11px] gap-1">
-                                  <Check className="h-3 w-3" /> 입금완료 (Paid)
+                                  <Check className="h-3 w-3" /> {t('invoice.paidBadge')}
                                 </Badge>
                                 {paidDateStr && (
                                   <div className="text-[10px] text-emerald-700 dark:text-emerald-400 mt-0.5">
-                                    확인: {paidDateStr}
+                                    {paidDateStr}
                                   </div>
                                 )}
                               </div>
                             ) : (
                               <div>
                                 <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-300 dark:bg-amber-950/40 dark:text-amber-300 font-medium text-[11px] gap-1">
-                                  <Clock className="h-3 w-3" /> 미납 (Unpaid)
+                                  <Clock className="h-3 w-3" /> {t('invoice.unpaidBadge')}
                                 </Badge>
                               </div>
                             )}
@@ -803,19 +801,18 @@ export default function Invoices() {
                                 }`}
                                 onClick={() => handleTogglePaymentStatus(inv)}
                                 disabled={isUpdating}
-                                title={isPaid ? '미납 상태로 변경' : '계좌 입금 확인 완료'}
                               >
                                 {isUpdating ? (
                                   <Loader2 className="h-3 w-3 animate-spin" />
                                 ) : isPaid ? (
                                   <>
                                     <RotateCcw className="h-3 w-3" />
-                                    <span>미납전환</span>
+                                    <span>{t('invoice.markUnpaid')}</span>
                                   </>
                                 ) : (
                                   <>
                                     <Check className="h-3 w-3" />
-                                    <span>입금확인</span>
+                                    <span>{t('invoice.markPaid')}</span>
                                   </>
                                 )}
                               </Button>
@@ -826,10 +823,10 @@ export default function Invoices() {
                                 variant="outline"
                                 className="h-7 px-2 text-xs gap-1"
                                 onClick={() => handleDownloadPdf(historyCompany, inv)}
-                                title="이 인보이스 PDF 다운로드"
+                                title={t('common.download')}
                               >
                                 <Download className="h-3 w-3" />
-                                <span>PDF</span>
+                                <span>{t('invoice.pdfBtn')}</span>
                               </Button>
                             </div>
                           </td>
@@ -844,7 +841,7 @@ export default function Invoices() {
 
           <DialogFooter className="sm:justify-between">
             <div className="text-[11px] text-muted-foreground">
-              총 {currentCompanyInvoices.length}건의 인보이스 기록
+              {t('invoice.totalRecords').replace('{count}', String(currentCompanyInvoices.length))}
             </div>
             <Button
               type="button"
@@ -852,7 +849,7 @@ export default function Invoices() {
               size="sm"
               onClick={() => setHistoryModalOpen(false)}
             >
-              닫기
+              {t('common.close')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -862,12 +859,12 @@ export default function Invoices() {
       <Dialog open={sendModalOpen} onOpenChange={setSendModalOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Tax Invoice 이메일 발송</DialogTitle>
+            <DialogTitle>{t('invoice.sendModalTitle')}</DialogTitle>
             <DialogDescription className="text-xs">
-              {selectedCompany?.name}에 공식 호주 세법 규격의 인보이스 이메일을 발송합니다.
+              {t('invoice.sendModalDesc').replace('{company}', selectedCompany?.name || '')}
               {selectedCompany?.xero_addon_enabled && (
                 <span className="block mt-1 text-primary font-medium">
-                  * Xero 연동 애드온($20.00 AUD)이 자동으로 포함되어 계산되었습니다.
+                  * Xero Integration Add-on ($20.00 AUD) included
                 </span>
               )}
             </DialogDescription>
@@ -875,7 +872,7 @@ export default function Invoices() {
 
           <div className="space-y-4 text-xs py-2">
             <div>
-              <Label className="text-xs">수신자 인보이스 이메일</Label>
+              <Label className="text-xs">{t('invoice.sendModalRecipient')}</Label>
               <Input
                 type="email"
                 value={sendForm.invoice_email}
@@ -887,7 +884,7 @@ export default function Invoices() {
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label className="text-xs">구독 플랜</Label>
+                <Label className="text-xs">{t('invoice.sendModalPlan')}</Label>
                 <Select
                   value={sendForm.plan_key}
                   onValueChange={(val) => {
@@ -911,8 +908,8 @@ export default function Invoices() {
 
               <div>
                 <Label className="text-xs">
-                  공급가액 (AUD, excl. GST)
-                  {selectedCompany?.xero_addon_enabled && <span className="text-primary font-bold ml-1">(Xero $20 포함)</span>}
+                  {t('invoice.sendModalSubtotal')}
+                  {selectedCompany?.xero_addon_enabled && <span className="text-primary font-bold ml-1">(+Xero $20)</span>}
                 </Label>
                 <Input
                   type="number"
@@ -926,15 +923,15 @@ export default function Invoices() {
             {/* 계산 요약 박스 */}
             <div className="rounded-lg bg-muted/50 p-3 space-y-1">
               <div className="flex justify-between text-muted-foreground">
-                <span>공급가액 (Subtotal):</span>
+                <span>Subtotal (excl. GST):</span>
                 <span>${Number(sendForm.subtotal || 0).toFixed(2)} AUD</span>
               </div>
               <div className="flex justify-between text-muted-foreground">
-                <span>호주 GST (10%):</span>
+                <span>GST (10%):</span>
                 <span>${(Number(sendForm.subtotal || 0) * 0.1).toFixed(2)} AUD</span>
               </div>
               <div className="flex justify-between font-bold text-foreground text-sm pt-1 border-t">
-                <span>총 청구액 (Total Due):</span>
+                <span>Total Due (incl. GST):</span>
                 <span className="text-primary">
                   ${(Number(sendForm.subtotal || 0) * 1.1).toFixed(2)} AUD
                 </span>
@@ -942,7 +939,7 @@ export default function Invoices() {
             </div>
 
             <div>
-              <Label className="text-xs">인보이스 번호 (Invoice No.)</Label>
+              <Label className="text-xs">{t('invoice.thInvNumber')}</Label>
               <Input
                 value={sendForm.invoice_number}
                 onChange={(e) => setSendForm({ ...sendForm, invoice_number: e.target.value })}
@@ -951,11 +948,11 @@ export default function Invoices() {
             </div>
 
             <div>
-              <Label className="text-xs">추가 메모 / 내역 표기 (선택사항)</Label>
+              <Label className="text-xs">{t('invoice.sendModalNotes')}</Label>
               <Input
                 value={sendForm.notes}
                 onChange={(e) => setSendForm({ ...sendForm, notes: e.target.value })}
-                placeholder="예: Xero Add-on 포함 또는 조기 납부 감사 할인"
+                placeholder="e.g. Early payment discount applied"
                 className="mt-1 text-xs h-8"
               />
             </div>
@@ -979,7 +976,7 @@ export default function Invoices() {
               }}
             >
               <Download className="mr-1.5 h-3.5 w-3.5" />
-              PDF 미리보기
+              {t('invoice.sendModalPreview')}
             </Button>
             <div className="flex items-center gap-2">
               <Button
@@ -989,7 +986,7 @@ export default function Invoices() {
                 onClick={() => setSendModalOpen(false)}
                 disabled={sending}
               >
-                취소
+                {t('common.cancel')}
               </Button>
               <Button
                 type="button"
@@ -999,7 +996,7 @@ export default function Invoices() {
                 className="gap-1.5 bg-primary"
               >
                 {sending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
-                인보이스 이메일 발송
+                {t('invoice.sendModalSubmit')}
               </Button>
             </div>
           </DialogFooter>

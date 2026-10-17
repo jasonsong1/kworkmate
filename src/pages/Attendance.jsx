@@ -219,10 +219,10 @@ export default function Attendance() {
     const multiplier = Number(multipliers[dayType.key]) || 1;
 
     let label = '';
-    if (dayType.key === 'saturday') label = '토요일';
-    else if (dayType.key === 'sunday') label = '일요일';
+    if (dayType.key === 'saturday') label = t('settings.paySaturday');
+    else if (dayType.key === 'sunday') label = t('settings.paySunday');
     else if (dayType.key === 'public_holiday') {
-      label = dayType.holiday?.ko || dayType.holiday?.en || '공휴일';
+      label = dayType.holiday?.ko || dayType.holiday?.en || t('settings.payHoliday');
     }
 
     return { multiplier, key: dayType.key, label };
@@ -307,7 +307,7 @@ export default function Attendance() {
                   disabled={!activeBranch}
                 >
                   <Plus className="h-3.5 w-3.5" />
-                  기록 추가
+                  {t('attendance.addRecord')}
                 </Button>
               )}
               <Button
@@ -335,10 +335,10 @@ export default function Attendance() {
                   className="flex-1 sm:flex-none h-9 text-xs gap-1.5 border-[#13b5ea]/40 text-[#0fa0cf] hover:bg-[#13b5ea]/10 font-semibold"
                   onClick={() => setXeroModalOpen(true)}
                   disabled={!activeBranch}
-                  title="승인된 출퇴근 기록을 Xero Payroll로 자동 전송합니다"
+                  title="Xero Payroll Sync"
                 >
                   <Send className="h-3.5 w-3.5" />
-                  Xero로 직접 전송
+                  {t('xero.syncBtn')}
                 </Button>
               )}
             </div>
@@ -349,13 +349,13 @@ export default function Attendance() {
       <div className="mb-6 grid gap-4 sm:grid-cols-3">
         <Card>
           <CardContent className="p-5">
-            <p className="text-xs text-muted-foreground">Records</p>
+            <p className="text-xs text-muted-foreground">{t('attendance.records')}</p>
             <p className="text-2xl font-semibold">{stats.count}</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-5">
-            <p className="text-xs text-muted-foreground">Total worked</p>
+            <p className="text-xs text-muted-foreground">{t('attendance.totalWorked')}</p>
             <p className="text-2xl font-semibold">
               {hours}h {minutes}m
             </p>
@@ -399,7 +399,7 @@ export default function Attendance() {
                     <TableHead>{t('attendance.geo')}</TableHead>
                     <TableHead>{t('attendance.approval')}</TableHead>
                     {canManageAttendance && (
-                      <TableHead className="text-right">관리</TableHead>
+                      <TableHead className="text-right">{t('common.actions')}</TableHead>
                     )}
                   </TableRow>
                 </TableHeader>

@@ -144,14 +144,16 @@ export default function ShiftDialog({
 
   const submit = async () => {
     if (!branch || !form.employee_email || !form.date) {
-      toast({ title: '직원과 날짜를 선택해주세요', variant: 'destructive' });
+      toast({ title: t('roster.selectStaffAndDate'), variant: 'destructive' });
       return;
     }
     // 선택된 날짜가 승인된 종일 휴가인 경우 즉시 배정 차단 (반차는 허용)
     if (isFullDayLeave) {
       toast({
-        title: '배정 불가: 해당 직원은 종일 휴가 중입니다.',
-        description: `${targetPersonName} 님은 ${form.date}에 종일 휴가로 등록되어 시프트를 배정할 수 없습니다.`,
+        title: t('roster.leave.allDayWarning'),
+        description: t('roster.leave.fullDayDesc')
+          .replace('{name}', targetPersonName)
+          .replace('{date}', form.date),
         variant: 'destructive'
       });
       return;
@@ -163,7 +165,7 @@ export default function ShiftDialog({
     const start = toMinutes(form.start_time);
     const end = toMinutes(form.end_time);
     if (end <= start) {
-      toast({ title: '종료 시간은 시작 시간보다 늦어야 합니다', variant: 'destructive' });
+      toast({ title: t('roster.timeValidation'), variant: 'destructive' });
       return;
     }
     const sameDayPage = await base44.entities.Shift
@@ -174,7 +176,7 @@ export default function ShiftDialog({
     );
     const clash = sameDay.some((row) => start < toMinutes(row.end_time) && toMinutes(row.start_time) < end);
     if (clash) {
-      toast({ title: '해당 직원의 근무 시간이 겹치는 기존 시프트가 있습니다', variant: 'destructive' });
+      toast({ title: t('roster.clashError'), variant: 'destructive' });
       return;
     }
     // 승인된 휴가가 있는 날 재확인 (종일 휴가만 차단, 반차는 허용)
@@ -195,7 +197,7 @@ export default function ShiftDialog({
       return !isPartial;
     });
     if (hasFullDayDbLeave) {
-      toast({ title: '해당 날짜에 승인된 종일 휴가가 있어 시프트를 배정할 수 없습니다.', variant: 'destructive' });
+      toast({ title: t('roster.leave.allDayWarning'), variant: 'destructive' });
       return;
     }
     setSaving(true);
@@ -280,10 +282,12 @@ export default function ShiftDialog({
             <div className="sm:col-span-2 flex items-start gap-2.5 rounded-xl border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900 shadow-sm dark:border-amber-700/50 dark:bg-amber-950/60 dark:text-amber-200">
               <div className="space-y-0.5">
                 <p className="font-semibold text-amber-950 dark:text-amber-100">
-                  승인된 휴가 (종일)
+                  {t('roster.leave.fullDayBadge')}
                 </p>
                 <p className="text-[11px] leading-relaxed opacity-90">
-                  선택하신 직원({targetPersonName})은 <strong>{form.date}</strong>에 종일 휴가(Leave) 중입니다. 종일 휴가일에는 시프트를 배정할 수 없습니다.
+                  {t('roster.leave.fullDayDesc')
+                    .replace('{name}', targetPersonName)
+                    .replace('{date}', form.date)}
                 </p>
               </div>
             </div>
@@ -294,10 +298,14 @@ export default function ShiftDialog({
             <div className="sm:col-span-2 flex items-start gap-2.5 rounded-xl border border-sky-300 bg-sky-50 p-3 text-xs text-sky-900 shadow-sm dark:border-sky-800/60 dark:bg-sky-950/50 dark:text-sky-200">
               <div className="space-y-0.5">
                 <p className="font-semibold text-sky-950 dark:text-sky-100">
-                  반차/시간 휴가 등록 안내 ({leaveHours}시간)
+                  {t('roster.leave.partialLeaveTitle').replace('{hours}', leaveHours)}
                 </p>
                 <p className="text-[11px] leading-relaxed opacity-90">
-                  선택하신 직원({targetPersonName})은 <strong>{form.date}</strong>에 {leaveHours}시간 휴가가 승인되어 있습니다. 남은 시간에 시프트 배정이 가능합니다. (권장 남은 근무: 약 {Math.max(0, 7.6 - leaveHours).toFixed(1)}시간)
+                  {t('roster.leave.partialLeaveDesc')
+                    .replace('{name}', targetPersonName)
+                    .replace('{date}', form.date)
+                    .replace('{hours}', leaveHours)
+                    .replace('{remaining}', Math.max(0, 7.6 - leaveHours).toFixed(1))}
                 </p>
               </div>
             </div>
@@ -310,10 +318,10 @@ export default function ShiftDialog({
             </div>
           ) : (
             <div className="sm:col-span-2">
-              <Label>직원 선택</Label>
+              <Label>{t('roster.selectStaff')}</Label>
               <Select value={form.employee_email} onValueChange={(v) => setForm({ ...form, employee_email: v })}>
                 <SelectTrigger>
-                  <SelectValue placeholder="직원을 선택하세요" />
+                  <SelectValue placeholder={t('roster.selectStaffPlaceholder')} />
                 </SelectTrigger>
                 <SelectContent>
                   {employees.map((e) => (
@@ -326,7 +334,7 @@ export default function ShiftDialog({
             </div>
           )}
           <div>
-            <Label>날짜</Label>
+            <Label>{t('common.date')}</Label>
             <Input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />
           </div>
           <div>
@@ -354,8 +362,8 @@ export default function ShiftDialog({
           {shiftTemplates.length > 0 && (
             <div className="sm:col-span-2 space-y-1.5">
               <div className="flex items-center justify-between">
-                <Label>시프트 프리셋</Label>
-                <span className="text-xs text-muted-foreground">버튼 클릭 시 시간 자동 입력</span>
+                <Label>{t('roster.presetTitle')}</Label>
+                <span className="text-xs text-muted-foreground">{t('roster.presetSub')}</span>
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                 {shiftTemplates.map((tmpl) => {
@@ -384,7 +392,7 @@ export default function ShiftDialog({
           )}
 
           <div>
-            <Label>시작 시간 (Start)</Label>
+            <Label>{t('roster.startTime')}</Label>
             <Input
               type="time"
               value={form.start_time}
@@ -392,7 +400,7 @@ export default function ShiftDialog({
             />
           </div>
           <div>
-            <Label>종료 시간 (End)</Label>
+            <Label>{t('roster.endTime')}</Label>
             <Input
               type="time"
               value={form.end_time}
@@ -400,7 +408,7 @@ export default function ShiftDialog({
             />
           </div>
           <div>
-            <Label>휴게시간 (분)</Label>
+            <Label>{t('roster.breakMinutes')}</Label>
             <Input
               type="number"
               value={form.break_min}
@@ -408,7 +416,7 @@ export default function ShiftDialog({
             />
           </div>
           <div className="sm:col-span-2">
-            <Label>메모 (Notes)</Label>
+            <Label>{t('roster.notes')}</Label>
             <Input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
           </div>
           {editing && shift.status === 'published' ? (

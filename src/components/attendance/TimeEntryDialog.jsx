@@ -127,18 +127,18 @@ export default function TimeEntryDialog({
     setError('');
 
     if (!branch || !branch.id) {
-      setError('지점 정보가 올바르지 않습니다.');
+      setError(t('attendance.entry.errBranch'));
       return;
     }
 
     if (!employeeEmail) {
-      setError('직원을 선택해 주세요.');
+      setError(t('attendance.entry.errStaff'));
       return;
     }
 
     const clockInAt = combineDateTime(clockInDate, clockInTime);
     if (!clockInAt) {
-      setError('출근 시간을 올바르게 입력해 주세요.');
+      setError(t('attendance.entry.errClockIn'));
       return;
     }
 
@@ -147,11 +147,11 @@ export default function TimeEntryDialog({
     if (hasClockOut) {
       clockOutAt = combineDateTime(clockOutDate, clockOutTime);
       if (!clockOutAt) {
-        setError('퇴근 시간을 올바르게 입력해 주세요.');
+        setError(t('attendance.entry.errClockOut'));
         return;
       }
       if (new Date(clockOutAt).getTime() <= new Date(clockInAt).getTime()) {
-        setError('퇴근 시간은 출근 시간보다 늦어야 합니다.');
+        setError(t('attendance.entry.errClockOrder'));
         return;
       }
       minutes = Math.max(0, Math.round((new Date(clockOutAt).getTime() - new Date(clockInAt).getTime()) / 60000));
@@ -176,13 +176,13 @@ export default function TimeEntryDialog({
           approval_status: approvalStatus,
           rejection_reason: approvalStatus === 'rejected' ? note : ''
         });
-        toast({ title: '타임시트 기록이 성공적으로 수정되었습니다.' });
+        toast({ title: t('attendance.entry.successUpdated') });
 
         // 디테일한 타임시트 수정 로그 기록
         logActivity({
           module: 'attendance',
           action: 'update',
-          summary: `${employeeName} 직원의 출퇴근 타임시트 수정 (${clockInTime} ~ ${hasClockOut ? clockOutTime : '미퇴근'}, ${minutes}분)`,
+          summary: `${employeeName} - ${clockInTime} ~ ${hasClockOut ? clockOutTime : 'Active'} (${minutes}m)`,
           details: {
             before: {
               clock_in_at: entry.clock_in_at,
@@ -218,13 +218,13 @@ export default function TimeEntryDialog({
           approval_status: approvalStatus,
           rejection_reason: approvalStatus === 'rejected' ? note : ''
         });
-        toast({ title: '타임시트 기록이 새로 등록되었습니다.' });
+        toast({ title: t('attendance.entry.successCreated') });
 
         // 디테일한 타임시트 추가 로그 기록
         logActivity({
           module: 'attendance',
           action: 'create',
-          summary: `${employeeName} 직원의 출퇴근 타임시트 수동 등록 (${clockInTime} ~ ${hasClockOut ? clockOutTime : '미퇴근'}, ${minutes}분)`,
+          summary: `${employeeName} - ${clockInTime} ~ ${hasClockOut ? clockOutTime : 'Active'} (${minutes}m)`,
           details: {
             after: {
               employee_email: employeeEmail,
@@ -246,7 +246,7 @@ export default function TimeEntryDialog({
       onOpenChange(false);
     } catch (err) {
       console.error('[TimeEntryDialog] save error:', err);
-      setError(err.message || '타임시트 기록 저장에 실패했습니다.');
+      setError(err.message || t('attendance.entry.errSave'));
     } finally {
       setSaving(false);
     }
@@ -258,14 +258,14 @@ export default function TimeEntryDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-base font-semibold">
             <Clock className="h-5 w-5 text-primary" />
-            {isEdit ? '출퇴근 타임시트 수정' : '신규 출퇴근 타임시트 추가'}
+            {isEdit ? t('attendance.entry.editTitle') : t('attendance.entry.addTitle')}
           </DialogTitle>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4 py-2">
           {/* 직원 선택 */}
           <div className="space-y-1.5">
-            <Label className="text-xs font-medium">직원 선택</Label>
+            <Label className="text-xs font-medium">{t('attendance.entry.selectStaff')}</Label>
             {isEdit ? (
               <Input
                 value={`${entry.employee_name || ''} (${entry.employee_email})`}
@@ -275,7 +275,7 @@ export default function TimeEntryDialog({
             ) : (
               <Select value={employeeEmail} onValueChange={setEmployeeEmail}>
                 <SelectTrigger className="h-9 text-xs">
-                  <SelectValue placeholder="직원을 선택하세요" />
+                  <SelectValue placeholder={t('attendance.entry.selectStaffPlaceholder')} />
                 </SelectTrigger>
                 <SelectContent>
                   {employees.map((emp) => (
@@ -291,7 +291,7 @@ export default function TimeEntryDialog({
           {/* 출근 일시 */}
           <div className="grid grid-cols-2 gap-2">
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium">출근 날짜</Label>
+              <Label className="text-xs font-medium">{t('attendance.entry.clockInDate')}</Label>
               <Input
                 type="date"
                 value={clockInDate}
@@ -301,7 +301,7 @@ export default function TimeEntryDialog({
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium">출근 시간</Label>
+              <Label className="text-xs font-medium">{t('attendance.entry.clockInTime')}</Label>
               <Input
                 type="time"
                 value={clockInTime}
@@ -315,13 +315,13 @@ export default function TimeEntryDialog({
           {/* 퇴근 일시 */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <Label className="text-xs font-medium">퇴근 일시</Label>
+              <Label className="text-xs font-medium">{t('attendance.entry.clockOutDateTime')}</Label>
               <button
                 type="button"
                 onClick={() => setHasClockOut(!hasClockOut)}
                 className="text-xs text-primary hover:underline"
               >
-                {hasClockOut ? '퇴근 미등록으로 변경' : '퇴근 시간 입력'}
+                {hasClockOut ? t('attendance.entry.removeClockOut') : t('attendance.entry.addClockOut')}
               </button>
             </div>
 
@@ -344,7 +344,7 @@ export default function TimeEntryDialog({
               </div>
             ) : (
               <div className="rounded-lg border border-dashed p-2.5 text-center text-xs text-muted-foreground bg-muted/30">
-                아직 퇴근하지 않은 근무 중 상태로 등록됩니다.
+                {t('attendance.entry.notClockedOutNotice')}
               </div>
             )}
           </div>
@@ -352,35 +352,35 @@ export default function TimeEntryDialog({
           {/* 실시간 근무 시간 표시 배지 */}
           {hasClockOut && calcMinutes > 0 && (
             <div className="flex items-center justify-between rounded-lg bg-primary/10 border border-primary/20 px-3 py-2 text-xs">
-              <span className="text-muted-foreground">총 계산 근무시간</span>
+              <span className="text-muted-foreground">{t('attendance.entry.calcTotal')}</span>
               <span className="font-semibold text-primary">
-                {calcHours > 0 ? `${calcHours}시간 ` : ''}{calcMins}분 ({calcMinutes}분)
+                {calcHours > 0 ? `${calcHours}h ` : ''}{calcMins}m ({calcMinutes}m)
               </span>
             </div>
           )}
 
           {/* 승인 상태 */}
           <div className="space-y-1.5">
-            <Label className="text-xs font-medium">승인 상태</Label>
+            <Label className="text-xs font-medium">{t('attendance.entry.approvalStatus')}</Label>
             <Select value={approvalStatus} onValueChange={setApprovalStatus}>
               <SelectTrigger className="h-9 text-xs">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="approved">승인 완료 (Approved)</SelectItem>
-                <SelectItem value="pending">승인 대기 (Pending)</SelectItem>
-                <SelectItem value="rejected">거절 (Rejected)</SelectItem>
+                <SelectItem value="approved">{t('attendance.entry.statusApproved')}</SelectItem>
+                <SelectItem value="pending">{t('attendance.entry.statusPending')}</SelectItem>
+                <SelectItem value="rejected">{t('attendance.entry.statusRejected')}</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
           {approvalStatus === 'rejected' && (
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium">거절 사유</Label>
+              <Label className="text-xs font-medium">{t('attendance.entry.rejectReason')}</Label>
               <Input
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
-                placeholder="거절 사유를 입력하세요"
+                placeholder={t('attendance.entry.rejectReasonPlaceholder')}
                 className="h-9 text-xs"
               />
             </div>
@@ -399,7 +399,7 @@ export default function TimeEntryDialog({
             </Button>
             <Button type="submit" size="sm" disabled={saving}>
               {saving && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
-              {isEdit ? '수정 완료' : '등록'}
+              {isEdit ? t('attendance.entry.saveEdit') : t('attendance.entry.saveCreate')}
             </Button>
           </DialogFooter>
         </form>
