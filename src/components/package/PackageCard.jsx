@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Loader2, RefreshCw } from 'lucide-react';
+import { Loader2, RefreshCw, CalendarPlus } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -13,12 +13,19 @@ import ModuleInfoTip from '@/components/package/ModuleInfoTip';
 import { PACKAGE_KEYS, PACKAGE_NAMES } from '@/lib/packages';
 import { base44 } from '@/api/base44Client';
 
-function Stat({ label, value, hint }) {
+/**
+ * 패키지 정보 요약 카드 (Stat)
+ * 각 항목의 라벨, 값, 보조 설명(hint) 및 액션 버튼(action)을 깔끔하게 렌더링합니다.
+ */
+function Stat({ label, value, hint, action }) {
   return (
-    <div className="rounded-lg border px-4 py-3">
-      <p className="text-xs text-muted-foreground">{label}</p>
-      <p className="mt-1 text-sm font-semibold">{value}</p>
-      {hint ? <p className="mt-0.5 text-xs text-muted-foreground">{hint}</p> : null}
+    <div className="rounded-lg border px-4 py-3 flex flex-col justify-between">
+      <div>
+        <p className="text-xs text-muted-foreground">{label}</p>
+        <p className="mt-1 text-sm font-semibold">{value}</p>
+        {hint ? <p className="mt-0.5 text-xs text-muted-foreground">{hint}</p> : null}
+      </div>
+      {action ? <div className="mt-2 pt-2 border-t border-border/50">{action}</div> : null}
     </div>
   );
 }
@@ -32,6 +39,7 @@ export default function PackageCard() {
   const [saving, setSaving] = useState(false);
   const [limitsSaving, setLimitsSaving] = useState(false);
 
+  // 현재 패키지 정보 동기화
   useEffect(() => {
     if (!pkg) return;
     setForm({ package: pkg.package || '', start_date: pkg.start_date || pkg.today || '' });
@@ -51,6 +59,13 @@ export default function PackageCard() {
   const locked = Boolean(pkg.job_lock);
   const expired = Boolean(pkg.expired);
 
+  /**
+   * 패키지 상태 관리 핸들러
+   * action 종류:
+   * - 'set': 요금제 및 시작일 직접 저장
+   * - 'reactivate': 만료된 계정 재활성화
+   * - 'extend_month': 액세스 종료일 한 달(30일) 자동 연장
+   */
   const send = async (action) => {
     setSaving(true);
     try {
@@ -62,7 +77,15 @@ export default function PackageCard() {
       });
       if (response.data?.error) throw new Error(response.data.error);
       await reloadPackage();
-      toast({ title: t('pkg.saved') });
+      
+      if (action === 'extend_month') {
+        toast({
+          title: '액세스 기간 30일 연장 완료',
+          description: `종료일이 ${response.data?.expires_at || '30일 뒤'}까지 성공적으로 늘어났습니다.`
+        });
+      } else {
+        toast({ title: t('pkg.saved') });
+      }
     } catch (error) {
       toast({ title: error.message || t('pkg.failed'), variant: 'destructive' });
     } finally {
@@ -70,7 +93,7 @@ export default function PackageCard() {
     }
   };
 
-  // An empty field hands the company back to the package default, 0 lifts the ceiling.
+  // 공고 및 직원 수 제한 저장 (0은 무제한, 빈칸은 기본값)
   const saveLimits = async () => {
     setLimitsSaving(true);
     try {
@@ -107,6 +130,7 @@ export default function PackageCard() {
         <p className="text-xs text-muted-foreground">{t('pkg.subtitle')}</p>
       </CardHeader>
       <CardContent className="space-y-4">
+        {/* 상단 패키지 정보 요약 그리드 */}
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           <Stat
             label={
@@ -122,11 +146,26 @@ export default function PackageCard() {
             label={t('pkg.expiresAt')}
             value={pkg.expires_at || '—'}
             hint={pkg.days_left === null || pkg.days_left === undefined ? '' : `${t('pkg.daysLeft')} ${pkg.days_left}`}
+            action={
+              isPlatformAdmin ? (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="w-full h-7 text-xs gap-1 text-primary border-primary/30 hover:bg-primary/10"
+                  onClick={() => send('extend_month')}
+                  disabled={saving}
+                >
+                  {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : <CalendarPlus className="h-3 w-3" />}
+                  한 달 늘리기 (+30일)
+                </Button>
+              ) : null
+            }
           />
         </div>
 
+        {/* 슈퍼어드민 전용 패키지 관리 및 기간 연장 영역 */}
         {isPlatformAdmin ? (
-          <div className="space-y-3 rounded-lg border px-4 py-4">
+          <div className="space-y-3 rounded-lg border px-4 py-4 bg-muted/10">
             <p className="text-xs text-muted-foreground">{t('pkg.assign')}</p>
             <div className="grid gap-3 sm:grid-cols-3">
               <div>
@@ -162,6 +201,16 @@ export default function PackageCard() {
                     <RefreshCw className="mr-2 h-4 w-4" /> {t('pkg.reactivate')}
                   </Button>
                 )}
+                {/* 원클릭 한 달 늘리기 버튼 */}
+                <Button
+                  variant="secondary"
+                  onClick={() => send('extend_month')}
+                  disabled={saving}
+                  className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 dark:bg-indigo-950/40 dark:text-indigo-300 dark:border-indigo-800"
+                >
+                  <CalendarPlus className="mr-1.5 h-4 w-4" />
+                  한 달 늘리기 (+30일)
+                </Button>
               </div>
             </div>
             {pkg.reactivated_at ? (
@@ -170,6 +219,7 @@ export default function PackageCard() {
               </p>
             ) : null}
 
+            {/* 공고 및 직원 한도 설정 */}
             <div className="space-y-3 border-t pt-3">
               <p className="text-xs text-muted-foreground">{t('pkg.limitsHint')}</p>
               <div className="grid gap-3 sm:grid-cols-3">

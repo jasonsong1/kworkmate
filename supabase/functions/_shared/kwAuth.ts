@@ -357,7 +357,9 @@ export const GATEWAY_ENTITIES = {
   Notification: { scope: 'company', company_field: 'company_id', self_field: 'user_email', module: 'dashboard', self_only: true, self_service: true },
   CalendarSubscription: { scope: 'company', company_field: 'company_id', self_field: 'user_email', module: 'dashboard', self_only: true, self_service: true },
   PushSubscription: { scope: 'company', company_field: 'company_id', self_field: 'user_email', module: 'dashboard', self_only: true, self_service: true },
-  ActivityLog: { scope: 'branch', branch_field: 'branch_id', module: 'activity_logs' }
+  ActivityLog: { scope: 'branch', branch_field: 'branch_id', module: 'activity_logs' },
+  // 인보이스(Tax Invoice) 엔티티: 플랫폼 관리자 및 회사 설정 영역에서 관리
+  Invoice: { scope: 'company', company_field: 'company_id', module: 'settings' }
 };
 
 const LEVEL_RANK = { none: 0, read: 1, update: 2, write: 3 };

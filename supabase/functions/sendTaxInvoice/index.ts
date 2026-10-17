@@ -265,7 +265,30 @@ async function handler(req: Request) {
       return Response.json({ error: sendResult.error || 'Failed to send email' }, { status: 500 });
     }
 
-    // Company 엔티티에 인보이스 발송 이력 및 전용 이메일 저장
+    // 1. invoices 테이블에 새 인보이스 이력 레코드 자동 저장 (초기 상태: unpaid)
+    const todayIsoDate = todayDate.toISOString().slice(0, 10);
+    const dueIsoDate = dueDateObj.toISOString().slice(0, 10);
+
+    const createdInvoice = await base44.asServiceRole.entities.Invoice.create({
+      company_id: company.id,
+      invoice_number: invNum,
+      issue_date: todayIsoDate,
+      due_date: dueIsoDate,
+      plan_key,
+      plan_name,
+      subtotal: numSubtotal,
+      gst,
+      total_amount: total,
+      recipient_email: invoice_email,
+      notes: notes || '',
+      status: 'unpaid',
+      paid_at: null
+    }).catch((err: any) => {
+      console.error('Failed to create invoice record:', err);
+      return null;
+    });
+
+    // 2. Company 엔티티에 최근 인보이스 발송 이력 및 전용 이메일 저장
     const nowIso = new Date().toISOString();
     await base44.asServiceRole.entities.Company.update(company.id, {
       invoice_email: invoice_email,
@@ -277,6 +300,7 @@ async function handler(req: Request) {
     return Response.json({
       success: true,
       invoice_number: invNum,
+      invoice_id: createdInvoice?.id,
       sent_to: invoice_email,
       sent_at: nowIso,
       total_amount: total

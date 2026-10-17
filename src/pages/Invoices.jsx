@@ -15,7 +15,13 @@ import {
   ShieldCheck,
   Edit2,
   Save,
-  Clock
+  Clock,
+  History,
+  CalendarPlus,
+  Check,
+  RotateCcw,
+  Receipt,
+  Plus
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -47,7 +53,7 @@ export default function Invoices() {
   const { toast } = useToast();
 
   const [companies, setCompanies] = useState([]);
-  const [packages, setPackages] = useState({});
+  const [invoices, setInvoices] = useState([]); // 전체 인보이스 이력 목록
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
 
@@ -55,7 +61,7 @@ export default function Invoices() {
   const [editingEmails, setEditingEmails] = useState({});
   const [savingEmailId, setSavingEmailId] = useState('');
 
-  // 인보이스 발송 모달 상태
+  // 1. 이번 달 인보이스 발송 모달 상태
   const [sendModalOpen, setSendModalOpen] = useState(false);
   const [selectedCompany, setSelectedCompany] = useState(null);
   const [sendForm, setSendForm] = useState({
@@ -67,21 +73,35 @@ export default function Invoices() {
   });
   const [sending, setSending] = useState(false);
 
-  // 회사 및 패키지 데이터 로드
+  // 2. 지난 인보이스 내역 및 수금 관리 모달 상태
+  const [historyModalOpen, setHistoryModalOpen] = useState(false);
+  const [historyCompany, setHistoryCompany] = useState(null);
+  const [updatingInvoiceId, setUpdatingInvoiceId] = useState('');
+  const [extendingCompanyId, setExtendingCompanyId] = useState('');
+
+  // 데이터 로드 (회사 목록 및 인보이스 이력)
   const loadData = async () => {
     setLoading(true);
     try {
-      const [compPage, pkgPage] = await Promise.all([
+      const [compPage, invPage] = await Promise.all([
         base44.entities.Company.list({ limit: 200 }).catch(() => ({ items: [] })),
-        base44.entities.PackageModule.list({ limit: 50 }).catch(() => ({ items: [] }))
+        base44.entities.Invoice.list({ limit: 500, sort: '-created_at' }).catch(() => ({ items: [] }))
       ]);
 
       const compList = (compPage && compPage.items) || compPage || [];
-      setCompanies(compList);
+      const invList = (invPage && invPage.items) || invPage || [];
 
-      // 인보이스 이메일 초기화
+      // 현재 Active(활성)한 회사만 필터링 (비활성화 deactivated !== true 및 inactive 제외)
+      const activeCompanies = compList.filter(
+        (c) => c.deactivated !== true && c.is_active !== false && c.status !== 'inactive'
+      );
+
+      setCompanies(activeCompanies);
+      setInvoices(invList);
+
+      // 인보이스 이메일 기본값 초기화
       const emailMap = {};
-      compList.forEach((c) => {
+      activeCompanies.forEach((c) => {
         emailMap[c.id] = c.invoice_email || c.contact_email || '';
       });
       setEditingEmails(emailMap);
@@ -111,7 +131,7 @@ export default function Invoices() {
     );
   }
 
-  // 검색 필터링된 회사 목록
+  // 검색 필터링된 활성 회사 목록
   const filteredCompanies = useMemo(() => {
     return companies.filter((c) => {
       const name = (c.name || '').toLowerCase();
@@ -121,6 +141,16 @@ export default function Invoices() {
       return name.includes(q) || abn.includes(q) || email.includes(q);
     });
   }, [companies, search]);
+
+  // 회사별 인보이스 목록 매핑
+  const invoicesByCompany = useMemo(() => {
+    const map = {};
+    invoices.forEach((inv) => {
+      if (!map[inv.company_id]) map[inv.company_id] = [];
+      map[inv.company_id].push(inv);
+    });
+    return map;
+  }, [invoices]);
 
   // 상단 통계 수치 계산
   const stats = useMemo(() => {
@@ -141,13 +171,27 @@ export default function Invoices() {
     const totalGst = Math.round(totalMonthlyExGst * 0.1 * 100) / 100;
     const totalIncGst = totalMonthlyExGst + totalGst;
 
+    // 인보이스 수금(Paid) 통계
+    let totalPaidAmount = 0;
+    let totalUnpaidAmount = 0;
+    invoices.forEach((inv) => {
+      const amt = Number(inv.total_amount) || 0;
+      if (inv.status === 'paid') {
+        totalPaidAmount += amt;
+      } else {
+        totalUnpaidAmount += amt;
+      }
+    });
+
     return {
       totalCount,
       totalMonthlyExGst,
       totalIncGst,
-      sentThisMonthCount
+      sentThisMonthCount,
+      totalPaidAmount,
+      totalUnpaidAmount
     };
-  }, [companies]);
+  }, [companies, invoices]);
 
   // 인보이스 전용 이메일 단일 저장 핸들러
   const handleSaveEmail = async (companyId) => {
@@ -170,20 +214,31 @@ export default function Invoices() {
     }
   };
 
-  // PDF 다운로드 핸들러
-  const handleDownloadPdf = (company) => {
-    const planKey = company.pricing_package || 'starter';
-    const invNum = company.last_invoice_number || generateInvoiceNumber(company.id);
-    downloadTaxInvoicePdf({
-      company,
-      invoiceNumber: invNum,
-      issueDate: new Date().toISOString().slice(0, 10),
-      planKey
-    });
-    toast({ title: `${company.name} Tax Invoice PDF가 다운로드되었습니다.` });
+  // PDF 다운로드 핸들러 (최신 또는 특정 인보이스 기준)
+  const handleDownloadPdf = (company, invoiceRecord = null) => {
+    if (invoiceRecord) {
+      downloadTaxInvoicePdf({
+        company,
+        invoiceNumber: invoiceRecord.invoice_number,
+        issueDate: invoiceRecord.issue_date,
+        planKey: invoiceRecord.plan_key || 'starter',
+        customAmount: Number(invoiceRecord.subtotal)
+      });
+      toast({ title: `${company.name} 인보이스(${invoiceRecord.invoice_number}) PDF가 다운로드되었습니다.` });
+    } else {
+      const planKey = company.pricing_package || 'starter';
+      const invNum = company.last_invoice_number || generateInvoiceNumber(company.id);
+      downloadTaxInvoicePdf({
+        company,
+        invoiceNumber: invNum,
+        issueDate: new Date().toISOString().slice(0, 10),
+        planKey
+      });
+      toast({ title: `${company.name} Tax Invoice PDF가 다운로드되었습니다.` });
+    }
   };
 
-  // 모달 열기 핸들러
+  // 인보이스 발송 모달 열기 핸들러
   const handleOpenSendModal = (company) => {
     setSelectedCompany(company);
     const planKey = company.pricing_package || 'starter';
@@ -199,6 +254,74 @@ export default function Invoices() {
       invoice_number: invNum
     });
     setSendModalOpen(true);
+  };
+
+  // 지난 인보이스 내역 모달 열기
+  const handleOpenHistoryModal = (company) => {
+    setHistoryCompany(company);
+    setHistoryModalOpen(true);
+  };
+
+  // 인보이스 수금(Paid / Unpaid) 매뉴얼 상태 토글 핸들러
+  const handleTogglePaymentStatus = async (invoice) => {
+    setUpdatingInvoiceId(invoice.id);
+    const isNowPaid = invoice.status === 'paid';
+    const nextStatus = isNowPaid ? 'unpaid' : 'paid';
+    const nextPaidAt = isNowPaid ? null : new Date().toISOString();
+
+    try {
+      await base44.entities.Invoice.update(invoice.id, {
+        status: nextStatus,
+        paid_at: nextPaidAt
+      });
+
+      // 로컬 state 즉시 반영
+      setInvoices((prev) =>
+        prev.map((inv) =>
+          inv.id === invoice.id ? { ...inv, status: nextStatus, paid_at: nextPaidAt } : inv
+        )
+      );
+
+      toast({
+        title: nextStatus === 'paid' ? '입금 확인(Paid) 처리 완료' : '미납(Unpaid)으로 변경 완료',
+        description: `${invoice.invoice_number} 상태가 갱신되었습니다.`
+      });
+    } catch (err) {
+      toast({
+        title: '상태 업데이트 실패',
+        description: (err && err.message) || '수금 상태 변경 중 오류가 발생했습니다.',
+        variant: 'destructive'
+      });
+    } finally {
+      setUpdatingInvoiceId('');
+    }
+  };
+
+  // 액세스 종료일 한 달 늘리기 (+30일) 원클릭 연장 핸들러
+  const handleExtendMonth = async (companyId) => {
+    setExtendingCompanyId(companyId);
+    try {
+      const res = await base44.functions.invoke('managePackage', {
+        action: 'extend_month',
+        company_id: companyId
+      });
+      if (res.data?.error) throw new Error(res.data.error);
+
+      toast({
+        title: '액세스 기간 30일 연장 완료!',
+        description: `종료일이 ${res.data?.expires_at || '30일 뒤'}까지 성공적으로 늘어났습니다.`
+      });
+
+      await loadData();
+    } catch (err) {
+      toast({
+        title: '기간 연장 실패',
+        description: (err && err.message) || '기간 연장 중 오류가 발생했습니다.',
+        variant: 'destructive'
+      });
+    } finally {
+      setExtendingCompanyId('');
+    }
   };
 
   // 인보이스 즉시 발송 핸들러
@@ -245,11 +368,14 @@ export default function Invoices() {
     }
   };
 
+  // 현재 선택된 회사의 인보이스 내역
+  const currentCompanyInvoices = historyCompany ? (invoicesByCompany[historyCompany.id] || []) : [];
+
   return (
     <div className="space-y-6">
       <PageHeader
         title="인보이스 관리 (Invoices)"
-        subtitle="고객사별 요금제 Tax Invoice 생성, 전용 이메일 등록 및 원클릭 발송 시스템"
+        subtitle="고객사별 Tax Invoice 발행, 입금(Paid) 확인 체크 및 액세스 종료일 자동 연장 시스템"
         actions={
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" onClick={loadData} disabled={loading}>
@@ -259,15 +385,15 @@ export default function Invoices() {
         }
       />
 
-      {/* 1. 상단 통계 및 KWorkMate 공급자 정보 카드 */}
+      {/* 1. 상단 통계 카드 */}
       <div className="grid gap-4 md:grid-cols-4">
         <Card className="border-l-4 border-l-primary">
           <CardHeader className="pb-2">
-            <CardDescription className="text-xs">총 고객사 수</CardDescription>
+            <CardDescription className="text-xs">현재 활성 고객사 (Active)</CardDescription>
             <CardTitle className="text-2xl font-bold">{stats.totalCount}개 사</CardTitle>
           </CardHeader>
           <CardContent className="text-xs text-muted-foreground">
-            KWorkMate 플랫폼 등록 기업
+            정상 이용 중인 활성 기업만 표시
           </CardContent>
         </Card>
 
@@ -285,39 +411,41 @@ export default function Invoices() {
 
         <Card className="border-l-4 border-l-emerald-500">
           <CardHeader className="pb-2">
-            <CardDescription className="text-xs">이번 달 발송 완료 기업</CardDescription>
+            <CardDescription className="text-xs">누적 수금 완료액 (Paid)</CardDescription>
             <CardTitle className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">
-              {stats.sentThisMonthCount} / {stats.totalCount}개
+              ${stats.totalPaidAmount.toLocaleString()} AUD
             </CardTitle>
           </CardHeader>
           <CardContent className="text-xs text-muted-foreground">
-            이번 달 청구서 전송 완료율 {stats.totalCount > 0 ? Math.round((stats.sentThisMonthCount / stats.totalCount) * 100) : 0}%
+            미수금액: ${stats.totalUnpaidAmount.toLocaleString()} AUD
           </CardContent>
         </Card>
 
         <Card className="bg-slate-50 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800">
           <CardHeader className="pb-2">
             <CardDescription className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-              KWorkMate 공급자 세법 규격
+              KWorkMate 공급자 규격
             </CardDescription>
             <CardTitle className="text-sm font-medium">ABN: {KWORKMATE_ISSUER.abn}</CardTitle>
           </CardHeader>
           <CardContent className="text-xs space-y-0.5 text-muted-foreground">
-            <div>입금은행: CBA (BSB: {KWORKMATE_ISSUER.bsb})</div>
-            <div>계좌번호: {KWORKMATE_ISSUER.accountNumber}</div>
-            <div className="font-medium text-primary">호주 GST 10% 자동 계산</div>
+            <div>입금계좌: CBA BSB {KWORKMATE_ISSUER.bsb} / {KWORKMATE_ISSUER.accountNumber}</div>
+            <div className="font-medium text-primary">호주 세법 규격 GST 10% 자동 분리</div>
           </CardContent>
         </Card>
       </div>
 
-      {/* 2. 회사별 인보이스 관리 테이블 */}
+      {/* 2. 활성 고객사별 인보이스 관리 테이블 */}
       <Card>
         <CardHeader className="pb-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
-              <CardTitle className="text-lg">고객사별 인보이스 목록</CardTitle>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <span>활성 고객사 인보이스 목록</span>
+                <Badge variant="secondary" className="text-xs font-normal">Active Only</Badge>
+              </CardTitle>
               <CardDescription className="text-xs mt-1">
-                회사별 인보이스 수신 전용 이메일을 등록하고, 이번 달 Tax Invoice를 PDF로 출력하거나 즉시 발송합니다.
+                계좌 입금 확인 시 [인보이스 내역]에서 '입금 완료(Paid)'를 체크하고, '한 달 늘리기'로 이용 기간을 연장하세요.
               </CardDescription>
             </div>
             <div className="relative w-full sm:w-64">
@@ -335,23 +463,23 @@ export default function Invoices() {
           {loading ? (
             <div className="py-16 text-center text-sm text-muted-foreground">
               <Loader2 className="mx-auto mb-2 h-6 w-6 animate-spin text-primary" />
-              고객사 정보를 불러오는 중입니다...
+              활성 고객사 정보를 불러오는 중입니다...
             </div>
           ) : filteredCompanies.length === 0 ? (
             <div className="py-16 text-center text-sm text-muted-foreground">
-              등록된 고객사가 없거나 검색 결과가 없습니다.
+              활성화된 고객사가 없거나 검색 결과가 없습니다.
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm border-collapse">
                 <thead>
                   <tr className="border-t border-b bg-muted/40 text-xs font-semibold text-muted-foreground text-left">
-                    <th className="py-3 px-4">고객사 (Company)</th>
+                    <th className="py-3 px-4">고객사 (Active Company)</th>
                     <th className="py-3 px-4">구독 플랜</th>
                     <th className="py-3 px-4">월 청구액</th>
-                    <th className="py-3 px-4 min-w-[280px]">인보이스 전용 이메일</th>
-                    <th className="py-3 px-4">최근 발송 이력</th>
-                    <th className="py-3 px-4 text-right">인보이스 액션</th>
+                    <th className="py-3 px-4 min-w-[260px]">인보이스 전용 이메일</th>
+                    <th className="py-3 px-4">최근 인보이스</th>
+                    <th className="py-3 px-4 text-right">관리 액션</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y text-xs">
@@ -361,6 +489,10 @@ export default function Invoices() {
                     const subtotal = planInfo.monthlyExGst;
                     const gst = Math.round(subtotal * 0.1 * 100) / 100;
                     const total = subtotal + gst;
+
+                    const companyInvs = invoicesByCompany[company.id] || [];
+                    const invCount = companyInvs.length;
+                    const latestInv = companyInvs[0]; // 가장 최근 인보이스
 
                     const lastSent = company.last_invoice_sent_at
                       ? new Date(company.last_invoice_sent_at).toLocaleDateString('ko-KR', {
@@ -428,22 +560,35 @@ export default function Invoices() {
                             </Button>
                           </div>
                           <div className="text-[10px] text-muted-foreground mt-0.5 flex items-center gap-1">
-                            <span>대표 이메일:</span>
+                            <span>대표:</span>
                             <span className="truncate max-w-[180px]">{company.contact_email || '—'}</span>
                           </div>
                         </td>
 
-                        {/* 5. 최근 발송 이력 */}
+                        {/* 5. 최근 인보이스 & 수금 상태 */}
                         <td className="py-3 px-4">
-                          {lastSent ? (
+                          {latestInv ? (
                             <div>
-                              <div className="font-medium text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
-                                <CheckCircle2 className="h-3.5 w-3.5" />
-                                <span>{lastSent}</span>
+                              <div className="font-medium text-foreground flex items-center gap-1.5">
+                                <span>{latestInv.invoice_number}</span>
+                                {latestInv.status === 'paid' ? (
+                                  <Badge variant="outline" className="h-5 px-1.5 bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-300">
+                                    <Check className="h-3 w-3 mr-0.5" /> 입금완료
+                                  </Badge>
+                                ) : (
+                                  <Badge variant="outline" className="h-5 px-1.5 bg-amber-50 text-amber-700 border-amber-300 dark:bg-amber-950/40 dark:text-amber-300">
+                                    <Clock className="h-3 w-3 mr-0.5" /> 미납
+                                  </Badge>
+                                )}
                               </div>
-                              <div className="text-[10px] text-muted-foreground">
-                                {company.last_invoice_number || '완료'}
+                              <div className="text-[10px] text-muted-foreground mt-0.5">
+                                발행일: {latestInv.issue_date} (${Number(latestInv.total_amount).toFixed(2)})
                               </div>
+                            </div>
+                          ) : lastSent ? (
+                            <div>
+                              <div className="text-emerald-600 dark:text-emerald-400 font-medium">{lastSent} 발송</div>
+                              <div className="text-[10px] text-muted-foreground">{company.last_invoice_number}</div>
                             </div>
                           ) : (
                             <span className="text-muted-foreground">발송 이력 없음</span>
@@ -453,6 +598,19 @@ export default function Invoices() {
                         {/* 6. 액션 버튼 */}
                         <td className="py-3 px-4 text-right">
                           <div className="flex items-center justify-end gap-1.5">
+                            {/* 지난 인보이스 내역 모달 열기 버튼 */}
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-8 text-xs gap-1 border-indigo-200 text-indigo-700 hover:bg-indigo-50 dark:border-indigo-800 dark:text-indigo-300"
+                              onClick={() => handleOpenHistoryModal(company)}
+                              title="과거 모든 인보이스 목록 조회 및 수금 체크"
+                            >
+                              <History className="h-3.5 w-3.5" />
+                              <span>내역 ({invCount})</span>
+                            </Button>
+
+                            {/* 이번 달 PDF 즉시 다운로드 */}
                             <Button
                               variant="outline"
                               size="sm"
@@ -462,6 +620,8 @@ export default function Invoices() {
                               <Download className="h-3.5 w-3.5" />
                               <span>PDF</span>
                             </Button>
+
+                            {/* 이번 달 인보이스 발송 */}
                             <Button
                               size="sm"
                               className="h-8 text-xs gap-1 bg-primary text-primary-foreground"
@@ -482,13 +642,196 @@ export default function Invoices() {
         </CardContent>
       </Card>
 
-      {/* 3. Tax Invoice 발송 다이얼로그 모달 */}
+      {/* 3. 지난 인보이스 내역 & 수금 체크 & 한 달 늘리기 모달 */}
+      <Dialog open={historyModalOpen} onOpenChange={setHistoryModalOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center justify-between">
+              <span className="flex items-center gap-2">
+                <Receipt className="h-5 w-5 text-primary" />
+                <span>{historyCompany?.name} 인보이스 전체 내역</span>
+              </span>
+              {/* 모달 상단 원클릭 한 달 늘리기 버튼 */}
+              {historyCompany && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8 text-xs gap-1 bg-indigo-50 text-indigo-700 border-indigo-300 hover:bg-indigo-100 dark:bg-indigo-950/40 dark:text-indigo-300"
+                  onClick={() => handleExtendMonth(historyCompany.id)}
+                  disabled={extendingCompanyId === historyCompany.id}
+                >
+                  {extendingCompanyId === historyCompany.id ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <CalendarPlus className="h-3.5 w-3.5" />
+                  )}
+                  액세스 종료일 +30일 연장
+                </Button>
+              )}
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              계좌로 입금된 내역을 확인한 후 각 인보이스의 <strong>[입금 확인]</strong>을 체크하세요. 이전 인보이스의 PDF도 언제든 다시 다운로드할 수 있습니다.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="py-2">
+            {currentCompanyInvoices.length === 0 ? (
+              <div className="py-12 text-center text-xs text-muted-foreground border rounded-lg bg-muted/20">
+                <Receipt className="mx-auto mb-2 h-8 w-8 text-muted-foreground/40" />
+                저장된 인보이스 내역이 없습니다.
+                <div className="mt-1 text-[11px]">
+                  [발송] 버튼으로 인보이스를 발송하면 이 테이블에 자동으로 누적 기록됩니다.
+                </div>
+              </div>
+            ) : (
+              <div className="max-h-[380px] overflow-y-auto border rounded-lg">
+                <table className="w-full text-xs border-collapse">
+                  <thead className="sticky top-0 bg-muted/90 backdrop-blur z-10 border-b">
+                    <tr className="text-muted-foreground text-left">
+                      <th className="py-2.5 px-3">발행일</th>
+                      <th className="py-2.5 px-3">인보이스 번호</th>
+                      <th className="py-2.5 px-3">플랜 / 금액</th>
+                      <th className="py-2.5 px-3">수금 상태</th>
+                      <th className="py-2.5 px-3 text-right">액션</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y">
+                    {currentCompanyInvoices.map((inv) => {
+                      const isPaid = inv.status === 'paid';
+                      const isUpdating = updatingInvoiceId === inv.id;
+                      const paidDateStr = inv.paid_at
+                        ? new Date(inv.paid_at).toLocaleDateString('ko-KR', {
+                            year: 'numeric',
+                            month: '2-digit',
+                            day: '2-digit'
+                          })
+                        : null;
+
+                      return (
+                        <tr key={inv.id} className="hover:bg-muted/30">
+                          {/* 발행일 */}
+                          <td className="py-3 px-3 font-medium text-foreground">
+                            {inv.issue_date}
+                          </td>
+
+                          {/* 인보이스 번호 & 수신 이메일 */}
+                          <td className="py-3 px-3">
+                            <div className="font-semibold text-primary">{inv.invoice_number}</div>
+                            {inv.recipient_email && (
+                              <div className="text-[10px] text-muted-foreground mt-0.5">
+                                {inv.recipient_email}
+                              </div>
+                            )}
+                          </td>
+
+                          {/* 플랜 & 금액 */}
+                          <td className="py-3 px-3">
+                            <div className="font-bold text-foreground">
+                              ${Number(inv.total_amount).toFixed(2)} AUD
+                            </div>
+                            <div className="text-[10px] text-muted-foreground">
+                              공급가 ${Number(inv.subtotal).toFixed(2)} + GST ${Number(inv.gst).toFixed(2)}
+                            </div>
+                          </td>
+
+                          {/* 수금 상태 (Paid vs Unpaid) */}
+                          <td className="py-3 px-3">
+                            {isPaid ? (
+                              <div>
+                                <Badge className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-[11px] gap-1">
+                                  <Check className="h-3 w-3" /> 입금완료 (Paid)
+                                </Badge>
+                                {paidDateStr && (
+                                  <div className="text-[10px] text-emerald-700 dark:text-emerald-400 mt-0.5">
+                                    확인: {paidDateStr}
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              <div>
+                                <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-300 dark:bg-amber-950/40 dark:text-amber-300 font-medium text-[11px] gap-1">
+                                  <Clock className="h-3 w-3" /> 미납 (Unpaid)
+                                </Badge>
+                              </div>
+                            )}
+                          </td>
+
+                          {/* 액션 (입금 상태 토글 & PDF 다운로드) */}
+                          <td className="py-3 px-3 text-right">
+                            <div className="flex items-center justify-end gap-1.5">
+                              {/* 입금 확인 토글 버튼 */}
+                              <Button
+                                size="sm"
+                                variant={isPaid ? 'ghost' : 'default'}
+                                className={`h-7 px-2 text-xs gap-1 ${
+                                  isPaid
+                                    ? 'text-muted-foreground hover:text-amber-700'
+                                    : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                                }`}
+                                onClick={() => handleTogglePaymentStatus(inv)}
+                                disabled={isUpdating}
+                                title={isPaid ? '미납 상태로 변경' : '계좌 입금 확인 완료'}
+                              >
+                                {isUpdating ? (
+                                  <Loader2 className="h-3 w-3 animate-spin" />
+                                ) : isPaid ? (
+                                  <>
+                                    <RotateCcw className="h-3 w-3" />
+                                    <span>미납전환</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Check className="h-3 w-3" />
+                                    <span>입금확인</span>
+                                  </>
+                                )}
+                              </Button>
+
+                              {/* PDF 다운로드 버튼 */}
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 px-2 text-xs gap-1"
+                                onClick={() => handleDownloadPdf(historyCompany, inv)}
+                                title="이 인보이스 PDF 다운로드"
+                              >
+                                <Download className="h-3 w-3" />
+                                <span>PDF</span>
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="sm:justify-between">
+            <div className="text-[11px] text-muted-foreground">
+              총 {currentCompanyInvoices.length}건의 인보이스 기록
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setHistoryModalOpen(false)}
+            >
+              닫기
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 4. Tax Invoice 발송 다이얼로그 모달 */}
       <Dialog open={sendModalOpen} onOpenChange={setSendModalOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Tax Invoice 이메일 발송</DialogTitle>
             <DialogDescription className="text-xs">
-              {selectedCompany?.name}에 공식 호주 세법 규격의 인보이스 이메일을 발송합니다.
+              {selectedCompany?.name}에 공식 호주 세법 규격의 인보이스 이메일을 발송합니다. 발송 시 인보이스 내역에 자동 등록됩니다.
             </DialogDescription>
           </DialogHeader>
 

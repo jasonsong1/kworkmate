@@ -19,6 +19,7 @@ export function tableFor(entity) {
   if (name === 'User') return 'employee_profile';
   if (name === 'TfnDeclaration') return 'tfn_declarations';
   if (name === 'TfnDocument') return 'tfn_documents';
+  if (name === 'Invoice') return 'invoices';
   return name.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase();
 }
 
