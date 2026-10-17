@@ -15,17 +15,14 @@ import { base44 } from '@/api/base44Client';
 
 /**
  * 패키지 정보 요약 카드 (Stat)
- * 각 항목의 라벨, 값, 보조 설명(hint) 및 액션 버튼(action)을 깔끔하게 렌더링합니다.
+ * 각 항목의 라벨, 값 및 보조 설명(hint)을 깔끔하게 렌더링합니다.
  */
-function Stat({ label, value, hint, action }) {
+function Stat({ label, value, hint }) {
   return (
-    <div className="rounded-lg border px-4 py-3 flex flex-col justify-between">
-      <div>
-        <p className="text-xs text-muted-foreground">{label}</p>
-        <p className="mt-1 text-sm font-semibold">{value}</p>
-        {hint ? <p className="mt-0.5 text-xs text-muted-foreground">{hint}</p> : null}
-      </div>
-      {action ? <div className="mt-2 pt-2 border-t border-border/50">{action}</div> : null}
+    <div className="rounded-lg border px-4 py-3">
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="mt-1 text-sm font-semibold">{value}</p>
+      {hint ? <p className="mt-0.5 text-xs text-muted-foreground">{hint}</p> : null}
     </div>
   );
 }
@@ -146,20 +143,6 @@ export default function PackageCard() {
             label={t('pkg.expiresAt')}
             value={pkg.expires_at || '—'}
             hint={pkg.days_left === null || pkg.days_left === undefined ? '' : `${t('pkg.daysLeft')} ${pkg.days_left}`}
-            action={
-              isPlatformAdmin ? (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="w-full h-7 text-xs gap-1 text-primary border-primary/30 hover:bg-primary/10"
-                  onClick={() => send('extend_month')}
-                  disabled={saving}
-                >
-                  {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : <CalendarPlus className="h-3 w-3" />}
-                  한 달 늘리기 (+30일)
-                </Button>
-              ) : null
-            }
           />
         </div>
 

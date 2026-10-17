@@ -17,7 +17,6 @@ import {
   Save,
   Clock,
   History,
-  CalendarPlus,
   Check,
   RotateCcw,
   Receipt,
@@ -45,7 +44,6 @@ import { useWorkspace } from '@/lib/WorkspaceContext';
 import { base44 } from '@/api/base44Client';
 import PageHeader from '@/components/PageHeader';
 import {
-  KWORKMATE_ISSUER,
   PLAN_PRICING,
   XERO_ADDON_PRICE,
   generateInvoiceNumber,
@@ -82,7 +80,6 @@ export default function Invoices() {
   const [historyModalOpen, setHistoryModalOpen] = useState(false);
   const [historyCompany, setHistoryCompany] = useState(null);
   const [updatingInvoiceId, setUpdatingInvoiceId] = useState('');
-  const [extendingCompanyId, setExtendingCompanyId] = useState('');
 
   // 데이터 로드 (활성 회사 목록 및 인보이스 이력)
   const loadData = async () => {
@@ -358,33 +355,6 @@ export default function Invoices() {
     }
   };
 
-  // 액세스 종료일 한 달 늘리기 (+30일) 원클릭 연장 핸들러
-  const handleExtendMonth = async (companyId) => {
-    setExtendingCompanyId(companyId);
-    try {
-      const res = await base44.functions.invoke('managePackage', {
-        action: 'extend_month',
-        company_id: companyId
-      });
-      if (res.data?.error) throw new Error(res.data.error);
-
-      toast({
-        title: '액세스 기간 30일 연장 완료!',
-        description: `종료일이 ${res.data?.expires_at || '30일 뒤'}까지 성공적으로 늘어났습니다.`
-      });
-
-      await loadData();
-    } catch (err) {
-      toast({
-        title: '기간 연장 실패',
-        description: (err && err.message) || '기간 연장 중 오류가 발생했습니다.',
-        variant: 'destructive'
-      });
-    } finally {
-      setExtendingCompanyId('');
-    }
-  };
-
   // 인보이스 즉시 발송 핸들러
   const handleSendInvoice = async () => {
     if (!selectedCompany) return;
@@ -436,7 +406,7 @@ export default function Invoices() {
     <div className="space-y-6">
       <PageHeader
         title="인보이스 관리 (Invoices)"
-        subtitle="고객사별 Tax Invoice 발행, Xero 애드온(월 $20) 제어, 입금(Paid) 확인 및 기간 자동 연장"
+        subtitle="고객사별 Tax Invoice 발행, Xero 애드온(월 $20) 제어 및 입금(Paid) 확인"
         actions={
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" onClick={loadData} disabled={loading}>
@@ -446,8 +416,8 @@ export default function Invoices() {
         }
       />
 
-      {/* 1. 상단 통계 카드 */}
-      <div className="grid gap-4 md:grid-cols-4">
+      {/* 1. 상단 통계 카드 (3개 구성) */}
+      <div className="grid gap-4 md:grid-cols-3">
         <Card className="border-l-4 border-l-primary">
           <CardHeader className="pb-2">
             <CardDescription className="text-xs">현재 활성 고객사 (Active)</CardDescription>
@@ -479,19 +449,6 @@ export default function Invoices() {
           </CardHeader>
           <CardContent className="text-xs text-muted-foreground">
             미수금액: ${stats.totalUnpaidAmount.toLocaleString()} AUD
-          </CardContent>
-        </Card>
-
-        <Card className="bg-slate-50 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800">
-          <CardHeader className="pb-2">
-            <CardDescription className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-              KWorkMate 공급자 규격
-            </CardDescription>
-            <CardTitle className="text-sm font-medium">ABN: {KWORKMATE_ISSUER.abn}</CardTitle>
-          </CardHeader>
-          <CardContent className="text-xs space-y-0.5 text-muted-foreground">
-            <div>입금계좌: CBA BSB {KWORKMATE_ISSUER.bsb} / {KWORKMATE_ISSUER.accountNumber}</div>
-            <div className="font-medium text-primary">호주 세법 규격 GST 10% 자동 분리</div>
           </CardContent>
         </Card>
       </div>
@@ -737,32 +694,13 @@ export default function Invoices() {
         </CardContent>
       </Card>
 
-      {/* 3. 지난 인보이스 내역 & 수금 체크 & 한 달 늘리기 모달 */}
+      {/* 3. 지난 인보이스 내역 & 수금 체크 모달 */}
       <Dialog open={historyModalOpen} onOpenChange={setHistoryModalOpen}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle className="flex items-center justify-between">
-              <span className="flex items-center gap-2">
-                <Receipt className="h-5 w-5 text-primary" />
-                <span>{historyCompany?.name} 인보이스 전체 내역</span>
-              </span>
-              {/* 모달 상단 원클릭 한 달 늘리기 버튼 */}
-              {historyCompany && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-8 text-xs gap-1 bg-indigo-50 text-indigo-700 border-indigo-300 hover:bg-indigo-100 dark:bg-indigo-950/40 dark:text-indigo-300"
-                  onClick={() => handleExtendMonth(historyCompany.id)}
-                  disabled={extendingCompanyId === historyCompany.id}
-                >
-                  {extendingCompanyId === historyCompany.id ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <CalendarPlus className="h-3.5 w-3.5" />
-                  )}
-                  액세스 종료일 +30일 연장
-                </Button>
-              )}
+            <DialogTitle className="flex items-center gap-2">
+              <Receipt className="h-5 w-5 text-primary" />
+              <span>{historyCompany?.name} 인보이스 전체 내역</span>
             </DialogTitle>
             <DialogDescription className="text-xs">
               계좌로 입금된 내역을 확인한 후 각 인보이스의 <strong>[입금확인]</strong>을 체크하세요. 이전 인보이스의 PDF도 언제든 다시 다운로드할 수 있습니다.
