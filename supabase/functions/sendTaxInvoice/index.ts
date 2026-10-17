@@ -222,9 +222,12 @@ async function handler(req: Request) {
       invoice_number,
       plan_key = 'starter',
       plan_name = 'Starter',
+      planName: camelPlanName,
       subtotal = 99,
       notes = ''
     } = body;
+
+    const planName = camelPlanName || plan_name || 'Starter';
 
     if (!company_id || !invoice_email) {
       return Response.json({ error: 'company_id and invoice_email are required' }, { status: 400 });
