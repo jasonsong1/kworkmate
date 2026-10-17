@@ -144,45 +144,7 @@ export default function XeroIntegrationCard({ company, onUpdated }) {
 
   return (
     <Card className="border shadow-xs">
-      {/* 1. 슈퍼어드민(대표님) 전용 애드온 권한 제어 바 (고객에게는 절대 보이지 않음) */}
-      {isPlatformAdmin && (
-        <div className="bg-indigo-50/80 dark:bg-indigo-950/40 border-b border-indigo-100 dark:border-indigo-900/60 px-5 py-3 rounded-t-xl flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <ShieldCheck className="h-4 w-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
-            <div>
-              <span className="text-xs font-bold text-indigo-900 dark:text-indigo-200">
-                {t('xero.superAdminBanner')}
-              </span>
-              <p className="text-[11px] text-indigo-700/80 dark:text-indigo-300/80">
-                {t('xero.superAdminBannerDesc')}
-              </p>
-            </div>
-          </div>
-          <Button
-            size="sm"
-            variant={isAddonEnabled ? 'destructive' : 'default'}
-            className="h-7 text-xs gap-1 shrink-0 bg-indigo-600 hover:bg-indigo-700 text-white font-medium"
-            onClick={handleToggleAddon}
-            disabled={addonToggling}
-          >
-            {addonToggling ? (
-              <Loader2 className="h-3 w-3 animate-spin" />
-            ) : isAddonEnabled ? (
-              <>
-                <Lock className="h-3 w-3" />
-                <span>{t('xero.revokeAccess')}</span>
-              </>
-            ) : (
-              <>
-                <Unlock className="h-3 w-3" />
-                <span>{t('xero.grantAccess')}</span>
-              </>
-            )}
-          </Button>
-        </div>
-      )}
-
-      {/* 2. 일반 고객 및 관리자 공통 카드 헤더 */}
+      {/* 카드 헤더 */}
       <CardHeader>
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-3">
@@ -191,18 +153,17 @@ export default function XeroIntegrationCard({ company, onUpdated }) {
             </div>
             <div>
               <CardTitle className="text-base flex items-center gap-2">
-                <span>{t('xero.cardTitle')}</span>
+                <span>{lang === 'en' ? 'Xero Integration' : (t('xero.cardTitle') || 'Xero 회계 및 급여(Payroll) 연동')}</span>
                 {isConnected ? (
                   <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 text-[10px] font-semibold gap-1">
                     <CheckCircle2 className="h-3 w-3" />
                     {t('xero.connected')}
                   </Badge>
-                ) : !isAddonEnabled ? (
+                ) : (
                   <Badge variant="outline" className="text-muted-foreground text-[10px] gap-1">
-                    <Lock className="h-2.5 w-2.5" />
-                    {t('xero.paidAddon')}
+                    {t('xero.notConnected')}
                   </Badge>
-                ) : null}
+                )}
               </CardTitle>
               <CardDescription className="text-xs mt-0.5">
                 {t('xero.cardDesc')}
@@ -222,8 +183,7 @@ export default function XeroIntegrationCard({ company, onUpdated }) {
                 {loading ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Unlink className="mr-1.5 h-3.5 w-3.5" />}
                 {t('xero.disconnectBtn')}
               </Button>
-            ) : isAddonEnabled || isPlatformAdmin ? (
-              /* 슈퍼어드민이 애드온을 열어주었을 때 버튼 활성화 */
+            ) : (
               <Button
                 size="sm"
                 className="text-xs bg-[#13b5ea] hover:bg-[#0fa0cf] text-white font-semibold gap-1.5 shadow-sm"
@@ -232,17 +192,6 @@ export default function XeroIntegrationCard({ company, onUpdated }) {
               >
                 {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Link2 className="h-3.5 w-3.5" />}
                 {t('xero.connectBtn')}
-              </Button>
-            ) : (
-              /* 일반 고객에게 애드온이 닫혀 있을 때 잠금 표시 */
-              <Button
-                size="sm"
-                variant="outline"
-                className="text-xs text-muted-foreground bg-muted/30 cursor-not-allowed gap-1.5 border-dashed"
-                disabled={true}
-              >
-                <Lock className="h-3.5 w-3.5 text-muted-foreground" />
-                {t('xero.awaitingApproval')}
               </Button>
             )}
           </div>
@@ -274,13 +223,13 @@ export default function XeroIntegrationCard({ company, onUpdated }) {
                 : 'Click "Send Timesheets to Xero" on the Attendance screen to sync approved records directly.'}
             </p>
           </div>
-        ) : isAddonEnabled || isPlatformAdmin ? (
+        ) : (
           <div className="rounded-xl border border-dashed p-4 bg-muted/20 space-y-2 text-muted-foreground">
             <div className="font-semibold text-foreground text-xs flex items-center gap-1.5 text-primary">
               <Sparkles className="h-3.5 w-3.5" />
               {lang === 'ko'
-                ? 'Xero 연동 권한이 승인되었습니다. 지금 계정을 연결해 보세요!'
-                : 'Xero integration is unlocked! Connect your account now.'}
+                ? 'Xero 계정을 연결하여 출퇴근 타임시트를 자동 동기화해보세요!'
+                : 'Connect your Xero account to sync approved employee timesheets directly!'}
             </div>
             <ol className="list-decimal list-inside space-y-1 text-[11px] leading-relaxed mt-1">
               <li>{lang === 'ko' ? '상단의 [Xero 계정 연동] 버튼을 클릭합니다.' : 'Click "Connect to Xero" button above.'}</li>
@@ -288,17 +237,6 @@ export default function XeroIntegrationCard({ company, onUpdated }) {
               <li>{lang === 'ko' ? '연동할 사업장 조직(Organization)을 선택하고 승인합니다.' : 'Select your Xero organisation and click "Allow access".'}</li>
               <li>{lang === 'ko' ? 'KWorkMate로 자동 복귀되면 타임시트 연동이 완료됩니다!' : 'You will be redirected back with live integration enabled!'}</li>
             </ol>
-          </div>
-        ) : (
-          /* 애드온 미승인 상태의 일반 고객 안내 박스 */
-          <div className="rounded-xl border border-amber-200 bg-amber-50/50 p-4 dark:bg-amber-950/20 dark:border-amber-800/60 space-y-2">
-            <div className="flex items-center gap-2 text-amber-800 dark:text-amber-300 font-semibold text-xs">
-              <Lock className="h-4 w-4" />
-              <span>{t('xero.awaitingApproval')}</span>
-            </div>
-            <p className="text-[11px] text-amber-700 dark:text-amber-400 leading-relaxed">
-              {t('xero.paidNotice')}
-            </p>
           </div>
         )}
       </CardContent>

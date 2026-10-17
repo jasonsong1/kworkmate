@@ -37,7 +37,7 @@ const PANEL_MODULES = {
 };
 
 export default function CompanySettings() {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const { company, role, isPlatformAdmin, isCompanyAdmin, access, pkg, presets, feature, hasModule, levelOf, patchCompany, reload } = useWorkspace();
   const videoAllowed = isPlatformAdmin || videoInterviewAllowed(pkg);
   const miniAllowed = isPlatformAdmin || feature('mini_interview');
@@ -233,7 +233,7 @@ export default function CompanySettings() {
     { key: 'screening', label: t('settings.cat.screening') },
     { key: 'permissions', label: t('settings.cat.permissions') },
     { key: 'pay', label: t('settings.cat.pay') },
-    { key: 'xero', label: 'Xero 연동' }
+    { key: 'xero', label: lang === 'en' ? 'Xero Integration' : 'Xero 연동' }
   ].filter((category) => category.key === 'xero' || isPlatformAdmin || (PANEL_MODULES[category.key] || []).every((module) => hasModule(module)));
   // A panel this package does not carry is never the open one.
   const activeTab = CATEGORIES.some((category) => category.key === tab) ? tab : 'company';

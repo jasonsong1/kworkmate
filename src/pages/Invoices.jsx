@@ -322,14 +322,62 @@ export default function Invoices() {
   };
 
   // 인보이스 수금(Paid / Unpaid) 매뉴얼 상태 토글 핸들러
-  const handleTogglePaymentStatus = async (invoice) => {
-    setUpdatingInvoiceId(invoice.id);
-    const isNowPaid = invoice.status === 'paid';
+  // invoice 객체 직접 전달 또는 company 및 최근 인보이스 번호 기반 처리 모두 지원
+  const handleTogglePaymentStatus = async (targetInvoice, company = null) => {
+    // 1. invoice 레코드가 아직 DB에 없으나 회사의 last_invoice_number가 있는 경우 자동 생성 후 Paid 처리
+    if (!targetInvoice && company && company.last_invoice_number) {
+      setUpdatingInvoiceId(company.id);
+      try {
+        const planKey = company.pricing_package || 'starter';
+        const planInfo = PLAN_PRICING[planKey] || PLAN_PRICING.starter;
+        const xeroAddon = company.xero_addon_enabled ? XERO_ADDON_PRICE : 0;
+        const subtotal = planInfo.monthlyExGst + xeroAddon;
+        const gst = Math.round(subtotal * 0.1 * 100) / 100;
+        const total = subtotal + gst;
+
+        const created = await base44.entities.Invoice.create({
+          company_id: company.id,
+          invoice_number: company.last_invoice_number,
+          issue_date: (company.last_invoice_sent_at || new Date().toISOString()).slice(0, 10),
+          due_date: new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10),
+          plan_key: planKey,
+          plan_name: planInfo.name,
+          subtotal,
+          gst,
+          total_amount: Number(company.last_invoice_amount) || total,
+          recipient_email: company.invoice_email || company.contact_email || '',
+          notes: company.xero_addon_enabled ? 'Xero Integration Add-on Included' : '',
+          status: 'paid',
+          paid_at: new Date().toISOString()
+        });
+
+        if (created) {
+          setInvoices((prev) => [created, ...prev]);
+        }
+        toast({
+          title: t('invoice.markPaid') || '입금 확인 완료 (Paid)',
+          description: `${company.name} (${company.last_invoice_number})`
+        });
+      } catch (err) {
+        toast({
+          title: (err && err.message) || 'Error updating payment status',
+          variant: 'destructive'
+        });
+      } finally {
+        setUpdatingInvoiceId('');
+      }
+      return;
+    }
+
+    if (!targetInvoice) return;
+
+    setUpdatingInvoiceId(targetInvoice.id);
+    const isNowPaid = targetInvoice.status === 'paid';
     const nextStatus = isNowPaid ? 'unpaid' : 'paid';
     const nextPaidAt = isNowPaid ? null : new Date().toISOString();
 
     try {
-      await base44.entities.Invoice.update(invoice.id, {
+      await base44.entities.Invoice.update(targetInvoice.id, {
         status: nextStatus,
         paid_at: nextPaidAt
       });
@@ -337,13 +385,13 @@ export default function Invoices() {
       // 로컬 state 즉시 반영
       setInvoices((prev) =>
         prev.map((inv) =>
-          inv.id === invoice.id ? { ...inv, status: nextStatus, paid_at: nextPaidAt } : inv
+          inv.id === targetInvoice.id ? { ...inv, status: nextStatus, paid_at: nextPaidAt } : inv
         )
       );
 
       toast({
-        title: nextStatus === 'paid' ? t('invoice.markPaid') : t('invoice.markUnpaid'),
-        description: `${invoice.invoice_number}`
+        title: nextStatus === 'paid' ? (t('invoice.markPaid') || '입금 확인 완료') : (t('invoice.markUnpaid') || '미납 처리 완료'),
+        description: `${targetInvoice.invoice_number}`
       });
     } catch (err) {
       toast({
@@ -621,79 +669,114 @@ export default function Invoices() {
 
                         {/* 5. 최근 인보이스 & 수금 상태 (원클릭 입금 확인 버튼 지원) */}
                         <td className="py-3 px-4">
-                          {latestInv ? (
-                            <div>
-                              <div className="font-medium text-foreground flex items-center gap-1.5 flex-wrap">
-                                <span className="font-mono text-xs">{latestInv.invoice_number}</span>
-                                {latestInv.status === 'paid' ? (
-                                  <button
-                                    type="button"
-                                    onClick={() => handleTogglePaymentStatus(latestInv)}
-                                    disabled={updatingInvoiceId === latestInv.id}
-                                    title="클릭 시 '미납(Unpaid)' 상태로 전환됩니다"
-                                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-300 hover:bg-emerald-200 transition-colors dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800"
-                                  >
-                                    {updatingInvoiceId === latestInv.id ? (
-                                      <Loader2 className="h-3 w-3 animate-spin" />
-                                    ) : (
-                                      <Check className="h-3 w-3 text-emerald-700" />
-                                    )}
-                                    <span>{t('invoice.paidBadge')}</span>
-                                  </button>
-                                ) : (
-                                  <Button
-                                    type="button"
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() => handleTogglePaymentStatus(latestInv)}
-                                    disabled={updatingInvoiceId === latestInv.id}
-                                    className="h-6 px-2 text-[11px] font-bold text-emerald-700 bg-emerald-50 border-emerald-300 hover:bg-emerald-100 hover:text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300 gap-1 shadow-2xs"
-                                    title="계좌 입금 확인 후 클릭하면 즉시 '입금 완료(Paid)'로 처리됩니다"
-                                  >
-                                    {updatingInvoiceId === latestInv.id ? (
-                                      <Loader2 className="h-3 w-3 animate-spin" />
-                                    ) : (
-                                      <CheckCircle2 className="h-3 w-3 text-emerald-600" />
-                                    )}
-                                    <span>{t('invoice.markPaid')}</span>
-                                  </Button>
-                                )}
+                          {(() => {
+                            const targetInv = latestInv || (company.last_invoice_number ? {
+                              id: 'legacy_' + company.id,
+                              invoice_number: company.last_invoice_number,
+                              status: 'unpaid',
+                              issue_date: lastSent || '',
+                              total_amount: company.last_invoice_amount || total
+                            } : null);
+
+                            if (!targetInv) {
+                              return <span className="text-muted-foreground">{t('invoice.noHistory')}</span>;
+                            }
+
+                            const isPaid = targetInv.status === 'paid';
+
+                            return (
+                              <div>
+                                <div className="font-medium text-foreground flex items-center gap-1.5 flex-wrap">
+                                  <span className="font-mono text-xs font-bold">{targetInv.invoice_number}</span>
+                                  {isPaid ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleTogglePaymentStatus(latestInv, company)}
+                                      disabled={updatingInvoiceId === (latestInv?.id || company.id)}
+                                      title={lang === 'ko' ? "클릭 시 '미납(Unpaid)' 상태로 전환됩니다" : "Click to mark as Unpaid"}
+                                      className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 hover:bg-emerald-200 transition-colors dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800 shadow-2xs"
+                                    >
+                                      {updatingInvoiceId === (latestInv?.id || company.id) ? (
+                                        <Loader2 className="h-3 w-3 animate-spin" />
+                                      ) : (
+                                        <Check className="h-3 w-3 text-emerald-700" />
+                                      )}
+                                      <span>{t('invoice.paidBadge') || '입금완료'}</span>
+                                    </button>
+                                  ) : (
+                                    <Button
+                                      type="button"
+                                      size="sm"
+                                      onClick={() => handleTogglePaymentStatus(latestInv, company)}
+                                      disabled={updatingInvoiceId === (latestInv?.id || company.id)}
+                                      className="h-6 px-2.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-500 gap-1 shadow-sm"
+                                      title={lang === 'ko' ? "계좌 입금 확인 후 클릭하면 즉시 '입금 완료(Paid)'로 처리됩니다" : "Click to mark invoice as Paid after verifying bank transfer"}
+                                    >
+                                      {updatingInvoiceId === (latestInv?.id || company.id) ? (
+                                        <Loader2 className="h-3 w-3 animate-spin" />
+                                      ) : (
+                                        <CheckCircle2 className="h-3 w-3" />
+                                      )}
+                                      <span>{t('invoice.markPaid') || '입금 확인'}</span>
+                                    </Button>
+                                  )}
+                                </div>
+                                <div className="text-[10px] text-muted-foreground mt-1 flex items-center gap-1.5">
+                                  <span>{targetInv.issue_date || lastSent}</span>
+                                  {targetInv.total_amount ? <span>(${Number(targetInv.total_amount).toFixed(2)})</span> : null}
+                                </div>
                               </div>
-                              <div className="text-[10px] text-muted-foreground mt-0.5">
-                                {latestInv.issue_date} (${Number(latestInv.total_amount).toFixed(2)})
-                              </div>
-                            </div>
-                          ) : lastSent ? (
-                            <div>
-                              <div className="text-emerald-600 dark:text-emerald-400 font-medium">{lastSent}</div>
-                              <div className="text-[10px] text-muted-foreground">{company.last_invoice_number}</div>
-                            </div>
-                          ) : (
-                            <span className="text-muted-foreground">{t('invoice.noHistory')}</span>
-                          )}
+                            );
+                          })()}
                         </td>
 
                         {/* 6. 액션 버튼 */}
                         <td className="py-3 px-4 text-right">
                           <div className="flex items-center justify-end gap-1.5">
-                            {/* 최근 인보이스가 미납 상태일 때 원클릭 입금 확인 버튼 노출 */}
-                            {latestInv && latestInv.status !== 'paid' && (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="h-8 text-xs gap-1 border-emerald-400 bg-emerald-50/80 text-emerald-800 hover:bg-emerald-100 font-bold dark:bg-emerald-950/50 dark:text-emerald-200"
-                                onClick={() => handleTogglePaymentStatus(latestInv)}
-                                disabled={updatingInvoiceId === latestInv.id}
-                                title="개인계좌 입금 확인 완료 시 클릭"
-                              >
-                                {updatingInvoiceId === latestInv.id ? (
-                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                ) : (
-                                  <Check className="h-3.5 w-3.5 text-emerald-600" />
-                                )}
-                                <span>{t('invoice.markPaid')}</span>
-                              </Button>
-                            )}
+                            {/* 최근 인보이스 입금 확인 및 상태 버튼 */}
+                            {(() => {
+                              const targetInv = latestInv || (company.last_invoice_number ? {
+                                id: 'legacy_' + company.id,
+                                invoice_number: company.last_invoice_number,
+                                status: 'unpaid'
+                              } : null);
+
+                              if (!targetInv) return null;
+
+                              const isPaid = targetInv.status === 'paid';
+                              if (isPaid) {
+                                return (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-8 text-xs gap-1 border-emerald-400 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 font-semibold dark:bg-emerald-950/50 dark:text-emerald-200"
+                                    onClick={() => handleTogglePaymentStatus(latestInv, company)}
+                                    disabled={updatingInvoiceId === (latestInv?.id || company.id)}
+                                    title={lang === 'ko' ? "클릭 시 '미납'으로 변경" : "Click to mark Unpaid"}
+                                  >
+                                    <Check className="h-3.5 w-3.5 text-emerald-600" />
+                                    <span>{t('invoice.paidBadge') || '완납'}</span>
+                                  </Button>
+                                );
+                              }
+
+                              return (
+                                <Button
+                                  size="sm"
+                                  className="h-8 text-xs gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-sm"
+                                  onClick={() => handleTogglePaymentStatus(latestInv, company)}
+                                  disabled={updatingInvoiceId === (latestInv?.id || company.id)}
+                                  title={lang === 'ko' ? "개인계좌 입금 확인 완료 시 클릭" : "Mark as Paid"}
+                                >
+                                  {updatingInvoiceId === (latestInv?.id || company.id) ? (
+                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                  ) : (
+                                    <CheckCircle2 className="h-3.5 w-3.5" />
+                                  )}
+                                  <span>{t('invoice.markPaid') || '입금 확인'}</span>
+                                </Button>
+                              );
+                            })()}
 
                             {/* 지난 인보이스 내역 모달 열기 버튼 */}
                             <Button
