@@ -189,7 +189,7 @@ export default function XeroIntegrationCard({ company, onUpdated }) {
             )}
             <p className="text-[11px] text-emerald-800 dark:text-emerald-200 mt-2">
               {lang === 'ko'
-                ? '이제 [타임시트] 화면에서 [Xero로 직접 전송] 버튼을 누르면 승인된 출퇴근 시간이 Xero 계정으로 즉시 들어갑니다.'
+                ? '이제 [타임시트] 화면에서 [Xero로 전송] 버튼을 누르면 승인된 출퇴근 시간이 Xero 계정으로 즉시 들어갑니다.'
                 : 'Click "Send Timesheets to Xero" on the Attendance screen to sync approved records directly.'}
             </p>
           </div>
