@@ -41,9 +41,11 @@ async function handler(req: Request) {
         'openid',
         'profile',
         'email',
-        'accounting.transactions',
+        'offline_access',
         'payroll.timesheets',
-        'offline_access'
+        'payroll.employees',
+        'accounting.settings',
+        'accounting.contacts'
       ].join(' ');
 
       const authUrl = `https://login.xero.com/identity/connect/authorize?response_type=code&client_id=${encodeURIComponent(
